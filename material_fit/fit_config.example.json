@@ -1,0 +1,68 @@
+{
+  "_README_PLEASE_READ": [
+    "This is an ILLUSTRATIVE example, not a runnable config. Path resolution rule:",
+    "  - Relative paths are resolved against config_path.resolve().parents[2].",
+    "  - i.e., if you place this file at <repo>/tools/material_fit/output/<case>/fit_config.json,",
+    "    parents[2] = <repo>/, and 'assets/...' below means '<repo>/assets/...'.",
+    "  - When the UI persists a project, derive_fit_config writes ABSOLUTE paths to avoid this trap.",
+    "  - When you write a config by hand, the safest practice is to use absolute paths everywhere.",
+    "The 'assets/resources/...' paths below are taken from one specific user's Laya project layout",
+    "and will NOT exist in your environment. Replace them with paths to YOUR Laya/Unity assets.",
+    "All keys starting with '_' are ignored by fit_material.py."
+  ],
+  "case_name": "fish_1580_smoke",
+  "laya_shader_path": "assets/resources/shader/FishStandard.shader",
+  "laya_material_path": "assets/resources/play/fish/1580/mat/1580_body.lmat",
+  "unity_shader_path": "",
+  "unity_material_params_path": "",
+  "reference_images": ["tools/material_fit/vision/test_image/unity_reference.png"],
+  "candidate_images": ["latest"],
+  "mask_images": [],
+  "image_pairs": [],
+  "auto_adjust_target_score": 0.5,
+  "capture_screen_after_apply": false,
+  "rerender_wait_ms": 1200,
+  "fit_score_mode": "perceptual",
+  "optimizer": "cma_warm",
+  "cma_es": {
+    "mode": "warm",
+    "warm_start_iters": 12,
+    "population_size": null,
+    "sigma": null,
+    "seed": null,
+    "hint_bias_mix_ratio": 0.30
+  },
+  "screen_capture": {
+    "capture_dir": "tools/material_fit/vision/test_image",
+    "state_file": "tools/material_fit/vision/test_image/.capture_region.json",
+    "prefix": "laya_candidate",
+    "region": "",
+    "max_keep": 30
+  },
+  "laya_window": {
+    "process_pattern": "LayaAirIDE",
+    "title_pattern": "",
+    "settle_ms": 250
+  },
+  "laya_capture_anchor": {
+    "enabled": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "width": 0,
+    "height": 0,
+    "process_pattern": "LayaAirIDE",
+    "title_pattern": ""
+  },
+  "output_dir": "tools/material_fit/output/fish_1580_smoke",
+  "dry_run": true,
+  "render_command": [],
+  "laya_capture": {
+    "command": ["node", "tools/material_fit/vision/capture_laya.js"],
+    "url": "http://127.0.0.1:3000/material-fit.html",
+    "viewport": { "width": 900, "height": 600 },
+    "waitUntil": "networkidle2",
+    "waitMs": 500,
+    "readyFunction": "return window.__MATERIAL_FIT_READY__ === true;",
+    "applyParamsFunction": "if (window.__applyMaterialFitParams) { return window.__applyMaterialFitParams(params); }"
+  }
+}

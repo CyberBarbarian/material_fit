@@ -1,0 +1,86 @@
+# ============================================================================
+# Material Fit Inspector — .gitignore
+# ============================================================================
+# This file lives at the tool's repo root (`tools/`).
+# When the tool is migrated to a standalone project space, copy this dir over;
+# .gitignore travels with it.
+
+# ----------------------------------------------------------------------------
+# Python
+# ----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ----------------------------------------------------------------------------
+# Node / Vite (UI frontend)
+# ----------------------------------------------------------------------------
+material_fit_ui/frontend/node_modules/
+material_fit_ui/frontend/dist/
+material_fit_ui/frontend/.vite/
+material_fit_ui/frontend/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ----------------------------------------------------------------------------
+# User runtime data (per-machine absolute paths inside)
+# ----------------------------------------------------------------------------
+# Each UI project lives at material_fit/output/<project_id>/ and contains
+# absolute paths to the user's local Laya / Unity assets. Don't commit it;
+# users who want to migrate their existing project state can copy the
+# `output/` directory directly alongside the repo on their target machine.
+material_fit/output/
+
+# Auto-adjust rolling capture pool (E-012). Pool files are ephemeral and
+# bounded by max_keep; checked-in copies would just churn diffs.
+material_fit/vision/test_image/laya_candidate_*.png
+material_fit/vision/test_image/.capture_region.json
+
+# Preflight probe slot files (E-012). Always overwritten on next run.
+material_fit/output/**/preflight/*.png
+
+# Experiment scratch outputs
+material_fit/experiments_out/
+
+# Backup files written by lmat_io.write_candidate_lmat
+*.lmat.auto_adjust_*.bak
+*.lmat.bak
+*.bak
+
+# ----------------------------------------------------------------------------
+# Editor / IDE
+# ----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# ----------------------------------------------------------------------------
+# OS
+# ----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----------------------------------------------------------------------------
+# Local environment / secrets
+# ----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
