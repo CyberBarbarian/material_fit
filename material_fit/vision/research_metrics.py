@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover
     np = None  # type: ignore[assignment]
 
 _PERCEPTUAL_CACHE: dict[str, Any] = {}
+_REFERENCE_FEATURE_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def build_research_metrics(
@@ -20,6 +21,8 @@ def build_research_metrics(
     *,
     explicit_mask: Any = None,
     fallback_mask: Any = None,
+    compute_perceptual_optional: bool = True,
+    reference_cache_key: str | None = None,
 ) -> dict[str, Any]:
     """Compute P0 research metrics for one reference/candidate render pair.
 
@@ -35,7 +38,8 @@ def build_research_metrics(
             "reason": "numpy not installed",
         }
 
-    ref = _to_rgba_float(reference)
+    ref_features = _reference_features(reference, reference_cache_key)
+    ref = ref_features.get("rgba") if ref_features else None
     cand = _to_rgba_float(candidate)
     if ref is None or cand is None:
         return {
@@ -65,15 +69,22 @@ def build_research_metrics(
             "notes": ["core_mask has no pixels; visual metrics skipped"],
         }
 
-    ref_rgb = ref[..., :3]
+    ref_rgb = ref_features["rgb"]
     cand_rgb = cand[..., :3]
-    color = _color_metrics(ref_rgb, cand_rgb, core_mask)
-    luminance = _luminance_metrics(ref_rgb, cand_rgb, core_mask)
-    structure = _structure_metrics(ref_rgb, cand_rgb, core_mask)
-    highlight = _highlight_metrics(ref_rgb, cand_rgb, core_mask)
-    detail = _detail_metrics(ref_rgb, cand_rgb, core_mask)
-    perceptual = _perceptual_optional_metrics(ref_rgb, cand_rgb, core_mask)
-    loss_payload = _research_loss(color, luminance, structure, highlight, detail, validity)
+    cand_lab = _rgb_to_lab(cand_rgb)
+    cand_y = _linear_luminance(cand_rgb)
+    delta_e = _delta_e_ciede2000(ref_features["lab"], cand_lab)
+    color = _color_metrics(ref_rgb, cand_rgb, core_mask, ref_lab=ref_features["lab"], cand_lab=cand_lab, delta_e=delta_e)
+    luminance = _luminance_metrics(ref_rgb, cand_rgb, core_mask, ref_y=ref_features["luminance"], cand_y=cand_y)
+    structure = _structure_metrics(ref_rgb, cand_rgb, core_mask, ref_y=ref_features["luminance"], cand_y=cand_y)
+    highlight = _highlight_metrics(ref_rgb, cand_rgb, core_mask, ref_y=ref_features["luminance"], cand_y=cand_y, delta_e=delta_e)
+    detail = _detail_metrics(ref_rgb, cand_rgb, core_mask, ref_y=ref_features["luminance"], cand_y=cand_y)
+    perceptual = (
+        _perceptual_optional_metrics(ref_rgb, cand_rgb, core_mask, ref_y=ref_features["luminance"], cand_y=cand_y)
+        if compute_perceptual_optional
+        else _perceptual_optional_skipped()
+    )
+    loss_payload = _guidance_loss(color, luminance, structure, highlight, detail, validity)
 
     return {
         "version": "research_metrics_p0_v1",
@@ -102,6 +113,8 @@ def build_research_metrics(
         "score": loss_payload["score"],
         "components": loss_payload["components"],
         "weights": loss_payload["weights"],
+        "guidance": loss_payload["guidance"],
+        "acceptance_thresholds": loss_payload["acceptance_thresholds"],
         "notes": loss_payload["notes"],
     }
 
@@ -158,11 +171,13 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
         "p90_loss": p90_loss,
         "max_loss": max_loss,
         "worst_view_index": worst_index,
-        "formula": "0.65*mean_loss + 0.20*p90_loss + 0.15*max_loss",
+        "formula": "guidance: 0.65*mean_loss + 0.20*p90_loss + 0.15*max_loss",
         "validity": validity,
         "masks": _aggregate_masks(all_ok_items),
         "components": _aggregate_mean_section(scored_items, "components"),
         "weights": _aggregate_mean_section(scored_items, "weights"),
+        "guidance": _aggregate_guidance(scored_items, final_loss, mean_loss, p90_loss, max_loss),
+        "acceptance_thresholds": _aggregate_acceptance_thresholds(scored_items),
         "aggregated_scientific": _aggregate_scientific(scored_items),
     }
 
@@ -185,6 +200,29 @@ def _to_rgba_float(image: Any) -> Any:
             arr = np.concatenate([arr[..., :3], alpha], axis=2)
         return arr[..., :4]
     return None
+
+
+def _reference_features(image: Any, cache_key: str | None) -> dict[str, Any] | None:
+    if cache_key:
+        cached = _REFERENCE_FEATURE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+    rgba = _to_rgba_float(image)
+    if rgba is None:
+        return None
+    rgb = rgba[..., :3]
+    features = {
+        "rgba": rgba,
+        "rgb": rgb,
+        "lab": _rgb_to_lab(rgb),
+        "luminance": _linear_luminance(rgb),
+    }
+    if cache_key:
+        _REFERENCE_FEATURE_CACHE[cache_key] = features
+        if len(_REFERENCE_FEATURE_CACHE) > 64:
+            oldest_key = next(iter(_REFERENCE_FEATURE_CACHE))
+            _REFERENCE_FEATURE_CACHE.pop(oldest_key, None)
+    return features
 
 
 def _to_mask_array(mask: Any, shape: tuple[int, int]) -> Any:
@@ -285,10 +323,18 @@ def _build_validity(masks: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _color_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
-    ref_lab = _rgb_to_lab(ref_rgb)
-    cand_lab = _rgb_to_lab(cand_rgb)
-    delta = _delta_e_ciede2000(ref_lab, cand_lab)
+def _color_metrics(
+    ref_rgb: Any,
+    cand_rgb: Any,
+    mask: Any,
+    *,
+    ref_lab: Any = None,
+    cand_lab: Any = None,
+    delta_e: Any = None,
+) -> dict[str, Any]:
+    ref_lab = ref_lab if ref_lab is not None else _rgb_to_lab(ref_rgb)
+    cand_lab = cand_lab if cand_lab is not None else _rgb_to_lab(cand_rgb)
+    delta = delta_e if delta_e is not None else _delta_e_ciede2000(ref_lab, cand_lab)
     values = delta[mask]
     rgb_bias = (cand_rgb[mask] - ref_rgb[mask]).mean(axis=0)
     lab_bias = (cand_lab[mask] - ref_lab[mask]).mean(axis=0)
@@ -302,9 +348,9 @@ def _color_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
     }
 
 
-def _luminance_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
-    ref_y = _linear_luminance(ref_rgb)
-    cand_y = _linear_luminance(cand_rgb)
+def _luminance_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any, *, ref_y: Any = None, cand_y: Any = None) -> dict[str, Any]:
+    ref_y = ref_y if ref_y is not None else _linear_luminance(ref_rgb)
+    cand_y = cand_y if cand_y is not None else _linear_luminance(cand_rgb)
     diff = cand_y[mask] - ref_y[mask]
     return {
         "luminance_mae": float(np.abs(diff).mean()),
@@ -313,7 +359,7 @@ def _luminance_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]
     }
 
 
-def _structure_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
+def _structure_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any, *, ref_y: Any = None, cand_y: Any = None) -> dict[str, Any]:
     try:
         from skimage.metrics import structural_similarity
     except ImportError:
@@ -322,8 +368,8 @@ def _structure_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]
             "ssim_l_status": "unavailable",
             "ssim_l_notes": ["scikit-image not installed"],
         }
-    ref_y = _linear_luminance(ref_rgb)
-    cand_y = _linear_luminance(cand_rgb)
+    ref_y = ref_y if ref_y is not None else _linear_luminance(ref_rgb)
+    cand_y = cand_y if cand_y is not None else _linear_luminance(cand_rgb)
     h, w = ref_y.shape[:2]
     win = min(7, h, w)
     if win % 2 == 0:
@@ -358,9 +404,17 @@ def _structure_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]
     }
 
 
-def _highlight_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
-    ref_y = _linear_luminance(ref_rgb)
-    cand_y = _linear_luminance(cand_rgb)
+def _highlight_metrics(
+    ref_rgb: Any,
+    cand_rgb: Any,
+    mask: Any,
+    *,
+    ref_y: Any = None,
+    cand_y: Any = None,
+    delta_e: Any = None,
+) -> dict[str, Any]:
+    ref_y = ref_y if ref_y is not None else _linear_luminance(ref_rgb)
+    cand_y = cand_y if cand_y is not None else _linear_luminance(cand_rgb)
     ref_values = ref_y[mask]
     if ref_values.size <= 0:
         return {"enabled": False, "status": "not_applicable", "reason": "empty core mask"}
@@ -379,7 +433,7 @@ def _highlight_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]
             "reason": "reference highlight region is too weak, too small, or too large",
         }
 
-    delta = _delta_e_ciede2000(_rgb_to_lab(ref_rgb), _rgb_to_lab(cand_rgb))
+    delta = delta_e if delta_e is not None else _delta_e_ciede2000(_rgb_to_lab(ref_rgb), _rgb_to_lab(cand_rgb))
     ref_area = float(highlight_mask.sum())
     cand_threshold = threshold
     cand_highlight_mask = mask & (cand_y >= cand_threshold)
@@ -400,9 +454,9 @@ def _highlight_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]
     }
 
 
-def _detail_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
-    ref_y = _linear_luminance(ref_rgb)
-    cand_y = _linear_luminance(cand_rgb)
+def _detail_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any, *, ref_y: Any = None, cand_y: Any = None) -> dict[str, Any]:
+    ref_y = ref_y if ref_y is not None else _linear_luminance(ref_rgb)
+    cand_y = cand_y if cand_y is not None else _linear_luminance(cand_rgb)
     interior = _erode_mask(mask, iterations=1)
     if int(interior.sum()) <= 0:
         interior = mask
@@ -421,9 +475,9 @@ def _detail_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
     }
 
 
-def _perceptual_optional_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict[str, Any]:
-    ref_y = _linear_luminance(ref_rgb)
-    cand_y = _linear_luminance(cand_rgb)
+def _perceptual_optional_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any, *, ref_y: Any = None, cand_y: Any = None) -> dict[str, Any]:
+    ref_y = ref_y if ref_y is not None else _linear_luminance(ref_rgb)
+    cand_y = cand_y if cand_y is not None else _linear_luminance(cand_rgb)
     rgb_abs = np.abs(ref_rgb - cand_rgb).mean(axis=2)
     y_abs = np.abs(ref_y - cand_y)
     combined = 0.65 * y_abs + 0.35 * rgb_abs
@@ -446,6 +500,22 @@ def _perceptual_optional_metrics(ref_rgb: Any, cand_rgb: Any, mask: Any) -> dict
         "dists": dists_value,
         "dists_status": dists_status,
         "dists_notes": dists_notes,
+    }
+
+
+def _perceptual_optional_skipped() -> dict[str, Any]:
+    return {
+        "status": "skipped",
+        "enters_loss": False,
+        "reason": "disabled for this optimization iteration",
+        "flip_like_error": None,
+        "flip_like_p95": None,
+        "lpips": None,
+        "lpips_status": "skipped",
+        "lpips_notes": ["P2 perceptual metrics are evaluated at the configured interval only"],
+        "dists": None,
+        "dists_status": "skipped",
+        "dists_notes": ["P2 perceptual metrics are evaluated at the configured interval only"],
     }
 
 
@@ -543,7 +613,7 @@ def _perceptual_tensors(ref_rgb: Any, cand_rgb: Any, mask: Any, torch: Any) -> t
     return ref_tensor, cand_tensor, notes
 
 
-def _research_loss(
+def _guidance_loss(
     color: dict[str, Any],
     luminance: dict[str, Any],
     structure: dict[str, Any],
@@ -551,11 +621,17 @@ def _research_loss(
     detail: dict[str, Any],
     validity: dict[str, Any],
 ) -> dict[str, Any]:
-    raw_components = {
-        "color_mean": _clamp01(float(color["mean_deltaE00"]) / 10.0),
-        "color_p95": _clamp01(float(color["p95_deltaE00"]) / 20.0),
-        "luminance_mae": _clamp01(float(luminance["luminance_mae"]) / 0.20),
-        "luminance_bias": _clamp01(abs(float(luminance["luminance_bias"])) / 0.15),
+    components = {
+        "color_mean": _soft_saturating_loss(float(color["mean_deltaE00"]), 10.0),
+        "color_p95": _soft_saturating_loss(float(color["p95_deltaE00"]), 20.0),
+        "luminance_mae": _soft_saturating_loss(float(luminance["luminance_mae"]), 0.20),
+        "luminance_bias": _soft_saturating_loss(abs(float(luminance["luminance_bias"])), 0.15),
+    }
+    scales = {
+        "color_mean": {"raw": "mean_deltaE00", "scale": 10.0, "reason": "average ΔE00 half-saturation for clearly visible whole-object color mismatch"},
+        "color_p95": {"raw": "p95_deltaE00", "scale": 20.0, "reason": "tail ΔE00 half-saturation; p95 is expected to be larger around highlights, edges, and localized reflections"},
+        "luminance_mae": {"raw": "luminance_mae", "scale": 0.20, "reason": "linear luminance half-saturation for large material brightness mismatch"},
+        "luminance_bias": {"raw": "abs(luminance_bias)", "scale": 0.15, "reason": "signed luminance bias half-saturation"},
     }
     weights = {
         "color_mean": 0.35,
@@ -566,8 +642,9 @@ def _research_loss(
     ssim_l = _finite_float(structure.get("ssim_l"))
     notes: list[str] = []
     if ssim_l is not None:
-        raw_components["structure_ssim_l"] = _clamp01((1.0 - ssim_l) / 0.15)
+        components["structure_ssim_l"] = _soft_saturating_loss(max(1.0 - ssim_l, 0.0), 0.15)
         weights["structure_ssim_l"] = 0.20
+        scales["structure_ssim_l"] = {"raw": "1.0 - ssim_l", "scale": 0.15, "reason": "SSIM-L deficit half-saturation"}
     else:
         notes.append("SSIM-L unavailable; loss weights renormalized over color/luminance components")
     if highlight.get("enabled"):
@@ -575,28 +652,58 @@ def _research_loss(
         h_area = _finite_float(highlight.get("highlight_area_error"))
         h_peak = _finite_float(highlight.get("peak_luminance_error"))
         if h_delta is not None and h_area is not None and h_peak is not None:
-            raw_components["highlight"] = _clamp01(
-                0.45 * _clamp01(h_delta / 20.0)
-                + 0.35 * _clamp01(h_area / 0.50)
-                + 0.20 * _clamp01(h_peak / 0.25)
+            components["highlight"] = (
+                0.45 * _soft_saturating_loss(h_delta, 20.0)
+                + 0.35 * _soft_saturating_loss(h_area, 0.50)
+                + 0.20 * _soft_saturating_loss(h_peak, 0.25)
             )
             weights["highlight"] = 0.12
+            scales["highlight"] = {
+                "raw": "0.45*highlight_deltaE00 + 0.35*highlight_area_error + 0.20*peak_luminance_error",
+                "scales": {
+                    "highlight_deltaE00": 20.0,
+                    "highlight_area_error": 0.50,
+                    "peak_luminance_error": 0.25,
+                },
+                "reason": "conditional highlight/reflection guidance",
+            }
     else:
         notes.append("highlight metric not applicable for this view; loss weights renormalized")
     grad = _finite_float(detail.get("gradient_loss"))
     lap = _finite_float(detail.get("laplacian_loss"))
     if grad is not None and lap is not None:
-        raw_components["detail_texture"] = _clamp01(0.60 * _clamp01(grad / 0.25) + 0.40 * _clamp01(lap / 0.50))
+        components["detail_texture"] = 0.60 * _soft_saturating_loss(grad, 0.25) + 0.40 * _soft_saturating_loss(lap, 0.50)
         weights["detail_texture"] = 0.06
-    total_weight = sum(weights[key] for key in raw_components)
-    loss = sum(raw_components[key] * weights[key] for key in raw_components) / max(total_weight, 1e-8)
+        scales["detail_texture"] = {
+            "raw": "0.60*gradient_loss + 0.40*laplacian_loss",
+            "scales": {"gradient_loss": 0.25, "laplacian_loss": 0.50},
+            "reason": "texture/detail guidance",
+        }
+    total_weight = sum(weights[key] for key in components)
+    loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
     if not validity.get("passed"):
         notes.append("validity failed; metrics are reported but this view should not be trusted for material judgement")
+    normalized_weights = {key: weights[key] / max(total_weight, 1e-8) for key in components}
     return {
         "loss": _clamp01(loss),
         "score": 100.0 * (1.0 - _clamp01(loss)),
-        "components": raw_components,
-        "weights": {key: weights[key] / max(total_weight, 1e-8) for key in raw_components},
+        "components": components,
+        "weights": normalized_weights,
+        "guidance": {
+            "version": "optimizer_guidance_v1",
+            "normalization": "soft_saturating_half_scale",
+            "formula": "g(x; s) = x / (x + s)",
+            "loss": _clamp01(loss),
+            "score": 100.0 * (1.0 - _clamp01(loss)),
+            "components": components,
+            "weights": normalized_weights,
+            "scales": scales,
+            "notes": [
+                "soft guidance replaces hard-clamped research_loss as the optimization target",
+                "raw scientific metrics remain the report/acceptance evidence",
+            ],
+        },
+        "acceptance_thresholds": _acceptance_thresholds(color, luminance, structure, highlight, detail),
         "notes": notes,
     }
 
@@ -656,6 +763,94 @@ def _aggregate_scientific(items: list[dict[str, Any]]) -> dict[str, Any]:
                 "max_abs": [float(v) for v in np.max(np.abs(arr), axis=0)],
             }
     return out
+
+
+def _aggregate_guidance(
+    items: list[dict[str, Any]],
+    final_loss: float,
+    mean_loss: float,
+    p90_loss: float,
+    max_loss: float,
+) -> dict[str, Any]:
+    first_guidance = next((item.get("guidance") for item in items if isinstance(item.get("guidance"), dict)), {})
+    return {
+        "version": "optimizer_guidance_v1",
+        "normalization": "soft_saturating_half_scale",
+        "formula": "g(x; s) = x / (x + s); final_loss = 0.65*mean + 0.20*p90 + 0.15*max",
+        "loss": final_loss,
+        "score": 100.0 * (1.0 - final_loss),
+        "mean_loss": mean_loss,
+        "p90_loss": p90_loss,
+        "max_loss": max_loss,
+        "components": _aggregate_mean_section(items, "components"),
+        "weights": _aggregate_mean_section(items, "weights"),
+        "scales": first_guidance.get("scales") if isinstance(first_guidance, dict) else {},
+        "notes": [
+            "This is the optimization guidance score used by fit_score_mode='research'.",
+            "It is intentionally not a hard pass/fail acceptance metric.",
+        ],
+    }
+
+
+def _aggregate_acceptance_thresholds(items: list[dict[str, Any]]) -> dict[str, Any]:
+    thresholds = [item.get("acceptance_thresholds") for item in items if isinstance(item.get("acceptance_thresholds"), dict)]
+    if not thresholds:
+        return {}
+    keys = sorted({str(key) for item in thresholds for key in item})
+    out: dict[str, Any] = {}
+    for key in keys:
+        entries = [item.get(key) for item in thresholds if isinstance(item.get(key), dict)]
+        if not entries:
+            continue
+        pass_values = [entry.get("passed") for entry in entries if isinstance(entry.get("passed"), bool)]
+        values = [_finite_float(entry.get("value")) for entry in entries]
+        values = [value for value in values if value is not None]
+        first = entries[0]
+        out[key] = {
+            "value_mean": _mean(values) if values else None,
+            "threshold": first.get("threshold"),
+            "operator": first.get("operator"),
+            "passed_view_count": sum(1 for value in pass_values if value),
+            "view_count": len(pass_values),
+            "passed": bool(pass_values) and all(bool(value) for value in pass_values),
+        }
+    return out
+
+
+def _acceptance_thresholds(
+    color: dict[str, Any],
+    luminance: dict[str, Any],
+    structure: dict[str, Any],
+    highlight: dict[str, Any],
+    detail: dict[str, Any],
+) -> dict[str, Any]:
+    thresholds: dict[str, Any] = {
+        "mean_deltaE00": _threshold(float(color["mean_deltaE00"]), "<=", 10.0, "average color difference"),
+        "p95_deltaE00": _threshold(float(color["p95_deltaE00"]), "<=", 20.0, "tail color difference"),
+        "luminance_mae": _threshold(float(luminance["luminance_mae"]), "<=", 0.20, "foreground luminance MAE"),
+        "luminance_bias_abs": _threshold(abs(float(luminance["luminance_bias"])), "<=", 0.15, "absolute luminance bias"),
+    }
+    ssim_l = _finite_float(structure.get("ssim_l"))
+    if ssim_l is not None:
+        thresholds["ssim_l"] = _threshold(ssim_l, ">=", 0.85, "luminance structure similarity")
+    h_delta = _finite_float(highlight.get("highlight_deltaE00"))
+    if highlight.get("enabled") and h_delta is not None:
+        thresholds["highlight_deltaE00"] = _threshold(h_delta, "<=", 20.0, "conditional highlight color difference")
+    grad = _finite_float(detail.get("gradient_loss"))
+    if grad is not None:
+        thresholds["gradient_loss"] = _threshold(grad, "<=", 0.25, "detail gradient loss")
+    return thresholds
+
+
+def _threshold(value: float, operator: str, threshold: float, label: str) -> dict[str, Any]:
+    passed = value <= threshold if operator == "<=" else value >= threshold
+    return {
+        "label": label,
+        "value": float(value),
+        "operator": operator,
+        "threshold": float(threshold),
+        "passed": bool(passed),
+    }
 
 
 def _pick_vectors(items: list[dict[str, Any]], path: tuple[str, ...]) -> list[list[float]]:
@@ -897,6 +1092,14 @@ def _finite_float(value: Any) -> float | None:
 
 def _safe_ratio(numerator: float, denominator: float) -> float:
     return 0.0 if denominator <= 0.0 else float(numerator / denominator)
+
+
+def _soft_saturating_loss(value: float, scale: float) -> float:
+    if not math.isfinite(value):
+        return 1.0
+    value = max(float(value), 0.0)
+    scale = max(float(scale), 1e-8)
+    return value / (value + scale)
 
 
 def _clamp01(value: float) -> float:

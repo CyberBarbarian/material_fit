@@ -65,6 +65,8 @@ class ImageDiffConfig:
     bg_normalize_soft_low: float = 2.0
     bg_normalize_soft_high: float = 4.0
     bg_normalize_corner_size: int = 12
+    compute_perceptual_optional: bool = True
+    reference_cache_key: str | None = None
 
 
 def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
@@ -190,76 +192,65 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
             ),
         }
 
-    ref_pixels = reference.load()
-    cand_pixels = candidate.load()
+    ref_arr = np.asarray(reference, dtype=np.float32)[..., :3] / 255.0
+    cand_arr = np.asarray(candidate, dtype=np.float32)[..., :3] / 255.0
+    if mask_pixels is not None:
+        weight_map = np.asarray(mask, dtype=np.float32) / 255.0
+    elif auto_mask_array is not None:
+        weight_map = np.asarray(auto_mask_array, dtype=np.float32)
+    else:
+        weight_map = np.ones((height, width), dtype=np.float32)
+    weight_map = np.clip(weight_map, 0.0, 1.0)
 
-    stats = _Accumulator()
-    dark_stats = _Accumulator()
-    mid_stats = _Accumulator()
-    highlight_stats = _Accumulator()
-    emission_stats = _Accumulator()
-    edge_stats = _Accumulator()
-    center_stats = _Accumulator()
+    signed_rgb = cand_arr - ref_arr
+    rgb_abs = np.abs(signed_rgb)
+    ref_luma = _luma_array(ref_arr)
+    cand_luma = _luma_array(cand_arr)
+    signed_luma = cand_luma - ref_luma
+    signed_saturation = _saturation_array(cand_arr) - _saturation_array(ref_arr)
+    signed_contrast = np.abs(cand_luma - 0.5) - np.abs(ref_luma - 0.5)
 
-    diff_image = Image.new("RGBA", (width, height), (0, 0, 0, 255)) if config.generate_diff_image else None
-    diff_pixels = diff_image.load() if diff_image else None
-
+    yy, xx = np.indices((height, width), dtype=np.float32)
     center_x = (width - 1) * 0.5
     center_y = (height - 1) * 0.5
     max_radius = max(math.hypot(center_x, center_y), 1.0)
+    radius = np.hypot(xx - center_x, yy - center_y) / max_radius
 
-    for y in range(height):
-        for x in range(width):
-            if mask_pixels is not None:
-                weight = mask_pixels[x, y] / 255.0
-            elif auto_mask_array is not None:
-                weight = float(auto_mask_array[y, x])
-            else:
-                weight = 1.0
-            if weight <= 0.0:
-                continue
-
-            ref_rgb = tuple(ref_pixels[x, y][i] / 255.0 for i in range(3))
-            cand_rgb = tuple(cand_pixels[x, y][i] / 255.0 for i in range(3))
-            sample = _make_sample(ref_rgb, cand_rgb, weight)
-            stats.add(sample)
-
-            ref_luma = sample["ref_luma"]
-            if ref_luma <= config.dark_threshold:
-                dark_stats.add(sample)
-            elif ref_luma >= config.highlight_threshold:
-                highlight_stats.add(sample)
-            else:
-                mid_stats.add(sample)
-            if ref_luma >= config.emission_threshold:
-                emission_stats.add(sample)
-
-            radius = math.hypot(x - center_x, y - center_y) / max_radius
-            if radius >= 0.72:
-                edge_stats.add(sample)
-            elif radius <= 0.45:
-                center_stats.add(sample)
-
-            if diff_pixels:
-                diff_pixels[x, y] = tuple(
-                    int(max(0.0, min(1.0, abs(ref_rgb[i] - cand_rgb[i]) * config.diff_gain)) * 255) for i in range(3)
-                ) + (255,)
+    active = weight_map > 0.0
+    dark_mask = active & (ref_luma <= config.dark_threshold)
+    highlight_mask = active & (ref_luma >= config.highlight_threshold)
+    mid_mask = active & (ref_luma > config.dark_threshold) & (ref_luma < config.highlight_threshold)
+    emission_mask = active & (ref_luma >= config.emission_threshold)
+    edge_mask = active & (radius >= 0.72)
+    center_mask = active & (radius <= 0.45)
 
     output_dir = Path(config.output_dir) if config.output_dir else Path(config.candidate_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
     diff_image_path = None
-    if diff_image:
+    if config.generate_diff_image:
         diff_image_path = output_dir / "diff_visual.png"
+        diff_rgb = np.zeros((height, width, 3), dtype=np.uint8)
+        diff_rgb[active] = np.clip(rgb_abs[active] * float(config.diff_gain) * 255.0, 0.0, 255.0).astype(np.uint8)
+        alpha = np.full((height, width, 1), 255, dtype=np.uint8)
+        diff_image = Image.fromarray(np.concatenate([diff_rgb, alpha], axis=2), mode="RGBA")
         diff_image.save(diff_image_path)
 
-    global_metrics = stats.to_metrics()
+    metric_context = {
+        "weight_map": weight_map,
+        "signed_rgb": signed_rgb,
+        "rgb_abs": rgb_abs,
+        "signed_luma": signed_luma,
+        "signed_saturation": signed_saturation,
+        "signed_contrast": signed_contrast,
+    }
+    global_metrics = _metrics_from_arrays(metric_context, active)
     sections = {
-        "dark_shadow_occlusion": dark_stats.to_metrics(),
-        "base_mid_tone": mid_stats.to_metrics(),
-        "highlight_specular_reflection": highlight_stats.to_metrics(),
-        "very_bright_emission": emission_stats.to_metrics(),
-        "edge_fresnel_rim": edge_stats.to_metrics(),
-        "center_body": center_stats.to_metrics(),
+        "dark_shadow_occlusion": _metrics_from_arrays(metric_context, dark_mask),
+        "base_mid_tone": _metrics_from_arrays(metric_context, mid_mask),
+        "highlight_specular_reflection": _metrics_from_arrays(metric_context, highlight_mask),
+        "very_bright_emission": _metrics_from_arrays(metric_context, emission_mask),
+        "edge_fresnel_rim": _metrics_from_arrays(metric_context, edge_mask),
+        "center_body": _metrics_from_arrays(metric_context, center_mask),
     }
     channels = _build_material_channel_diagnostics(global_metrics, sections)
     suggestions = _build_adjustment_hints(channels)
@@ -347,6 +338,8 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
         research_candidate,
         explicit_mask=mask,
         fallback_mask=auto_mask_array,
+        compute_perceptual_optional=config.compute_perceptual_optional,
+        reference_cache_key=config.reference_cache_key,
     )
 
     result: dict[str, Any] = {
@@ -412,8 +405,10 @@ def analyze_multiview_pairs(
     pairs: Iterable[dict[str, Any]],
     output_dir: str | Path,
     *,
-    fit_score_mode: str = "human_accept",
+    fit_score_mode: str = "research",
     aggregation_config: dict[str, Any] | None = None,
+    compute_perceptual_optional: bool = True,
+    generate_diff_image: bool = True,
 ) -> dict[str, Any]:
     """Analyze multi-view render pairs and build a strategy-compatible aggregate.
 
@@ -436,6 +431,9 @@ def analyze_multiview_pairs(
                 candidate_path=pair["candidate"],
                 mask_path=pair.get("mask"),
                 output_dir=pair_dir,
+                compute_perceptual_optional=compute_perceptual_optional,
+                generate_diff_image=generate_diff_image,
+                reference_cache_key=str(pair.get("reference", "")),
             )
         )
         diff_score = _finite_float(result.get("score"), math.inf)
@@ -562,6 +560,49 @@ def analyze_multiview_pairs(
         encoding="utf-8",
     )
     return report
+
+
+def _metrics_from_arrays(context: dict[str, Any], mask: Any) -> dict[str, Any]:
+    weight = context["weight_map"][mask]
+    total_weight = float(weight.sum())
+    if total_weight <= 0.0:
+        return {"pixels": 0, "rgb_mae": 0.0, "valid": False}
+    signed_rgb = context["signed_rgb"][mask]
+    rgb_abs = context["rgb_abs"][mask]
+    inv = 1.0 / total_weight
+    rgb_abs_mean = (rgb_abs * weight[:, None]).sum(axis=0) * inv
+    rgb_signed_mean = (signed_rgb * weight[:, None]).sum(axis=0) * inv
+    luma_signed = context["signed_luma"][mask]
+    saturation_signed = context["signed_saturation"][mask]
+    contrast_signed = context["signed_contrast"][mask]
+    return {
+        "valid": True,
+        "pixels": round(total_weight, 3),
+        "rgb_mae": float(rgb_abs_mean.mean()),
+        "rgb_abs": [float(value) for value in rgb_abs_mean],
+        "rgb_signed_candidate_minus_reference": [float(value) for value in rgb_signed_mean],
+        "luma_mae": float((np_abs(luma_signed) * weight).sum() * inv),
+        "luma_signed_candidate_minus_reference": float((luma_signed * weight).sum() * inv),
+        "saturation_mae": float((np_abs(saturation_signed) * weight).sum() * inv),
+        "saturation_signed_candidate_minus_reference": float((saturation_signed * weight).sum() * inv),
+        "contrast_mae": float((np_abs(contrast_signed) * weight).sum() * inv),
+        "contrast_signed_candidate_minus_reference": float((contrast_signed * weight).sum() * inv),
+    }
+
+
+def _luma_array(rgb: Any) -> Any:
+    return rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722
+
+
+def _saturation_array(rgb: Any) -> Any:
+    return rgb.max(axis=2) - rgb.min(axis=2)
+
+
+def np_abs(values: Any) -> Any:
+    # Keep numpy local to the hot path import boundary in analyze_image_diff.
+    import numpy as np
+
+    return np.abs(values)
 
 
 class _Accumulator:
@@ -885,6 +926,23 @@ def _aggregate_metric_dicts(items: Iterable[Any]) -> dict[str, Any]:
 
 
 def _resolve_view_fit_score(analysis: dict[str, Any], diff_score: float, mode: str) -> float:
+    if mode == "research":
+        research = analysis.get("research_metrics")
+        if isinstance(research, dict):
+            guidance = research.get("guidance")
+            if isinstance(guidance, dict):
+                value = guidance.get("score")
+                if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                    return max(0.0, min(1.0, float(value) / 100.0))
+                loss = guidance.get("loss")
+                if isinstance(loss, (int, float)) and math.isfinite(float(loss)):
+                    return max(0.0, min(1.0, 1.0 - float(loss)))
+            value = research.get("score")
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return max(0.0, min(1.0, float(value) / 100.0))
+            loss = research.get("loss")
+            if isinstance(loss, (int, float)) and math.isfinite(float(loss)):
+                return max(0.0, min(1.0, 1.0 - float(loss)))
     if mode == "human_accept":
         value = analysis.get("human_accept_score")
         if isinstance(value, (int, float)) and math.isfinite(float(value)):

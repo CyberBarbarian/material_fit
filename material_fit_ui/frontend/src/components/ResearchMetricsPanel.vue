@@ -86,6 +86,16 @@ const perceptualOptional = computed(() => asRecord(scientific.value?.perceptual_
 const validity = computed(() => asRecord(props.metrics?.validity));
 const masks = computed(() => asRecord(props.metrics?.masks));
 const components = computed(() => asRecord(props.metrics?.components));
+const guidance = computed(() => asRecord(props.metrics?.guidance));
+const guidanceComponents = computed(() => asRecord(guidance.value?.components) ?? components.value);
+const guidanceScore = computed(() => {
+  const fromGuidance = numberAt(guidance.value, 'score');
+  return fromGuidance ?? researchScore.value;
+});
+const guidanceLoss = computed(() => {
+  const fromGuidance = numberAt(guidance.value, 'loss');
+  return fromGuidance ?? researchLoss.value;
+});
 
 function directOrAggregate(section: Record<string, unknown> | null, directKey: string, aggregateKey: string): number | null {
   const direct = numberAt(section, directKey);
@@ -277,19 +287,19 @@ const layer2 = computed<MetricItem[]>(() => [
 
 const layer3 = computed<MetricItem[]>(() => [
   {
-    label: '研究总分',
-    value: scoreUsesInvalidViews.value ? '不可采信' : researchScore.value,
+    label: '优化引导分',
+    value: scoreUsesInvalidViews.value ? '不可采信' : guidanceScore.value,
     unit: scoreUsesInvalidViews.value ? undefined : '/100',
     digits: 1,
-    hint: '由科学主指标归一化后聚合得到，用于报告和跨轮次比较。',
-    tone: scoreUsesInvalidViews.value ? 'bad' : scoreTone(researchScore.value),
+    hint: 'fit_score_mode=research 使用的 soft guidance score；采用 g(x)=x/(x+s)，避免大色差阶段硬截断。',
+    tone: scoreUsesInvalidViews.value ? 'bad' : scoreTone(guidanceScore.value),
     detail: { viewKey: 'research_score' },
   },
   {
-    label: '研究 Loss',
-    value: researchLoss.value,
+    label: '优化引导 Loss',
+    value: guidanceLoss.value,
     digits: 4,
-    hint: '越低越好；多视角时使用 mean + p90 + max 聚合，避免差视角被平均掩盖。',
+    hint: '越低越好；多视角时使用 mean + p90 + max 聚合。该值用于优化引导，不是人工验收的唯一依据。',
     detail: { viewKey: 'research_loss' },
   },
   {
@@ -311,45 +321,45 @@ const validViewText = computed(() => {
 const layer4 = computed<MetricItem[]>(() => [
   {
     label: '颜色均值项',
-    value: numberAt(components.value, 'color_mean'),
+    value: numberAt(guidanceComponents.value, 'color_mean'),
     digits: 4,
-    hint: 'research_loss 中的归一化颜色均值误差分量。',
-    detail: { path: ['components', 'color_mean'] },
+    hint: 'P0 优化引导项：mean ΔE00 的软饱和分量，g(x)=x/(x+10)，不再使用 hard clamp。',
+    detail: { path: ['guidance', 'components', 'color_mean'] },
   },
   {
     label: '颜色 P95 项',
-    value: numberAt(components.value, 'color_p95'),
+    value: numberAt(guidanceComponents.value, 'color_p95'),
     digits: 4,
-    hint: 'research_loss 中的局部严重色差分量。',
-    detail: { path: ['components', 'color_p95'] },
+    hint: 'P0 优化引导项：p95 ΔE00 的软饱和分量，g(x)=x/(x+20)，用于局部严重色差。',
+    detail: { path: ['guidance', 'components', 'color_p95'] },
   },
   {
     label: '亮度项',
-    value: numberAt(components.value, 'luminance_mae'),
+    value: numberAt(guidanceComponents.value, 'luminance_mae'),
     digits: 4,
-    hint: 'research_loss 中的亮度误差分量。',
-    detail: { path: ['components', 'luminance_mae'] },
+    hint: 'P0 优化引导项：亮度 MAE 的软饱和分量。',
+    detail: { path: ['guidance', 'components', 'luminance_mae'] },
   },
   {
     label: '结构项',
-    value: numberAt(components.value, 'structure_ssim_l'),
+    value: numberAt(guidanceComponents.value, 'structure_ssim_l'),
     digits: 4,
-    hint: 'research_loss 中的 SSIM-L 结构误差分量。',
-    detail: { path: ['components', 'structure_ssim_l'] },
+    hint: 'P0 优化引导项：SSIM-L deficit 的软饱和分量。',
+    detail: { path: ['guidance', 'components', 'structure_ssim_l'] },
   },
   {
     label: '高光项',
-    value: numberAt(components.value, 'highlight'),
+    value: numberAt(guidanceComponents.value, 'highlight'),
     digits: 4,
-    hint: 'P1，高光/反射误差在 research_loss 中的归一化分量。',
-    detail: { path: ['components', 'highlight'] },
+    hint: 'P1 优化引导项：高光/反射误差的软饱和分量。',
+    detail: { path: ['guidance', 'components', 'highlight'] },
   },
   {
     label: '细节项',
-    value: numberAt(components.value, 'detail_texture'),
+    value: numberAt(guidanceComponents.value, 'detail_texture'),
     digits: 4,
-    hint: 'P1，梯度和 Laplacian 细节误差在 research_loss 中的归一化分量。',
-    detail: { path: ['components', 'detail_texture'] },
+    hint: 'P1 优化引导项：梯度和 Laplacian 细节误差的软饱和分量。',
+    detail: { path: ['guidance', 'components', 'detail_texture'] },
   },
   {
     label: 'FLIP-like 误差',
@@ -396,15 +406,15 @@ const layers = computed(() => [
   {
     id: 'score',
     index: '03',
-    title: '研究总分层',
-    subtitle: '用于跨轮次、多视角聚合和报告排序',
+    title: '优化引导分层',
+    subtitle: 'fit_score_mode=research 使用 soft guidance；raw 科学指标用于解释和验收',
     items: layer3.value,
   },
   {
     id: 'diagnostic',
     index: '04',
     title: '诊断辅助层',
-    subtitle: '解释 loss 来源；P2 感知指标仅供人工查看，暂不参与优化',
+    subtitle: '解释 guidance 来源；P2 感知指标仅供人工查看，暂不参与优化',
     items: layer4.value,
   },
 ]);
@@ -422,11 +432,11 @@ function scoreTone(score: number | null): MetricItem['tone'] {
     <header class="research-header">
       <div>
         <h4>分层评价指标</h4>
-        <p>按照有效性检查、科学主指标、研究总分、诊断辅助四层展示，避免把不同语义的数字混在一起。</p>
+        <p>按照有效性检查、raw 科学主指标、优化引导分、诊断辅助四层展示，避免把不同语义的数字混在一起。</p>
       </div>
-      <div class="score-badge" :class="`tone-${scoreTone(researchScore) || 'neutral'}`">
-        <span>研究总分</span>
-        <strong>{{ scoreUsesInvalidViews ? '不可采信' : fmt(researchScore, 1) }}</strong>
+      <div class="score-badge" :class="`tone-${scoreTone(guidanceScore) || 'neutral'}`">
+        <span>优化引导分</span>
+        <strong>{{ scoreUsesInvalidViews ? '不可采信' : fmt(guidanceScore, 1) }}</strong>
       </div>
     </header>
 

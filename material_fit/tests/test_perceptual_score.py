@@ -217,6 +217,20 @@ def test_research_metrics_multiview_aggregation():
     assert agg["valid_view_count"] == 2
     assert 0.0 <= agg["loss"] <= 1.0
     assert 0.0 <= agg["score"] <= 100.0
+    assert agg["guidance"]["normalization"] == "soft_saturating_half_scale"
+
+
+def test_research_guidance_color_does_not_hard_clamp_large_delta_e():
+    ref = _rgba_foreground((230, 230, 230))
+    very_bad = build_research_metrics(ref, _rgba_foreground((120, 40, 40)))
+    less_bad = build_research_metrics(ref, _rgba_foreground((150, 75, 75)))
+
+    assert very_bad["status"] == "ok"
+    assert less_bad["status"] == "ok"
+    assert very_bad["scientific"]["color_accuracy"]["mean_deltaE00"] > 10.0
+    assert less_bad["scientific"]["color_accuracy"]["mean_deltaE00"] > 10.0
+    assert very_bad["components"]["color_mean"] < 1.0
+    assert less_bad["components"]["color_mean"] < very_bad["components"]["color_mean"]
 
 
 def test_research_metrics_p1_enters_loss_p2_does_not():
@@ -499,6 +513,46 @@ def test_analyze_multiview_pairs_emits_research_summary(tmp_path):
         assert view["research_valid"] is True
 
 
+def test_analyze_multiview_pairs_can_skip_p2_optional_metrics(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+
+    res = analyze_multiview_pairs(
+        [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}],
+        tmp_path / "mv_skip_p2",
+        compute_perceptual_optional=False,
+    )
+
+    perceptual = res["pairs"][0]["research_metrics"]["scientific"]["perceptual_optional"]
+    assert perceptual["status"] == "skipped"
+    assert perceptual["enters_loss"] is False
+    assert perceptual["lpips_status"] == "skipped"
+    assert perceptual["dists_status"] == "skipped"
+
+
+def test_analyze_multiview_pairs_can_skip_diff_visual(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    out_dir = tmp_path / "mv_skip_diff"
+    ref.save(ref_path)
+    cand.save(cand_path)
+
+    res = analyze_multiview_pairs(
+        [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}],
+        out_dir,
+        generate_diff_image=False,
+    )
+
+    assert res["views"][0]["diff_image_path"] == ""
+    assert not (out_dir / "pair_00" / "diff_visual.png").exists()
+
+
 # ---------------------------------------------------------------------
 # auto_adjust.scoring.resolve_fit_score
 # ---------------------------------------------------------------------
@@ -521,6 +575,30 @@ def test_resolve_fit_score_prefers_human_accept_score():
     }
     res = resolve_fit_score(analysis, diff_score=0.20, mode="human_accept")
     assert math.isclose(res, 0.67, abs_tol=1e-9)
+
+
+def test_resolve_fit_score_prefers_research_score():
+    analysis = {
+        "score": 0.20,
+        "perceptual_fit_score": 0.42,
+        "human_accept_score": 0.67,
+        "research_metrics": {"score": 91.5, "loss": 0.085},
+    }
+
+    res = resolve_fit_score(analysis, diff_score=0.20, mode="research")
+
+    assert math.isclose(res, 0.915, abs_tol=1e-9)
+
+
+def test_resolve_fit_score_uses_research_loss_when_score_missing():
+    analysis = {
+        "score": 0.20,
+        "research_metrics": {"loss": 0.18},
+    }
+
+    res = resolve_fit_score(analysis, diff_score=0.20, mode="research")
+
+    assert math.isclose(res, 0.82, abs_tol=1e-9)
 
 
 def test_resolve_fit_score_falls_back_when_perceptual_missing():

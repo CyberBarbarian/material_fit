@@ -91,6 +91,10 @@ export interface IterationSummary {
   diff_image_url: string | null;
 }
 
+export interface JobIterationSummary extends IterationSummary {
+  job_id: string;
+}
+
 export interface ParamChange {
   param: string;
   old: unknown;
@@ -253,6 +257,7 @@ export interface IterationDetail {
 }
 
 export const OVERVIEW_VIEW_ID = '__overview__';
+export const EXPERIMENT_RESULTS_VIEW_ID = '__experiment_results__';
 export const REPORT_VIEW_ID = '__report__';
 export const COMPARE_VIEW_ID = '__compare__';
 export const PROJECT_CONFIG_VIEW_ID = '__project_config__';
@@ -263,6 +268,7 @@ export const LLM_VIEW_ID = '__llm__';
 
 export type SyntheticViewId =
   | typeof OVERVIEW_VIEW_ID
+  | typeof EXPERIMENT_RESULTS_VIEW_ID
   | typeof REPORT_VIEW_ID
   | typeof COMPARE_VIEW_ID
   | typeof PROJECT_CONFIG_VIEW_ID
@@ -273,6 +279,7 @@ export type SyntheticViewId =
 
 const SYNTHETIC_VIEW_IDS: ReadonlySet<string> = new Set<string>([
   OVERVIEW_VIEW_ID,
+  EXPERIMENT_RESULTS_VIEW_ID,
   REPORT_VIEW_ID,
   COMPARE_VIEW_ID,
   PROJECT_CONFIG_VIEW_ID,
@@ -356,7 +363,7 @@ export interface LayaSceneNodesPayload {
   recommended_camera_name: string;
 }
 
-export type FitScoreMode = 'linear' | 'perceptual' | 'human_accept';
+export type FitScoreMode = 'linear' | 'perceptual' | 'human_accept' | 'research';
 export type AutoAdjustMode = 'fresh_fit' | 'refine_current';
 
 // E-007 (ExperimentLog.md): magenta-probe preflight result.
@@ -632,6 +639,12 @@ export interface LayaShaderControl {
   dependencies: string[];
   reason: string;
   source?: string;
+  confidence?: number;
+  evidence?: string[];
+  risk?: string;
+  conflict_status?: string;
+  auto_group?: string;
+  semantic_sources?: string[];
   locked_fields?: string[];
   note?: string;
 }
@@ -715,6 +728,9 @@ export interface LlmParamSemantic {
   dependencies: string[];
   searchable: boolean;
   reason: string;
+  confidence?: number;
+  evidence?: string[];
+  risk?: string;
 }
 
 export interface LlmInitialParamSuggestion {
@@ -781,6 +797,8 @@ export interface JobDecisionSummary {
   selected_stage: string | null;
   fit_score_before: number | null;
   diff_score_before: number | null;
+  research_score?: number | null;
+  research_loss?: number | null;
   human_accept_score?: number | null;
   perceptual_fit_score?: number | null;
   weighted_mae?: number | null;
@@ -798,6 +816,8 @@ export interface JobState {
   return_code: number | null;
   error: string | null;
   args: string[];
+  run_id?: string | null;
+  run_dir?: string | null;
   iterations_observed: number;
   last_iter_id: string | null;
   last_decision_summary: JobDecisionSummary | null;

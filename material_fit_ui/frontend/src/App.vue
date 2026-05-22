@@ -5,18 +5,24 @@ import {
   fetchCases,
   fetchIterationDetail,
   fetchIterations,
+  fetchJobIterationDetail,
+  fetchJobIterations,
   fetchProject,
+  listJobs,
 } from './api';
 import type {
   CaseOverviewPayload,
   CaseSummary,
   IterationDetail,
+  JobIterationSummary,
+  JobState,
   IterationSummary,
   ProjectDetail,
 } from './types';
 import {
   ALGO_CONFIG_VIEW_ID,
   COMPARE_VIEW_ID,
+  EXPERIMENT_RESULTS_VIEW_ID,
   LLM_VIEW_ID,
   OVERVIEW_VIEW_ID,
   PREANALYSIS_VIEW_ID,
@@ -27,6 +33,7 @@ import {
 } from './types';
 import CaseSelector from './components/CaseSelector.vue';
 import IterationList from './components/IterationList.vue';
+import JobIterationColumn from './components/JobIterationColumn.vue';
 import IterationDetailView from './components/IterationDetail.vue';
 import CaseOverviewView from './components/CaseOverview.vue';
 import ReportView from './components/ReportView.vue';
@@ -46,6 +53,9 @@ const selectedCaseId = ref<string>('');
 const overview = ref<CaseOverviewPayload | null>(null);
 const project = ref<ProjectDetail | null>(null);
 const iterations = ref<IterationSummary[]>([]);
+const jobs = ref<JobState[]>([]);
+const selectedJobId = ref<string>('');
+const jobIterationsById = ref<Record<string, JobIterationSummary[]>>({});
 const selectedView = ref<string>(OVERVIEW_VIEW_ID);
 const iterationDetail = ref<IterationDetail | null>(null);
 const isLoadingCase = ref(false);
@@ -53,7 +63,7 @@ const isLoadingIter = ref(false);
 const errorMessage = ref<string | null>(null);
 const wizardOpen = ref(false);
 
-interface Persisted { case?: string; view?: string; }
+interface Persisted { case?: string; view?: string; job?: string; }
 
 let suppressViewWatch = false;
 let detailRequestId = 0;
@@ -73,7 +83,7 @@ function persist(): void {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ case: selectedCaseId.value, view: selectedView.value }),
+      JSON.stringify({ case: selectedCaseId.value, view: selectedView.value, job: selectedJobId.value }),
     );
   } catch { /* ignore */ }
 }
@@ -81,6 +91,35 @@ function persist(): void {
 function isValidView(view: string, iters: IterationSummary[]): boolean {
   if (isSyntheticView(view)) return true;
   return iters.some((entry) => entry.iter_id === view);
+}
+
+function isLightweightProjectStartupView(view: string): boolean {
+  if (!isSyntheticView(view)) return false;
+  return view !== COMPARE_VIEW_ID;
+}
+
+function latestJobId(list: JobState[]): string {
+  return list[0]?.job_id ?? '';
+}
+
+async function loadProjectJobs(projectId: string, preferredJobId = selectedJobId.value): Promise<IterationSummary[]> {
+  const list = await listJobs(projectId);
+  jobs.value = list;
+  const persisted = loadPersisted();
+  const nextJob =
+    (preferredJobId && list.some((job) => job.job_id === preferredJobId) && preferredJobId) ||
+    (persisted.case === projectId && persisted.job && list.some((job) => job.job_id === persisted.job) && persisted.job) ||
+    project.value?.active_job_id ||
+    project.value?.last_job_id ||
+    latestJobId(list);
+  selectedJobId.value = nextJob || '';
+  if (!selectedJobId.value) {
+    jobIterationsById.value = {};
+    return [];
+  }
+  const jobIters = await fetchJobIterations(selectedJobId.value);
+  jobIterationsById.value = { ...jobIterationsById.value, [selectedJobId.value]: jobIters };
+  return jobIters;
 }
 
 const currentCase = computed<CaseSummary | null>(
@@ -128,27 +167,28 @@ async function loadCaseDetails(caseId: string): Promise<void> {
     const summary = cases.value.find((c) => c.id === caseId);
     const isProject = summary?.kind === 'project';
 
-    const [ov, iters, proj] = await Promise.all([
+    const [ov, legacyIters, proj] = await Promise.all([
       fetchCaseOverview(caseId),
-      fetchIterations(caseId),
+      isProject ? Promise.resolve([] as IterationSummary[]) : fetchIterations(caseId),
       isProject ? fetchProject(caseId) : Promise.resolve(null as ProjectDetail | null),
     ]);
     overview.value = ov;
-    iterations.value = iters;
     project.value = proj;
+    iterations.value = isProject ? await loadProjectJobs(caseId) : legacyIters;
 
     const persisted = loadPersisted();
     let nextView: string = OVERVIEW_VIEW_ID;
     if (
       persisted.case === caseId &&
       persisted.view &&
-      isValidView(persisted.view, iters)
+      isValidView(persisted.view, iterations.value) &&
+      (!isProject || isLightweightProjectStartupView(persisted.view))
     ) {
       nextView = persisted.view;
     } else if (isProject) {
-      nextView = PROJECT_CONFIG_VIEW_ID;
-    } else if (iters.length > 0) {
-      nextView = iters[iters.length - 1].iter_id;
+      nextView = proj?.active_job_id ? RUN_VIEW_ID : PROJECT_CONFIG_VIEW_ID;
+    } else if (iterations.value.length > 0) {
+      nextView = iterations.value[iterations.value.length - 1].iter_id;
     }
 
     suppressViewWatch = true;
@@ -177,7 +217,9 @@ async function refreshIterationDetail(caseId: string, view: string): Promise<voi
   }
   isLoadingIter.value = true;
   try {
-    const result = await fetchIterationDetail(caseId, view);
+    const result = isProjectCase.value && selectedJobId.value
+      ? await fetchJobIterationDetail(selectedJobId.value, view)
+      : await fetchIterationDetail(caseId, view);
     if (myReq !== detailRequestId) return;
     iterationDetail.value = result;
   } catch (err) {
@@ -199,20 +241,15 @@ function schedulePolling(): void {
   projectPollHandle = setInterval(async () => {
     if (!selectedCaseId.value) return;
     try {
-      const [iters, proj] = await Promise.all([
-        fetchIterations(selectedCaseId.value),
-        fetchProject(selectedCaseId.value).catch(() => null),
-      ]);
-      if (iters.length !== iterations.value.length) {
-        iterations.value = iters;
+      const proj = await fetchProject(selectedCaseId.value).catch(() => null);
+      if (proj) project.value = proj;
+      if (isProjectCase.value) {
+        iterations.value = await loadProjectJobs(selectedCaseId.value);
       } else {
-        iterations.value = iters;
+        iterations.value = await fetchIterations(selectedCaseId.value);
       }
-      if (proj) {
-        project.value = proj;
-        if (!proj.active_job_id) {
-          stopPolling();
-        }
+      if (proj && !proj.active_job_id) {
+        stopPolling();
       }
     } catch { /* keep polling */ }
   }, 1500);
@@ -268,9 +305,45 @@ const showAlgoConfig = computed(() => view.value === ALGO_CONFIG_VIEW_ID);
 const showRun = computed(() => view.value === RUN_VIEW_ID);
 const showLlm = computed(() => view.value === LLM_VIEW_ID);
 const showIteration = computed(() => !isSyntheticView(view.value));
+const showExperimentResults = computed(() => isProjectCase.value && (view.value === EXPERIMENT_RESULTS_VIEW_ID || showIteration.value));
+const showResultColumns = computed(() => showExperimentResults.value);
 
 const hasReport = computed(() => overview.value?.has_report ?? false);
 const showScoreCurve = computed(() => iterations.value.some((entry) => entry.fit_score_before != null));
+const projectNavItems = computed(() => {
+  const items = [
+    { id: OVERVIEW_VIEW_ID, label: '概览', meta: 'metadata' },
+    { id: EXPERIMENT_RESULTS_VIEW_ID, label: '实验结果', meta: `${jobs.value.length} jobs / ${iterations.value.length} iters` },
+    { id: PROJECT_CONFIG_VIEW_ID, label: '项目配置', meta: 'inputs' },
+    { id: PREANALYSIS_VIEW_ID, label: '预分析', meta: 'shader diff' },
+    { id: ALGO_CONFIG_VIEW_ID, label: '算法配置', meta: 'target / iter' },
+    { id: RUN_VIEW_ID, label: '运行控制台', meta: isJobRunning.value ? 'running' : 'start / cancel' },
+    { id: LLM_VIEW_ID, label: 'LLM 助手', meta: '骨架' },
+  ];
+  if (hasReport.value) {
+    items.push({ id: REPORT_VIEW_ID, label: '报告', meta: 'report.md' });
+  }
+  if (iterations.value.length >= 2 || jobs.value.length >= 2) {
+    items.push({ id: COMPARE_VIEW_ID, label: '迭代对比', meta: 'job + iter' });
+  }
+  return items;
+});
+
+function isProjectNavActive(id: string): boolean {
+  if (id === EXPERIMENT_RESULTS_VIEW_ID) return showExperimentResults.value;
+  return selectedView.value === id;
+}
+
+function selectProjectNav(id: string): void {
+  if (id === EXPERIMENT_RESULTS_VIEW_ID) {
+    const currentIterValid = !isSyntheticView(selectedView.value) && iterations.value.some((entry) => entry.iter_id === selectedView.value);
+    selectedView.value = currentIterValid
+      ? selectedView.value
+      : (iterations.value[0]?.iter_id ?? EXPERIMENT_RESULTS_VIEW_ID);
+    return;
+  }
+  selectedView.value = id;
+}
 
 watch(selectedCaseId, (caseId, oldId) => {
   if (caseId === oldId) return;
@@ -324,6 +397,9 @@ async function onProjectChanged(): Promise<void> {
   if (selectedCaseId.value) {
     try {
       project.value = await fetchProject(selectedCaseId.value);
+      if (isProjectCase.value) {
+        iterations.value = await loadProjectJobs(selectedCaseId.value);
+      }
     } catch { /* ignore */ }
   }
 }
@@ -339,13 +415,33 @@ async function onProjectDeleted(): Promise<void> {
 async function onJobProgress(): Promise<void> {
   if (!selectedCaseId.value) return;
   try {
-    iterations.value = await fetchIterations(selectedCaseId.value);
     project.value = await fetchProject(selectedCaseId.value);
+    iterations.value = isProjectCase.value
+      ? await loadProjectJobs(selectedCaseId.value)
+      : await fetchIterations(selectedCaseId.value);
   } catch { /* ignore */ }
 }
 
 function onOpenIter(iterId: string): void {
   selectedView.value = iterId;
+}
+
+async function onSelectJob(jobId: string): Promise<void> {
+  if (!jobId || jobId === selectedJobId.value) return;
+  selectedJobId.value = jobId;
+  try {
+    const jobIters = await fetchJobIterations(jobId);
+    jobIterationsById.value = { ...jobIterationsById.value, [jobId]: jobIters };
+    iterations.value = jobIters;
+    if (!isSyntheticView(selectedView.value) && !isValidView(selectedView.value, jobIters)) {
+      selectedView.value = EXPERIMENT_RESULTS_VIEW_ID;
+    } else if (!isSyntheticView(selectedView.value)) {
+      await refreshIterationDetail(selectedCaseId.value, selectedView.value);
+    }
+    persist();
+  } catch (err) {
+    errorMessage.value = formatError(err);
+  }
 }
 </script>
 
@@ -368,10 +464,33 @@ function onOpenIter(iterId: string): void {
       <button class="dismiss-btn" @click="errorMessage = null" aria-label="dismiss">×</button>
     </div>
 
-    <div class="app-body">
-      <aside class="iter-panel">
+    <nav v-if="isProjectCase" class="project-view-tabs">
+      <button
+        v-for="item in projectNavItems"
+        :key="item.id"
+        type="button"
+        class="project-view-tab"
+        :class="{ 'is-active': isProjectNavActive(item.id) }"
+        @click="selectProjectNav(item.id)"
+      >
+        <span>{{ item.label }}</span>
+        <small>{{ item.meta }}</small>
+      </button>
+    </nav>
+
+    <div
+      class="app-body"
+      :class="{
+        'is-project-results-layout': showResultColumns,
+        'is-project-full-layout': isProjectCase && !showResultColumns,
+      }"
+    >
+      <aside v-if="!isProjectCase || showResultColumns" class="iter-panel job-panel">
         <div class="iter-panel-header">
-          视图 <span class="muted">({{ iterations.length }} 迭代)</span>
+          {{ isProjectCase ? '实验 jobs' : '视图' }}
+          <span class="muted">
+            ({{ isProjectCase ? `${jobs.length} jobs` : `${iterations.length} 迭代` }})
+          </span>
         </div>
         <IterationList
           v-model="selectedView"
@@ -379,6 +498,20 @@ function onOpenIter(iterId: string): void {
           :has-report="hasReport"
           :is-project="isProjectCase"
           :job-is-running="isJobRunning"
+          :jobs="jobs"
+          :selected-job-id="selectedJobId"
+          @update:selected-job-id="onSelectJob"
+        />
+      </aside>
+      <aside v-if="showResultColumns" class="iter-panel round-panel">
+        <div class="iter-panel-header">
+          当前 job 迭代
+          <span class="muted">({{ iterations.length }} 轮)</span>
+        </div>
+        <JobIterationColumn
+          v-model="selectedView"
+          :iterations="iterations"
+          :selected-job-id="selectedJobId"
         />
       </aside>
       <main class="main-pane">
@@ -410,11 +543,16 @@ function onOpenIter(iterId: string): void {
           v-else-if="showCompare && selectedCaseId"
           :case-id="selectedCaseId"
           :iterations="iterations"
+          :jobs="jobs"
+          :job-iterations-by-id="jobIterationsById"
         />
         <IterationDetailView
           v-else-if="showIteration && iterationDetail"
           :detail="iterationDetail"
         />
+        <div v-else-if="showExperimentResults" class="empty-state">
+          请选择左侧 job 和迭代轮查看实验结果。
+        </div>
         <div v-else-if="isLoadingIter" class="empty-state">加载中…</div>
         <div v-else-if="!selectedCaseId" class="empty-state">
           还没有项目。点右上角 <span class="kbd">+ 新建项目</span> 开始一个 Unity → Laya 调参任务。
@@ -443,6 +581,53 @@ function onOpenIter(iterId: string): void {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: white;
+}
+.app-body.is-project-results-layout {
+  grid-template-columns: 220px 300px minmax(0, 1fr);
+}
+.app-body.is-project-full-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.round-panel {
+  background: #101720;
+}
+.project-view-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  overflow-x: auto;
+  padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.project-view-tab {
+  flex: 0 0 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 104px;
+  height: 58px;
+  max-height: 58px;
+  gap: 1px;
+  padding: 7px 10px;
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+.project-view-tab.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+.project-view-tab small {
+  color: var(--text-muted);
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dismiss-btn {
   margin-left: 8px;

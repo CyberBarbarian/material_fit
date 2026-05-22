@@ -53,3 +53,21 @@ def api_job_log(job_id: str, tail_kb: int = 64) -> dict[str, Any]:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"job_id": job_id, "tail_kb": tail_kb, "text": text}
+
+
+@router.get("/api/jobs/{job_id}/iterations")
+def api_job_iterations(job_id: str) -> list[dict[str, Any]]:
+    try:
+        return job_manager.list_job_iterations(job_id, config())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/api/jobs/{job_id}/iterations/{iter_id}")
+def api_job_iteration_detail(job_id: str, iter_id: str) -> dict[str, Any]:
+    try:
+        return job_manager.get_job_iteration_detail(job_id, iter_id, config())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

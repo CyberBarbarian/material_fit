@@ -31,6 +31,11 @@ class ParamSemantics:
     dependencies: list[str] = field(default_factory=list)
     searchable: bool = True
     reason: str = ""
+    confidence: float = 0.5
+    evidence: list[str] = field(default_factory=list)
+    source: str = "rule"
+    risk: str = ""
+    conflict_status: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -78,6 +83,8 @@ class ShaderEffectGraph:
         }
 
     def active_search_params(self) -> list[str]:
+        """Return statically active search params from the preanalysis graph."""
+
         active: list[str] = []
         for name, sem in self.params.items():
             group = self.groups.get(sem.group)
@@ -91,6 +98,112 @@ class ShaderEffectGraph:
                     continue
                 active.append(name)
         return active
+
+    def runtime_group_status(self, group_name: str, material_params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Evaluate param-gated activity against the current material params.
+
+        ``current_active`` is computed during preanalysis from the initial
+        material. Runtime optimization can later move gate values, so this
+        method re-checks numeric gate params without rebuilding the whole
+        graph. Define gates remain static because they require shader keyword
+        state, not just material uniform values.
+        """
+
+        group = self.groups.get(group_name)
+        if group is None:
+            return {"active": True, "blocked_by": [], "reason": "ungrouped"}
+        material_params = material_params or {}
+        blocked_by: list[str] = []
+        for name in group.gate_params:
+            if name not in self.params:
+                continue
+            if _number(material_params.get(name), 0.0) <= 0.0:
+                blocked_by.append(name)
+        define_blocked = (not group.current_active and "missing defines:" in str(group.reason))
+        active = not define_blocked and not blocked_by
+        if active:
+            reason = "runtime_active"
+        elif define_blocked:
+            reason = str(group.reason)
+        else:
+            reason = f"zero gate params: {', '.join(blocked_by)}"
+        return {
+            "active": active,
+            "blocked_by": blocked_by,
+            "define_blocked": define_blocked,
+            "reason": reason,
+        }
+
+    def active_search_params_for(self, material_params: dict[str, Any] | None = None) -> list[str]:
+        """Return search params active under the current material values."""
+
+        active: list[str] = []
+        material_params = material_params or {}
+        for name, sem in self.params.items():
+            group = self.groups.get(sem.group)
+            if not sem.searchable:
+                continue
+            if group is None:
+                active.append(name)
+                continue
+            runtime = self.runtime_group_status(group.name, material_params)
+            if runtime["active"] or group.suggested_by_unity:
+                if group.search_params and name not in group.search_params and name not in group.gate_params:
+                    continue
+                active.append(name)
+        return active
+
+    def gated_search_params_for(self, material_params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Return searchable params currently blocked by runtime gates."""
+
+        rows: list[dict[str, Any]] = []
+        material_params = material_params or {}
+        for group in self.groups.values():
+            runtime = self.runtime_group_status(group.name, material_params)
+            if runtime["active"] or group.suggested_by_unity:
+                continue
+            candidate_names = list(group.search_params or group.params)
+            for name in candidate_names:
+                sem = self.params.get(name)
+                if sem is None or not sem.searchable:
+                    continue
+                rows.append(
+                    {
+                        "param": name,
+                        "group": group.name,
+                        "role": sem.role,
+                        "transform": sem.transform,
+                        "blocked_by": list(runtime.get("blocked_by", [])),
+                        "reason": runtime.get("reason"),
+                    }
+                )
+        return rows
+
+    def activation_params_for(self, material_params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Return gate params that can reactivate currently gated groups."""
+
+        rows: list[dict[str, Any]] = []
+        material_params = material_params or {}
+        for group in self.groups.values():
+            runtime = self.runtime_group_status(group.name, material_params)
+            if runtime["active"] or group.suggested_by_unity:
+                continue
+            for name in group.gate_params:
+                sem = self.params.get(name)
+                if sem is None or not sem.searchable:
+                    continue
+                rows.append(
+                    {
+                        "param": name,
+                        "group": group.name,
+                        "role": sem.role,
+                        "transform": sem.transform,
+                        "current_value": material_params.get(name),
+                        "activates": list(group.search_params or group.params),
+                        "reason": runtime.get("reason"),
+                    }
+                )
+        return rows
 
 
 def build_shader_effect_graph(
@@ -111,6 +224,7 @@ def build_shader_effect_graph(
     material_params = material_params or {}
     material_define_set = {str(item) for item in material_defines}
     shader_define_names = {_define_name(item) for item in shader_defines}
+    shader_param_names = {param.name for param in shader_params}
     llm_by_param = _index_llm_param_semantics(llm_semantics)
 
     params: dict[str, ParamSemantics] = {}
@@ -119,6 +233,7 @@ def build_shader_effect_graph(
             param,
             material_params=material_params,
             shader_define_names=shader_define_names,
+            shader_param_names=shader_param_names,
         )
         params[param.name] = _merge_llm_semantics(base, llm_by_param.get(param.name))
 
@@ -163,6 +278,11 @@ def graph_from_dict(payload: dict[str, Any] | None) -> ShaderEffectGraph | None:
             dependencies=[str(item) for item in raw.get("dependencies", []) if isinstance(item, str)],
             searchable=bool(raw.get("searchable", True)),
             reason=str(raw.get("reason", "")),
+            confidence=_confidence(raw.get("confidence"), default=0.5),
+            evidence=[str(item) for item in raw.get("evidence", []) if isinstance(item, str)],
+            source=str(raw.get("source") or "rule"),
+            risk=str(raw.get("risk") or ""),
+            conflict_status=str(raw.get("conflict_status") or "none"),
         )
     groups: dict[str, ShaderEffectGroup] = {}
     for name, raw in raw_groups.items():
@@ -197,16 +317,18 @@ def _infer_param_semantics(
     *,
     material_params: dict[str, Any],
     shader_define_names: set[str],
+    shader_param_names: set[str],
 ) -> ParamSemantics:
     name = param.name
     lower = name.lower()
     group = _infer_group(lower)
     role = _infer_role(lower, param.param_type)
     transform = _infer_transform(lower, param.param_type)
-    gates = _infer_gates(name, lower, group, shader_define_names)
+    gates = _infer_gates(name, lower, group, shader_define_names, shader_param_names)
     dependencies = [gate.name for gate in gates if gate.kind == "param_nonzero"]
     searchable = _is_searchable(param, lower, role)
     reason = "name/type heuristic"
+    evidence = [f"rule matched group={group}, role={role}, transform={transform}"]
     if role == "gate":
         reason = "effect gate parameter"
     elif not searchable:
@@ -225,6 +347,9 @@ def _infer_param_semantics(
         dependencies=dependencies,
         searchable=searchable,
         reason=reason,
+        confidence=0.65 if group != "misc" else 0.35,
+        evidence=evidence,
+        source="rule",
     )
 
 
@@ -240,7 +365,14 @@ def _build_groups(
 
     out: dict[str, ShaderEffectGroup] = {}
     for group_name, items in sorted(grouped.items()):
-        gate_params = sorted({gate.name for sem in items for gate in sem.gates if gate.kind == "param_nonzero"})
+        gate_params = sorted(
+            {
+                gate.name
+                for sem in items
+                for gate in sem.gates
+                if gate.kind == "param_nonzero" and gate.name in params
+            }
+        )
         define_gates = sorted({gate.name for sem in items for gate in sem.gates if gate.kind == "define"})
         missing_defines = [name for name in define_gates if name not in material_defines]
         zero_gates = [name for name in gate_params if _number(material_params.get(name), 0.0) <= 0.0]
@@ -328,13 +460,38 @@ def _group_unity_hint(group_name: str, llm_semantics: dict[str, Any] | None) -> 
 
 
 def _infer_group(lower: str) -> str:
-    if any(token in lower for token in ("base", "albedo", "gamma")):
+    compact = lower.replace("_", "")
+    if "alphatest" in compact or compact in {"ualphatestvalue", "alphacutoff", "ucutoff"}:
+        return "alpha_cutout"
+    if "normal" in compact or "bump" in compact:
+        return "normal_detail"
+    if "lightrotate" in compact or "lightdirection" in compact:
+        return "light_direction"
+    if compact in {"ulmap", "ulmapst", "lmap", "lmapst", "ugammapower", "gammapower"}:
+        return "shared_mask_lmap"
+    if "spetex" in compact or "speoffet" in compact or "speoffset" in compact:
+        return "specular_smoothness"
+    if compact in {"umaintex", "umaintexst", "maintex", "maintexst"}:
         return "base_color"
-    if any(token in lower for token in ("shadow", "occlusion", "diffuse", "gi")):
+    if (
+        compact in {"ucolor", "color", "maincolor", "basecolor", "albedo", "tint"}
+        or "basecolor" in compact
+        or "maincolor" in compact
+        or "albedo" in compact
+        or "tint" in compact
+        or "texpower" in compact
+        or "maintexpower" in compact
+    ):
+        return "base_color"
+    if any(token in lower for token in ("shadow", "occlusion", "diffuse", "gi")) or "aopower" in compact:
         return "shadow_diffuse"
     if any(token in lower for token in ("specular", "smooth", "metallic", "roughness", "ggx")):
         return "specular_smoothness"
-    if any(token in lower for token in ("ibl", "reflect", "matcap", "environment")):
+    if (
+        any(token in lower for token in ("ibl", "reflect", "matcap", "environment"))
+        or "skyrotate" in compact
+        or "indirectstrength" in compact
+    ):
         return "reflection_matcap"
     if "fresnel" in lower or "rim" in lower:
         return "fresnel"
@@ -357,6 +514,9 @@ def _infer_role(lower: str, param_type: str) -> str:
         return "shape"
     if "hue" in lower:
         return "angle"
+    compact = lower.replace("_", "")
+    if "rotate" in compact or "offset" in compact or "offet" in compact:
+        return "angle"
     return "value"
 
 
@@ -364,27 +524,40 @@ def _infer_transform(lower: str, param_type: str) -> str:
     type_l = str(param_type).lower()
     if "color" in lower or type_l == "color":
         return "color_rgb"
-    if "hue" in lower or "angle" in lower or "rotation" in lower:
+    compact = lower.replace("_", "")
+    if "hue" in lower or "angle" in lower or "rotation" in lower or "rotate" in compact:
         return "circular"
     if any(token in lower for token in ("pow", "power", "gamma", "intensity", "strength", "scale")):
         return "log"
     return "linear"
 
 
-def _infer_gates(name: str, lower: str, group: str, shader_define_names: set[str]) -> list[ParamGate]:
+def _infer_gates(
+    name: str,
+    lower: str,
+    group: str,
+    shader_define_names: set[str],
+    shader_param_names: set[str],
+) -> list[ParamGate]:
     gates: list[ParamGate] = []
     if group == "emission" and "EMISSION" in shader_define_names:
         gates.append(ParamGate("define", "EMISSION", True, "emission uniforms require EMISSION"))
         if "scale" not in lower and "intensity" not in lower:
-            gates.append(ParamGate("param_nonzero", "u_EmissionScale", True, "emission scale gates this group"))
+            if "u_EmissionScale" in shader_param_names:
+                gates.append(ParamGate("param_nonzero", "u_EmissionScale", True, "emission scale gates this group"))
     if group == "color_grade" and "ADJUST_HSV" in shader_define_names:
         gates.append(ParamGate("define", "ADJUST_HSV", True, "HSV uniforms require ADJUST_HSV"))
     if "contrast" in lower and "ENABLE_CONTRAST" in shader_define_names:
         gates.append(ParamGate("define", "ENABLE_CONTRAST", True, "contrast requires ENABLE_CONTRAST"))
-    if group == "fresnel" and name != "u_FresnelIntensity":
+    if group == "fresnel" and name != "u_FresnelIntensity" and "u_FresnelIntensity" in shader_param_names:
         gates.append(ParamGate("param_nonzero", "u_FresnelIntensity", True, "Fresnel intensity gates Fresnel shape/color"))
     if group == "reflection_matcap" and "matcap" in lower and "strength" not in lower:
-        gates.append(ParamGate("param_nonzero", "u_MatcapStrength", True, "Matcap strength gates Matcap color/map"))
+        if "u_MatcapStrength" in shader_param_names:
+            gates.append(ParamGate("param_nonzero", "u_MatcapStrength", True, "Matcap strength gates Matcap color/map"))
+    if group == "normal_detail" and name != "u_NormalScale" and "NORMALMAP" in shader_define_names:
+        gates.append(ParamGate("define", "NORMALMAP", True, "normal detail uniforms require NORMALMAP"))
+    if group == "alpha_cutout" and "ALPHATEST" in shader_define_names:
+        gates.append(ParamGate("define", "ALPHATEST", True, "alpha cutoff only affects discard when ALPHATEST is enabled"))
     return gates
 
 
@@ -398,6 +571,8 @@ def _is_searchable(param: ShaderParam, lower: str, role: str) -> bool:
         return False
     if lower in {"u_alpha", "u_cutoff"}:
         return False
+    if "alphatest" in lower.replace("_", ""):
+        return False
     hidden = str(param.hidden or "").lower()
     if hidden in {"true", "1", "yes"}:
         return False
@@ -410,6 +585,10 @@ def _channels_for_group(group: str) -> list[str]:
         "shadow_diffuse": ["shadow_occlusion", "base_color_main_texture"],
         "specular_smoothness": ["metallic_smoothness_specular"],
         "reflection_matcap": ["environment_reflection_matcap"],
+        "normal_detail": ["detail_texture", "normal_response", "specular_smoothness"],
+        "shared_mask_lmap": ["emission", "environment_reflection_matcap", "shadow_occlusion", "fresnel_rim"],
+        "light_direction": ["shadow_occlusion", "base_color_main_texture", "metallic_smoothness_specular"],
+        "alpha_cutout": ["validity_alpha_mask"],
         "fresnel": ["fresnel_rim", "center_vs_edge_balance"],
         "emission": ["emission"],
         "color_grade": ["color_grading_hsv_contrast"],
@@ -432,6 +611,7 @@ def _index_llm_param_semantics(payload: dict[str, Any] | None) -> dict[str, dict
 def _merge_llm_semantics(base: ParamSemantics, hint: dict[str, Any] | None) -> ParamSemantics:
     if not hint:
         return base
+    confidence = _confidence(hint.get("confidence"), default=0.75)
     gates = list(base.gates)
     for gate in hint.get("gates", []):
         if isinstance(gate, dict) and isinstance(gate.get("name"), str):
@@ -443,6 +623,29 @@ def _merge_llm_semantics(base: ParamSemantics, hint: dict[str, Any] | None) -> P
                     reason=str(gate.get("reason", "LLM semantic hint")),
                 )
             )
+    evidence = list(base.evidence)
+    for item in hint.get("evidence", []):
+        if isinstance(item, str) and item and item not in evidence:
+            evidence.append(item)
+    if confidence < 0.55:
+        return ParamSemantics(
+            name=base.name,
+            param_type=base.param_type,
+            group=base.group,
+            role=base.role,
+            transform=base.transform,
+            range_min=base.range_min,
+            range_max=base.range_max,
+            gates=base.gates,
+            dependencies=base.dependencies,
+            searchable=base.searchable,
+            reason=f"{base.reason}; low-confidence LLM hint retained for review",
+            confidence=max(base.confidence, confidence),
+            evidence=evidence[:12],
+            source=base.source,
+            risk=str(hint.get("risk") or ""),
+            conflict_status="llm_low_confidence",
+        )
     return ParamSemantics(
         name=base.name,
         param_type=base.param_type,
@@ -453,8 +656,13 @@ def _merge_llm_semantics(base: ParamSemantics, hint: dict[str, Any] | None) -> P
         range_max=base.range_max,
         gates=gates,
         dependencies=[str(item) for item in hint.get("dependencies", base.dependencies) if isinstance(item, str)],
-        searchable=bool(hint.get("searchable", base.searchable)),
+        searchable=base.searchable and bool(hint.get("searchable", base.searchable)),
         reason=str(hint.get("reason") or f"{base.reason}; LLM refined"),
+        confidence=confidence,
+        evidence=evidence[:12],
+        source="llm",
+        risk=str(hint.get("risk") or ""),
+        conflict_status="llm_refined" if str(hint.get("group") or base.group) != base.group else "none",
     )
 
 
@@ -471,6 +679,15 @@ def _number(value: Any, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _confidence(value: Any, *, default: float) -> float:
+    numeric = _number(value, default)
+    if numeric < 0.0:
+        return 0.0
+    if numeric > 1.0:
+        return 1.0
+    return numeric
 
 
 def _optional_float(value: Any) -> float | None:

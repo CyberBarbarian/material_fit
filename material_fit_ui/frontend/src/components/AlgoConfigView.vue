@@ -14,7 +14,7 @@ const ok = ref(false);
 function defaultConfig(): AlgorithmConfig {
   return {
     max_iterations: 6,
-    target_score: 0.5,
+    target_score: 0.9,
     apply_lmat: true,
     capture_screen_after_apply: false,
     use_laya_editor_capture: true,
@@ -27,7 +27,7 @@ function defaultConfig(): AlgorithmConfig {
     rerender_wait_ms: 900,
     use_capture_contract: false,
     dry_run: false,
-    fit_score_mode: 'human_accept',
+    fit_score_mode: 'research',
     auto_adjust_mode: 'fresh_fit',
     optimizer: 'semantic_group',
     cma_es: {
@@ -224,7 +224,7 @@ async function save(): Promise<void> {
             <td>
               <label for="cfg-target">target_score</label>
               <p class="muted small">
-                fit_score 达到该值即终止。human_accept 是当前默认目标；perceptual / linear 主要用于诊断对照。
+                fit_score 达到该值即终止。research 是当前默认目标，直接对应研究总分 / 100；human_accept / perceptual / linear 主要用于诊断对照。
               </p>
             </td>
             <td>
@@ -235,6 +235,8 @@ async function save(): Promise<void> {
             <td>
               <label for="cfg-mode">fit_score_mode</label>
               <p class="muted small">
+                <strong>research</strong>（推荐）：使用新的多视角 research_score / 100，包含 ΔE00、亮度、结构、高光与细节纹理。
+                <br/>
                 <strong>human_accept</strong>（推荐）：弱化姿态/视角微差带来的像素惩罚，重点比较前景颜色分布和材质统计。
                 <br/>
                 <strong>perceptual</strong>：更严格的通道加权 MAE + SSIM，用于诊断。
@@ -244,6 +246,7 @@ async function save(): Promise<void> {
             </td>
             <td>
               <select id="cfg-mode" v-model="form.fit_score_mode">
+                <option value="research">research（研究指标闭环）</option>
                 <option value="human_accept">human_accept</option>
                 <option value="perceptual">perceptual</option>
                 <option value="linear">linear (legacy)</option>

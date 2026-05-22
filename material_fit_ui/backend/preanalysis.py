@@ -521,28 +521,54 @@ def _run_llm_semantics(
             for define in laya_info.get("defines", [])
             if isinstance(define, dict) and define.get("name")
         }
-        feature_context = _build_unity_feature_llm_context(context)
-        raw = run_shader_semantics_llm(
-            feature_context,
+        has_unity_evidence = _has_unity_llm_evidence(context)
+        raw: dict[str, Any] = {
+            "unity_feature_summary": [],
+            "laya_module_candidates": [],
+            "unity_phenomena": [],
+            "param_semantics": [],
+            "initial_laya_param_suggestions": [],
+        }
+        if has_unity_evidence:
+            feature_context = _build_unity_feature_llm_context(context)
+            raw = run_shader_semantics_llm(
+                feature_context,
+                runtime=runtime,
+                max_tokens=_env_int("LLM_FEATURE_MAX_TOKENS", 3500),
+            )
+        param_raw = _run_llm_semantics_batches(
+            context,
             runtime=runtime,
-            max_tokens=_env_int("LLM_FEATURE_MAX_TOKENS", 3500),
+            batch_size=_env_int("LLM_PARAM_BATCH_SIZE", 4),
+            concurrency=_env_int("LLM_PARAM_CONCURRENCY", 1),
         )
+        if isinstance(param_raw, dict):
+            raw = _merge_llm_raw_outputs(raw, param_raw)
         validated = validate_llm_semantics_output(
             raw,
             allowed_params=allowed_params,
             allowed_defines=allowed_defines,
         )
         features_count = len(validated.get("unity_feature_summary", [])) + len(validated.get("unity_phenomena", []))
-        status = "ok" if features_count else "failed"
+        param_count = len(validated.get("param_semantics", []))
+        status = "ok" if (features_count or param_count) else "failed"
         warnings = list(validated.get("warnings", []))
-        if not features_count:
+        if isinstance(param_raw, dict):
+            warnings.extend(str(item) for item in (param_raw.get("_batch_warnings") or []) if isinstance(item, str))
+        if has_unity_evidence and not features_count:
             warnings.append("LLM did not return any Unity feature modules")
+        if not param_count:
+            warnings.append("LLM did not return any Laya param_semantics")
+        mode = "laya_param_semantics"
+        if has_unity_evidence:
+            mode = "unity_feature_summary+laya_param_semantics"
         return {
             "enabled": True,
             "status": status,
             "provider": "openai-compatible",
             "runtime": runtime.public_dict(),
-            "mode": "unity_feature_summary",
+            "mode": mode,
+            "unity_evidence_present": has_unity_evidence,
             "validated": validated,
             "warnings": warnings,
         }
@@ -550,6 +576,21 @@ def _run_llm_semantics(
         return {"enabled": True, "status": "not_configured", "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         return {"enabled": True, "status": "failed", "error": str(exc)}
+
+
+def _has_unity_llm_evidence(context: dict[str, Any]) -> bool:
+    unity_shader = context.get("unity_shader") if isinstance(context.get("unity_shader"), dict) else None
+    unity_material = context.get("unity_material") if isinstance(context.get("unity_material"), dict) else None
+    if unity_shader:
+        if unity_shader.get("source_excerpt"):
+            return True
+        if isinstance(unity_shader.get("params"), list) and bool(unity_shader["params"]):
+            return True
+        if isinstance(unity_shader.get("defines"), list) and bool(unity_shader["defines"]):
+            return True
+    if unity_material:
+        return bool(unity_material)
+    return False
 
 
 def _build_module_plan(
@@ -639,6 +680,25 @@ def _build_module_plan(
     }
 
 
+def _merge_llm_raw_outputs(primary: Any, secondary: Any) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(primary) if isinstance(primary, dict) else {}
+    if not isinstance(secondary, dict):
+        return merged
+    for key in (
+        "unity_feature_summary",
+        "laya_module_candidates",
+        "unity_phenomena",
+        "param_semantics",
+        "initial_laya_param_suggestions",
+        "_batch_warnings",
+    ):
+        left = merged.get(key) if isinstance(merged.get(key), list) else []
+        right = secondary.get(key) if isinstance(secondary.get(key), list) else []
+        if right:
+            merged[key] = [*left, *right]
+    return merged
+
+
 def _build_laya_control_groups(
     *,
     laya_info: dict[str, Any],
@@ -682,6 +742,13 @@ def _build_laya_control_groups(
             "gate_status": gate_status,
             "dependencies": [str(item) for item in sem.get("dependencies", []) if isinstance(item, str)],
             "reason": str(sem.get("reason") or ""),
+            "source": str(sem.get("source") or "rule"),
+            "confidence": float(sem.get("confidence", 0.0) or 0.0),
+            "evidence": [str(item) for item in sem.get("evidence", []) if isinstance(item, str)],
+            "risk": str(sem.get("risk") or ""),
+            "conflict_status": str(sem.get("conflict_status") or "none"),
+            "auto_group": group_name,
+            "semantic_sources": [str(sem.get("source") or "rule")],
         }
         controls_by_group.setdefault(group_name, []).append(control)
 
@@ -1372,10 +1439,19 @@ def build_effective_laya_control_schema(
             "reason",
             "range_min",
             "range_max",
+            "confidence",
+            "evidence",
+            "risk",
+            "conflict_status",
         ):
             if key in patch:
                 control[key] = patch[key]
         control["source"] = "manual"
+        sources = [str(item) for item in control.get("semantic_sources", []) if isinstance(item, str)]
+        control["semantic_sources"] = _unique_strings([*sources, "manual"])
+        if target_group_id and control.get("auto_group") and target_group_id != control.get("auto_group"):
+            control["conflict_status"] = "manual_override"
+            control["reason"] = str(control.get("reason") or "manual override")
         control["locked_fields"] = [str(item) for item in patch.get("locked_fields", []) if isinstance(item, str)]
 
     deleted_groups = set(manual_schema.get("deleted_groups", []))
@@ -1410,7 +1486,43 @@ def build_effective_laya_control_schema(
         elif enabled is True and "enabled" not in manual_schema["groups"].get(str(group_id), {}):
             group["enabled"] = True
 
+    diagnostics: list[dict[str, Any]] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        for control in group.get("controls", []):
+            if not isinstance(control, dict):
+                continue
+            searchable = bool(control.get("searchable", True))
+            is_search_param = bool(control.get("is_search_param", searchable))
+            locked = [str(item) for item in control.get("locked_fields", []) if isinstance(item, str)]
+            if searchable and not is_search_param:
+                diagnostics.append(
+                    {
+                        "level": "warning",
+                        "code": "searchable_not_search_param",
+                        "param": str(control.get("name") or ""),
+                        "group": str(group.get("id") or ""),
+                        "message": "searchable=true but is_search_param=false; normalized unless is_search_param is locked",
+                    }
+                )
+                if "is_search_param" not in locked:
+                    control["is_search_param"] = True
+            elif not searchable and is_search_param:
+                diagnostics.append(
+                    {
+                        "level": "warning",
+                        "code": "search_param_not_searchable",
+                        "param": str(control.get("name") or ""),
+                        "group": str(group.get("id") or ""),
+                        "message": "is_search_param=true but searchable=false; normalized to avoid an inert search parameter",
+                    }
+                )
+                if "is_search_param" not in locked:
+                    control["is_search_param"] = False
+
     effective["manual_laya_control_schema"] = manual_schema
+    effective["diagnostics"] = diagnostics
     effective["groups"] = sorted(groups, key=lambda group: (int(group.get("order", 0) or 0), str(group.get("id", ""))))
     return effective
 
@@ -1459,6 +1571,10 @@ def _laya_control_group_label(group: str) -> str:
         "shadow_diffuse": "阴影 / 漫反射层次",
         "specular_smoothness": "高光 / 金属 / 光滑度",
         "reflection_matcap": "环境反射 / Matcap",
+        "normal_detail": "法线 / 细节结构",
+        "shared_mask_lmap": "LMap 通道 / 共享遮罩",
+        "light_direction": "灯光方向 / 明暗方向",
+        "alpha_cutout": "透明裁剪 / Alpha",
         "fresnel": "Fresnel / 边缘光",
         "emission": "自发光",
         "color_grade": "HSV / 对比度调色",
@@ -1472,6 +1588,10 @@ def _laya_control_group_description(group: str) -> str:
         "shadow_diffuse": "控制暗部、遮蔽、GI 与 diffuse ramp，适合修正明暗层次。",
         "specular_smoothness": "控制主高光、金属感、粗糙/光滑过渡等材质反射特征。",
         "reflection_matcap": "控制 IBL、环境反射和 Matcap 叠加，常与高光观感耦合。",
+        "normal_detail": "控制法线贴图、法线强度和细节结构，通常会同时影响高光形状和边缘明暗。",
+        "shared_mask_lmap": "控制复用遮罩贴图或通道响应，例如 LMap 的 Emiss/Sky/AO/Rim 多通道影响。",
+        "light_direction": "控制材质内部灯光方向或旋转，会同时影响漫反射、阴影和高光位置。",
+        "alpha_cutout": "控制 alpha test、裁剪阈值和透明边界，默认不参与外观主优化。",
         "fresnel": "控制轮廓边缘光和视角相关亮边，通常受强度 gate 控制。",
         "emission": "控制自发光颜色和强度，通常需要 define 或 scale/gate 生效。",
         "color_grade": "控制 Hue、Saturation、Lightness、Contrast 等全局后处理式修正。",
@@ -1507,6 +1627,10 @@ def _build_unity_feature_llm_context(context: dict[str, Any]) -> dict[str, Any]:
             "shadow_diffuse",
             "specular_smoothness",
             "reflection_matcap",
+            "normal_detail",
+            "shared_mask_lmap",
+            "light_direction",
+            "alpha_cutout",
             "fresnel",
             "emission",
             "color_grade",
@@ -1528,7 +1652,7 @@ def _build_unity_feature_llm_context(context: dict[str, Any]) -> dict[str, Any]:
         "output_schema": {
             "unity_feature_summary": [
                 {
-                    "feature": "base_color|normal|occlusion|metallic_smoothness|specular|secondary_specular|matcap_reflection|rim_or_fresnel|emission|color_grade|alpha|other",
+                    "feature": "base_color|normal|occlusion|metallic_smoothness|specular|secondary_specular|matcap_reflection|rim_or_fresnel|emission|color_grade|alpha|light_direction|shared_mask|other",
                     "enabled": True,
                     "confidence": 0.0,
                     "evidence": ["keyword/texture/value/formula evidence"],
@@ -1610,11 +1734,14 @@ def _candidate_groups_for_feature(feature: str) -> list[str]:
     text = feature.lower()
     mapping = [
         (("base", "albedo", "color", "alpha"), ["base_color"]),
-        (("normal", "bump"), ["misc"]),
+        (("normal", "bump"), ["normal_detail"]),
         (("occlusion", "shadow", "diffuse"), ["shadow_diffuse"]),
         (("metallic", "smooth", "rough", "specular", "gloss"), ["specular_smoothness"]),
         (("secondary_specular", "second_specular"), ["specular_smoothness"]),
         (("matcap", "reflection", "reflect", "environment", "ibl"), ["reflection_matcap"]),
+        (("light_direction", "lightrotate", "directional"), ["light_direction"]),
+        (("shared_mask", "lmap", "mask"), ["shared_mask_lmap"]),
+        (("alpha", "cutout", "cutoff"), ["alpha_cutout"]),
         (("rim", "fresnel"), ["fresnel"]),
         (("emission", "emissive"), ["emission"]),
         (("hsv", "color_grade", "contrast", "saturation", "hue"), ["color_grade"]),
@@ -1713,6 +1840,17 @@ def _build_llm_batch_context(
     batch_laya = dict(laya_shader)
     batch_laya["params"] = chunk
     batch_laya["source_excerpt"] = ""
+    if isinstance(laya_shader.get("param_evidence"), list):
+        batch_laya["param_evidence"] = [
+            item
+            for item in laya_shader["param_evidence"]
+            if isinstance(item, dict)
+            and str(item.get("name") or "") in {
+                str(param.get("name"))
+                for param in chunk
+                if isinstance(param, dict) and param.get("name")
+            }
+        ]
     batch_context["laya_shader"] = batch_laya
     unity_shader = batch_context.get("unity_shader")
     if isinstance(unity_shader, dict):
@@ -1738,10 +1876,31 @@ def _build_llm_batch_context(
         "batch_index": index,
         "batch_count": count,
         "batch_instruction": (
-            "Return param_semantics only for laya_shader.params in this batch. "
-            "Keep unity_phenomena and initial_laya_param_suggestions concise. "
-            "Do not include parameters outside this batch in param_semantics."
+            "Return one strict JSON object with a param_semantics array only. "
+            "Classify only laya_shader.params in this batch. "
+            "Use laya_shader.param_evidence source_usages and candidate_groups as evidence, "
+            "but correct the candidate group when the shader formula proves a better group. "
+            "Evidence max 1 short string per parameter. Reason max 12 words. "
+            "For Texture2D and *_ST parameters set searchable=false. "
+            "Do not include Unity feature summaries, suggestions, markdown, or parameters outside this batch."
         ),
+    }
+    batch_context["output_schema"] = {
+        "param_semantics": [
+            {
+                "name": "exact Laya parameter name from this batch",
+                "group": "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|normal_detail|shared_mask_lmap|light_direction|alpha_cutout|fresnel|emission|color_grade|misc",
+                "role": "color|intensity|gate|shape|angle|texture|value",
+                "transform": "linear|log|circular|color_rgb",
+                "searchable": True,
+                "confidence": 0.0,
+                "evidence": ["brief source/formula evidence"],
+                "risk": "brief uncertainty or coupling risk",
+                "gates": [],
+                "dependencies": [],
+                "reason": "brief semantic explanation",
+            }
+        ]
     }
     return batch_context
 

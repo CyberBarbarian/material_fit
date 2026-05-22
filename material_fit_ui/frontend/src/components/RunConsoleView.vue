@@ -361,6 +361,8 @@ async function doCancel(): Promise<void> {
   cancelling.value = true;
   try {
     await cancelJob(activeJob.value.job_id);
+    await loadJobs();
+    await refreshLog();
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);
   } finally {
@@ -641,6 +643,9 @@ function pickIter(iterId: string | null): void {
           </span>
           <span v-if="activeJob.last_decision_summary?.fit_score_before != null" class="stat-pill">
             fit <strong>{{ fmt(activeJob.last_decision_summary?.fit_score_before ?? null) }}</strong>
+          </span>
+          <span v-if="activeJob.last_decision_summary?.research_score != null" class="stat-pill">
+            research <strong>{{ (activeJob.last_decision_summary?.research_score ?? 0).toFixed(1) }}/100</strong>
           </span>
           <span v-if="activeJob.last_decision_summary?.human_accept_score != null" class="stat-pill">
             human <strong>{{ fmt(activeJob.last_decision_summary?.human_accept_score ?? null) }}</strong>

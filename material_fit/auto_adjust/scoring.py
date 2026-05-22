@@ -24,6 +24,15 @@ def resolve_fit_score(
     """Pick the headline score for one auto-adjust iteration."""
 
     if isinstance(analysis, dict):
+        if mode == "research":
+            research = analysis.get("research_metrics")
+            if isinstance(research, dict):
+                raw = research.get("score")
+                if isinstance(raw, (int, float)) and math.isfinite(float(raw)):
+                    return max(0.0, min(1.0, float(raw) / 100.0))
+                loss = research.get("loss")
+                if isinstance(loss, (int, float)) and math.isfinite(float(loss)):
+                    return max(0.0, min(1.0, 1.0 - float(loss)))
         if mode == "human_accept":
             raw = analysis.get("human_accept_score")
             if isinstance(raw, (int, float)) and math.isfinite(float(raw)):
@@ -40,21 +49,23 @@ def extract_perceptual_signals(analysis: dict[str, Any]) -> dict[str, Any]:
 
     if not isinstance(analysis, dict):
         return {}
+    out: dict[str, Any] = {}
     perc = analysis.get("perceptual")
     auto_mask = analysis.get("auto_mask")
-    if not isinstance(perc, dict):
-        return {}
-    out: dict[str, Any] = {
-        "weighted_mae": perc.get("weighted_mae"),
-        "ssim": perc.get("ssim"),
-        "ssim_status": perc.get("ssim_status"),
-        "fit_score": perc.get("fit_score"),
-        "fit_components": perc.get("fit_components"),
-        "branch_weights": perc.get("branch_weights"),
-        "weights_used": perc.get("weights_used"),
-        "coverage": perc.get("coverage"),
-        "diagnostics": perc.get("diagnostics"),
-    }
+    if isinstance(perc, dict):
+        out.update(
+            {
+                "weighted_mae": perc.get("weighted_mae"),
+                "ssim": perc.get("ssim"),
+                "ssim_status": perc.get("ssim_status"),
+                "fit_score": perc.get("fit_score"),
+                "fit_components": perc.get("fit_components"),
+                "branch_weights": perc.get("branch_weights"),
+                "weights_used": perc.get("weights_used"),
+                "coverage": perc.get("coverage"),
+                "diagnostics": perc.get("diagnostics"),
+            }
+        )
     human_accept = analysis.get("human_accept")
     if isinstance(human_accept, dict):
         out["human_accept"] = {

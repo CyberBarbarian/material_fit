@@ -1,45 +1,48 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { IterationDetail, IterationSummary, ParamChange } from '../types';
-import { fetchIterationDetail } from '../api';
+import type { IterationDetail, IterationSummary, JobIterationSummary, JobState, ParamChange } from '../types';
+import { fetchIterationDetail, fetchJobIterationDetail, fetchJobIterations } from '../api';
 import ImageComparison from './ImageComparison.vue';
 import MultiviewImageGrid from './MultiviewImageGrid.vue';
 
-const props = defineProps<{ caseId: string; iterations: IterationSummary[] }>();
+const props = defineProps<{
+  caseId: string;
+  iterations: IterationSummary[];
+  jobs?: JobState[];
+  jobIterationsById?: Record<string, JobIterationSummary[]>;
+}>();
 
-const leftId = ref<string>('');
-const rightId = ref<string>('');
+const leftJobId = ref<string>('');
+const rightJobId = ref<string>('');
+const leftIterId = ref<string>('');
+const rightIterId = ref<string>('');
 const leftDetail = ref<IterationDetail | null>(null);
 const rightDetail = ref<IterationDetail | null>(null);
 const error = ref<string | null>(null);
+const localJobIterations = ref<Record<string, JobIterationSummary[]>>({});
 
 watch(
-  () => props.iterations,
-  (iters) => {
-    if (!iters.length) {
-      leftId.value = '';
-      rightId.value = '';
-      return;
-    }
-    if (!iters.some((i) => i.iter_id === leftId.value)) {
-      leftId.value = iters[0].iter_id;
-    }
-    if (!iters.some((i) => i.iter_id === rightId.value)) {
-      rightId.value = iters[Math.min(iters.length - 1, 1)].iter_id ?? iters[0].iter_id;
-    }
+  () => props.jobs?.map((job) => job.job_id).join('|') ?? '',
+  () => {
+    syncDefaultJobs();
+    void loadSelectedJobIterations();
   },
   { immediate: true },
 );
 
 async function loadSide(side: 'left' | 'right'): Promise<void> {
-  const id = side === 'left' ? leftId.value : rightId.value;
   const target = side === 'left' ? leftDetail : rightDetail;
-  if (!props.caseId || !id) {
+  const jobs = props.jobs ?? [];
+  const jobId = side === 'left' ? leftJobId.value : rightJobId.value;
+  const iterId = side === 'left' ? leftIterId.value : rightIterId.value;
+  if (!props.caseId || !iterId) {
     target.value = null;
     return;
   }
   try {
-    target.value = await fetchIterationDetail(props.caseId, id);
+    target.value = jobs.length && jobId
+      ? await fetchJobIterationDetail(jobId, iterId)
+      : await fetchIterationDetail(props.caseId, iterId);
     error.value = null;
   } catch (err) {
     target.value = null;
@@ -47,8 +50,75 @@ async function loadSide(side: 'left' | 'right'): Promise<void> {
   }
 }
 
-watch([() => props.caseId, leftId], () => { void loadSide('left'); }, { immediate: true });
-watch([() => props.caseId, rightId], () => { void loadSide('right'); }, { immediate: true });
+async function ensureJobIterations(jobId: string): Promise<void> {
+  if (!jobId) return;
+  if (props.jobIterationsById?.[jobId] || localJobIterations.value[jobId]) return;
+  const next = { ...localJobIterations.value };
+  next[jobId] = await fetchJobIterations(jobId);
+  localJobIterations.value = next;
+}
+
+async function loadSelectedJobIterations(): Promise<void> {
+  await Promise.all([
+    ensureJobIterations(leftJobId.value),
+    ensureJobIterations(rightJobId.value),
+  ]);
+}
+
+function syncDefaultJobs(): void {
+  const jobs = props.jobs ?? [];
+  if (!jobs.length) {
+    leftJobId.value = '';
+    rightJobId.value = '';
+    return;
+  }
+  if (!jobs.some((job) => job.job_id === leftJobId.value)) {
+    leftJobId.value = jobs[0].job_id;
+  }
+  if (!jobs.some((job) => job.job_id === rightJobId.value)) {
+    rightJobId.value = jobs[Math.min(jobs.length - 1, 1)]?.job_id ?? jobs[0].job_id;
+  }
+}
+
+function iterationsForJob(jobId: string): JobIterationSummary[] {
+  if (!jobId) return [];
+  return props.jobIterationsById?.[jobId] ?? localJobIterations.value[jobId] ?? [];
+}
+
+function syncDefaultIter(side: 'left' | 'right'): void {
+  const jobs = props.jobs ?? [];
+  const current = side === 'left' ? leftIterId.value : rightIterId.value;
+  const source = jobs.length
+    ? iterationsForJob(side === 'left' ? leftJobId.value : rightJobId.value)
+    : props.iterations;
+  if (!source.length) {
+    if (side === 'left') leftIterId.value = '';
+    else rightIterId.value = '';
+    return;
+  }
+  if (!source.some((iter) => iter.iter_id === current)) {
+    const fallback = side === 'left' ? source[0] : (source[Math.min(source.length - 1, 1)] ?? source[0]);
+    if (side === 'left') leftIterId.value = fallback.iter_id;
+    else rightIterId.value = fallback.iter_id;
+  }
+}
+
+const leftJobIterations = computed(() => iterationsForJob(leftJobId.value));
+const rightJobIterations = computed(() => iterationsForJob(rightJobId.value));
+
+watch(() => props.iterations, () => {
+  if (!(props.jobs ?? []).length) {
+    syncDefaultIter('left');
+    syncDefaultIter('right');
+  }
+}, { immediate: true });
+
+watch([leftJobId, () => props.jobIterationsById, localJobIterations], () => syncDefaultIter('left'), { immediate: true, deep: true });
+watch([rightJobId, () => props.jobIterationsById, localJobIterations], () => syncDefaultIter('right'), { immediate: true, deep: true });
+watch([leftJobId, rightJobId], () => { void loadSelectedJobIterations(); });
+
+watch([() => props.caseId, leftJobId, leftIterId], () => { void loadSide('left'); }, { immediate: true });
+watch([() => props.caseId, rightJobId, rightIterId], () => { void loadSide('right'); }, { immediate: true });
 
 interface CompareRow {
   param: string;
@@ -158,6 +228,22 @@ function summarize(detail: IterationDetail | null) {
     stop: inner?.stop_reason ?? null,
   };
 }
+
+function formatJobLabel(job: JobState): string {
+  const stamp = (job.started_at ?? job.job_id).replace('T', ' ').replace(/\.\d+.*$/, '');
+  return `${stamp} · ${job.status}`;
+}
+
+function iterLabel(iter: IterationSummary): string {
+  return `#${iter.iteration} · ${iter.selected_stage ?? iter.kind}`;
+}
+
+function selectedLabel(jobId: string, iterId: string): string {
+  const job = (props.jobs ?? []).find((entry) => entry.job_id === jobId);
+  const iter = (job ? iterationsForJob(job.job_id) : props.iterations).find((entry) => entry.iter_id === iterId);
+  const jobPart = job ? `${formatJobLabel(job)} · ` : '';
+  return `${jobPart}${iter ? iterLabel(iter) : iterId}`;
+}
 </script>
 
 <template>
@@ -168,22 +254,40 @@ function summarize(detail: IterationDetail | null) {
     </header>
 
     <div class="compare-pickers">
-      <label class="compare-picker">
+      <div class="compare-picker">
         <span class="muted small">left</span>
-        <select v-model="leftId">
-          <option v-for="iter in iterations" :key="iter.iter_id" :value="iter.iter_id">
-            #{{ iter.iteration }} · {{ iter.iter_id }} · {{ iter.selected_stage ?? iter.kind }}
+        <select v-if="(jobs ?? []).length" v-model="leftJobId">
+          <option v-for="job in jobs" :key="job.job_id" :value="job.job_id">
+            {{ formatJobLabel(job) }}
           </option>
         </select>
-      </label>
-      <label class="compare-picker">
+        <select v-model="leftIterId">
+          <option
+            v-for="iter in ((jobs ?? []).length ? leftJobIterations : iterations)"
+            :key="iter.iter_id"
+            :value="iter.iter_id"
+          >
+            {{ iterLabel(iter) }}
+          </option>
+        </select>
+      </div>
+      <div class="compare-picker">
         <span class="muted small">right</span>
-        <select v-model="rightId">
-          <option v-for="iter in iterations" :key="iter.iter_id" :value="iter.iter_id">
-            #{{ iter.iteration }} · {{ iter.iter_id }} · {{ iter.selected_stage ?? iter.kind }}
+        <select v-if="(jobs ?? []).length" v-model="rightJobId">
+          <option v-for="job in jobs" :key="job.job_id" :value="job.job_id">
+            {{ formatJobLabel(job) }}
           </option>
         </select>
-      </label>
+        <select v-model="rightIterId">
+          <option
+            v-for="iter in ((jobs ?? []).length ? rightJobIterations : iterations)"
+            :key="iter.iter_id"
+            :value="iter.iter_id"
+          >
+            {{ iterLabel(iter) }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
@@ -241,8 +345,8 @@ function summarize(detail: IterationDetail | null) {
         <thead>
           <tr>
             <th>参数</th>
-            <th>{{ leftId }}</th>
-            <th>{{ rightId }}</th>
+            <th>{{ selectedLabel(leftJobId, leftIterId) }}</th>
+            <th>{{ selectedLabel(rightJobId, rightIterId) }}</th>
             <th>左侧本轮决策</th>
             <th>右侧本轮决策</th>
           </tr>
@@ -282,8 +386,8 @@ function summarize(detail: IterationDetail | null) {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.compare-picker { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.compare-picker select { padding: 4px 6px; }
+.compare-picker { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.compare-picker select { width: 100%; padding: 4px 6px; }
 .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .compare-side {
   background: var(--bg-panel);

@@ -5,6 +5,7 @@ import type {
   FileListResult,
   FilePickResult,
   IterationDetail,
+  JobIterationSummary,
   IterationSummary,
   JobState,
   LayaProbeOptions,
@@ -315,4 +316,15 @@ export function cancelJob(jobId: string): Promise<JobState> {
 
 export function fetchJobLog(jobId: string, tailKb = 64): Promise<{ text: string; job_id: string }> {
   return getJson(`/api/jobs/${encodeURIComponent(jobId)}/log?tail_kb=${tailKb}`);
+}
+
+export function fetchJobIterations(jobId: string): Promise<JobIterationSummary[]> {
+  return getJson<IterationSummary[]>(`/api/jobs/${encodeURIComponent(jobId)}/iterations`)
+    .then((items) => items.map((item) => ({ ...item, job_id: jobId })));
+}
+
+export function fetchJobIterationDetail(jobId: string, iterId: string): Promise<IterationDetail> {
+  return getJson<IterationDetail>(
+    `/api/jobs/${encodeURIComponent(jobId)}/iterations/${encodeURIComponent(iterId)}`,
+  );
 }

@@ -9,13 +9,14 @@ import ResearchMetricsPanel from './ResearchMetricsPanel.vue';
 
 const props = defineProps<{ detail: IterationDetail }>();
 
-type TabKey = 'decision' | 'channels' | 'params' | 'lmat' | 'capture';
+type TabKey = 'decision' | 'agenda' | 'channels' | 'params' | 'lmat' | 'capture';
 const activeTab = ref<TabKey>('decision');
 
 const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
   const list: Array<{ key: TabKey; label: string }> = [];
   if (props.detail.kind === 'auto_adjust') {
     list.push({ key: 'decision', label: '决策与变化' });
+    list.push({ key: 'agenda', label: '参数优先级' });
   }
   if (props.detail.diff_analysis) {
     list.push({ key: 'channels', label: '通道分析' });
@@ -45,6 +46,7 @@ const decision = computed(() => props.detail.decision);
 const innerDecision = computed(() => decision.value?.decision ?? null);
 const changes = computed(() => innerDecision.value?.changes ?? []);
 const stage = computed(() => innerDecision.value?.stage ?? null);
+const showAllParamRanking = ref(false);
 
 const fitScore = computed(() => decision.value?.fit_score_before ?? null);
 const diffScore = computed(() => decision.value?.diff_score_before ?? null);
@@ -129,6 +131,117 @@ const headerStage = computed(() => {
 });
 
 const headerNote = computed(() => props.detail._note ?? null);
+
+type ParamAgendaRow = {
+  param: string;
+  group: string | null;
+  role: string | null;
+  reason: string | null;
+  blocked_by: string[];
+  priority: number | null;
+  semantic_relevance: number | null;
+  attempts: number | null;
+  accepted: number | null;
+  fit_gain_ema: number | null;
+  risk_ema: number | null;
+  recent_failures: number | null;
+  component_ema: Record<string, unknown> | null;
+};
+
+const scheduler = computed(() => {
+  const value = (innerDecision.value as Record<string, unknown> | null | undefined)?.scheduler;
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+});
+
+const paramRankingRows = computed<ParamAgendaRow[]>(() => {
+  const raw = Array.isArray(scheduler.value?.param_ranking)
+    ? scheduler.value?.param_ranking
+    : scheduler.value?.param_agenda;
+  return normalizeParamRows(raw);
+});
+
+const paramCandidatePoolRows = computed<ParamAgendaRow[]>(() => {
+  const raw = Array.isArray(scheduler.value?.param_candidate_pool)
+    ? scheduler.value?.param_candidate_pool
+    : scheduler.value?.param_agenda;
+  return normalizeParamRows(raw);
+});
+
+const gatedParamRows = computed<ParamAgendaRow[]>(() => normalizeParamRows(scheduler.value?.gated_params));
+
+const activationCandidateRows = computed<ParamAgendaRow[]>(() => normalizeParamRows(scheduler.value?.activation_candidates));
+
+const visibleParamRankingRows = computed(() => {
+  return showAllParamRanking.value ? paramRankingRows.value : paramRankingRows.value.slice(0, 5);
+});
+
+const paramCandidatePoolSize = computed(() => {
+  const value = scheduler.value?.param_candidate_pool_size;
+  return typeof value === 'number' && Number.isFinite(value) ? value : paramCandidatePoolRows.value.length;
+});
+
+const searchParamCount = computed(() => {
+  const value = scheduler.value?.search_param_count;
+  return typeof value === 'number' && Number.isFinite(value) ? value : paramRankingRows.value.length;
+});
+
+const allSearchableParamCount = computed(() => {
+  const value = scheduler.value?.all_searchable_param_count;
+  return typeof value === 'number' && Number.isFinite(value) ? value : searchParamCount.value + gatedParamRows.value.length;
+});
+
+const gatedParamCount = computed(() => {
+  const value = scheduler.value?.gated_param_count;
+  return typeof value === 'number' && Number.isFinite(value) ? value : gatedParamRows.value.length;
+});
+
+const paramSelectionRule = computed(() => {
+  const value = scheduler.value?.param_selection_rule;
+  return typeof value === 'string' ? value : '全量可搜索参数按当前瓶颈、历史收益、探索次数、风险和失败惩罚排序；分组只作为语义约束与覆盖度保护。';
+});
+
+function normalizeParamRows(raw: unknown): ParamAgendaRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      param: String(item.param ?? ''),
+      group: typeof item.group === 'string' ? item.group : null,
+      role: typeof item.role === 'string' ? item.role : null,
+      reason: typeof item.reason === 'string' ? item.reason : null,
+      blocked_by: Array.isArray(item.blocked_by) ? item.blocked_by.map(String) : [],
+      priority: numberOrNull(item.priority),
+      semantic_relevance: numberOrNull(item.semantic_relevance),
+      attempts: numberOrNull(item.attempts),
+      accepted: numberOrNull(item.accepted),
+      fit_gain_ema: numberOrNull(item.fit_gain_ema),
+      risk_ema: numberOrNull(item.risk_ema),
+      recent_failures: numberOrNull(item.recent_failures),
+      component_ema: item.component_ema && typeof item.component_ema === 'object'
+        ? item.component_ema as Record<string, unknown>
+        : null,
+    }))
+    .filter((item) => item.param);
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function fmtSigned(value: unknown, digits = 4): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
+}
+
+function topComponentGain(row: ParamAgendaRow): string {
+  if (!row.component_ema) return '—';
+  const entries = Object.entries(row.component_ema)
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+    .map(([key, value]) => [key, value as number] as const)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (!entries.length) return '—';
+  return entries.slice(0, 2).map(([key, value]) => `${key} ${fmtSigned(value, 3)}`).join(' · ');
+}
 </script>
 
 <template>
@@ -244,6 +357,152 @@ const headerNote = computed(() => props.detail._note ?? null);
         <ParamChangesTable :changes="changes" />
       </div>
 
+      <div v-show="activeTab === 'agenda' && detail.kind === 'auto_adjust'">
+        <div v-if="paramRankingRows.length" class="param-agenda-card">
+          <div class="param-agenda-header">
+            <div>
+              <h4>全量参数优先级 Top {{ Math.min(5, paramRankingRows.length) }}</h4>
+              <p class="muted small">
+                {{ paramSelectionRule }}
+              </p>
+              <p class="muted small">
+                用户允许搜索控件：{{ allSearchableParamCount }} 个；当前活跃可搜索参数：{{ searchParamCount }} 个；被 gate 暂停：{{ gatedParamCount }} 个。
+                这里展示的是当前活跃参数排序，不等同于本轮实际生成候选的数量。
+              </p>
+            </div>
+            <button
+              v-if="paramRankingRows.length > 5"
+              type="button"
+              class="link-btn"
+              @click="showAllParamRanking = !showAllParamRanking"
+            >
+              {{ showAllParamRanking ? '收起为 Top 5' : `查看全部可搜索参数（${searchParamCount}）` }}
+            </button>
+          </div>
+          <table class="agenda-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>参数</th>
+                <th>分组</th>
+                <th>priority</th>
+                <th>语义</th>
+                <th>尝试/接受</th>
+                <th>fit收益</th>
+                <th>分项收益 Top</th>
+                <th>风险</th>
+                <th>失败</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in visibleParamRankingRows" :key="row.param">
+                <td class="muted small">{{ index + 1 }}</td>
+                <td><span class="mono">{{ row.param }}</span></td>
+                <td class="muted small">{{ row.group ?? '—' }}</td>
+                <td class="numeric mono">{{ fmt(row.priority) }}</td>
+                <td class="numeric mono">{{ fmt(row.semantic_relevance) }}</td>
+                <td class="numeric mono">{{ row.attempts ?? 0 }}/{{ row.accepted ?? 0 }}</td>
+                <td class="numeric mono">{{ fmtSigned(row.fit_gain_ema) }}</td>
+                <td class="muted small">{{ topComponentGain(row) }}</td>
+                <td class="numeric mono">{{ fmt(row.risk_ema) }}</td>
+                <td class="numeric mono">{{ row.recent_failures ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="paramCandidatePoolRows.length" class="param-agenda-card">
+          <div class="param-agenda-header">
+            <div>
+              <h4>本轮候选池</h4>
+              <p class="muted small">
+                从全量排序中取前 {{ paramCandidatePoolSize }} 项作为本轮候选池；breakthrough 和参数优先搜索会优先围绕这些参数生成单参数或小组合候选。
+              </p>
+            </div>
+          </div>
+          <table class="agenda-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>参数</th>
+                <th>分组</th>
+                <th>priority</th>
+                <th>语义</th>
+                <th>尝试/接受</th>
+                <th>fit收益</th>
+                <th>风险</th>
+                <th>失败</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in paramCandidatePoolRows" :key="`${row.param}-pool`">
+                <td class="muted small">{{ index + 1 }}</td>
+                <td><span class="mono">{{ row.param }}</span></td>
+                <td class="muted small">{{ row.group ?? '—' }}</td>
+                <td class="numeric mono">{{ fmt(row.priority) }}</td>
+                <td class="numeric mono">{{ fmt(row.semantic_relevance) }}</td>
+                <td class="numeric mono">{{ row.attempts ?? 0 }}/{{ row.accepted ?? 0 }}</td>
+                <td class="numeric mono">{{ fmtSigned(row.fit_gain_ema) }}</td>
+                <td class="numeric mono">{{ fmt(row.risk_ema) }}</td>
+                <td class="numeric mono">{{ row.recent_failures ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="activationCandidateRows.length || gatedParamRows.length" class="param-agenda-card">
+          <div class="param-agenda-header">
+            <div>
+              <h4>待激活 / 门控参数</h4>
+              <p class="muted small">
+                这些参数是用户允许搜索的控件，但当前可能被强度为 0、功能开关或 shader define 挡住。优化器可先尝试 gate/Intensity，再让下游参数进入活跃排序。
+              </p>
+            </div>
+          </div>
+          <table v-if="activationCandidateRows.length" class="agenda-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>激活参数</th>
+                <th>分组</th>
+                <th>priority</th>
+                <th>原因</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in activationCandidateRows" :key="`${row.param}-activation`">
+                <td class="muted small">{{ index + 1 }}</td>
+                <td><span class="mono">{{ row.param }}</span></td>
+                <td class="muted small">{{ row.group ?? '—' }}</td>
+                <td class="numeric mono">{{ fmt(row.priority) }}</td>
+                <td class="muted small">{{ row.reason ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table v-if="gatedParamRows.length" class="agenda-table gated-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>暂未进入活跃排序</th>
+                <th>分组</th>
+                <th>被 gate 阻挡</th>
+                <th>原因</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in gatedParamRows" :key="`${row.param}-gated`">
+                <td class="muted small">{{ index + 1 }}</td>
+                <td><span class="mono">{{ row.param }}</span></td>
+                <td class="muted small">{{ row.group ?? '—' }}</td>
+                <td class="muted small">{{ row.blocked_by.length ? row.blocked_by.join(', ') : '—' }}</td>
+                <td class="muted small">{{ row.reason ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="!paramRankingRows.length && !paramCandidatePoolRows.length" class="muted small">
+          本轮没有参数优先级数据。旧实验记录可能没有 <span class="mono">scheduler.param_ranking</span>。
+        </p>
+      </div>
+
       <div v-show="activeTab === 'channels' && detail.diff_analysis">
         <p v-if="detail.kind === 'auto_adjust' && decision?.multiview_analysis" class="muted small" style="margin-bottom: 8px;">
           这是多视角聚合通道分析；优化器使用的也是这份聚合信号，不再只取第一视角。
@@ -277,4 +536,49 @@ const headerNote = computed(() => props.detail._note ?? null);
 .stat-pill--accent { background: rgba(53, 132, 228, 0.12); border-color: rgba(53, 132, 228, 0.3); }
 .stat-pill--muted { opacity: 0.6; }
 .mono { font-family: var(--mono); }
+.param-agenda-card {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.param-agenda-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.param-agenda-header h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.link-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.agenda-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.agenda-table th,
+.agenda-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.agenda-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.agenda-table .numeric {
+  text-align: right;
+}
 </style>

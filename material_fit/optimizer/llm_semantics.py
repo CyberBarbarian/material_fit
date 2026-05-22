@@ -22,6 +22,9 @@ class LlmParamSemantic:
     dependencies: list[str] = field(default_factory=list)
     searchable: bool = True
     reason: str = ""
+    confidence: float = 0.0
+    evidence: list[str] = field(default_factory=list)
+    risk: str = ""
 
 
 @dataclass(frozen=True)
@@ -79,16 +82,24 @@ def build_llm_semantics_context(
 
     return {
         "task": {
-            "goal": "infer_unity_feature_modules_for_laya_search",
+            "goal": "infer_laya_shader_parameter_semantics_for_material_search",
             "allowed_output": "strict_json_semantic_prior",
             "forbidden_actions": ["write_files", "modify_lmat", "run_optimizer"],
             "notes": [
+                "Primary goal: read the Laya shader source/usages and classify exposed Laya parameters for optimization.",
+                "Unity shader/material data is optional auxiliary evidence and may be absent or structurally different.",
+                "When Unity data is absent, still classify Laya param_semantics from Laya shader code, names, types, and material values.",
                 "Unity material values are visual-effect evidence, not directly transferable Laya targets.",
-                "Primary goal: identify enabled Unity feature modules and the evidence for each module.",
-                "Do not output per-parameter Laya semantics unless explicitly required.",
             ],
         },
-        "laya_shader": laya_shader,
+        "laya_shader": {
+            **laya_shader,
+            "param_evidence": _build_param_evidence(
+                laya_shader=laya_shader,
+                laya_material_params=laya_material_params,
+                laya_material_defines=laya_material_defines,
+            ),
+        },
         "laya_material": {
             "params": laya_material_params,
             "defines": laya_material_defines,
@@ -99,7 +110,7 @@ def build_llm_semantics_context(
         "output_schema": {
             "unity_feature_summary": [
                 {
-                    "feature": "base_color|normal|occlusion|metallic_smoothness|specular|secondary_specular|matcap_reflection|rim_or_fresnel|emission|color_grade|alpha|other",
+                    "feature": "base_color|normal|occlusion|metallic_smoothness|specular|secondary_specular|matcap_reflection|rim_or_fresnel|emission|color_grade|alpha|light_direction|shared_mask|other",
                     "enabled": True,
                     "confidence": 0.0,
                     "evidence": ["keyword/texture/value/formula evidence"],
@@ -107,7 +118,7 @@ def build_llm_semantics_context(
                     "textures": ["texture slots or texture names used by this feature"],
                     "controls": ["color|intensity|shape|texture|mask|remap|gate"],
                     "laya_candidate_groups": [
-                        "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|fresnel|emission|color_grade|misc"
+                        "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|normal_detail|shared_mask_lmap|light_direction|alpha_cutout|fresnel|emission|color_grade|misc"
                     ],
                     "risk": "brief uncertainty or cross-engine mismatch risk",
                 }
@@ -115,19 +126,100 @@ def build_llm_semantics_context(
             "laya_module_candidates": [],
             "unity_phenomena": [
                 {
-                    "name": "rim_or_fresnel|emission|matcap|specular|base_color|color_grade|other",
+                    "name": "rim_or_fresnel|emission|matcap|specular|base_color|normal|light_direction|shared_mask|color_grade|alpha|other",
                     "confidence": 0.0,
                     "unity_evidence": ["brief Unity shader/material evidence"],
                     "laya_candidate_groups": [
-                        "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|fresnel|emission|color_grade|misc"
+                        "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|normal_detail|shared_mask_lmap|light_direction|alpha_cutout|fresnel|emission|color_grade|misc"
                     ],
                     "note": "brief explanation",
                 }
             ],
-            "param_semantics": [],
+            "param_semantics": [
+                {
+                    "name": "exact Laya parameter name",
+                    "group": "base_color|shadow_diffuse|specular_smoothness|reflection_matcap|normal_detail|shared_mask_lmap|light_direction|alpha_cutout|fresnel|emission|color_grade|misc",
+                    "role": "color|intensity|gate|shape|angle|texture|value",
+                    "transform": "linear|log|circular|color_rgb",
+                    "searchable": True,
+                    "confidence": 0.0,
+                    "evidence": ["source or formula evidence"],
+                    "risk": "uncertainty or coupling risk",
+                    "gates": [],
+                    "dependencies": [],
+                    "reason": "brief semantic explanation",
+                }
+            ],
             "initial_laya_param_suggestions": [],
         },
     }
+
+
+def _build_param_evidence(
+    *,
+    laya_shader: dict[str, Any],
+    laya_material_params: dict[str, Any],
+    laya_material_defines: list[str],
+) -> list[dict[str, Any]]:
+    params = laya_shader.get("params") if isinstance(laya_shader.get("params"), list) else []
+    source = str(laya_shader.get("source_excerpt") or "")
+    lines = source.splitlines()
+    active_defines = {str(item) for item in laya_material_defines}
+    out: list[dict[str, Any]] = []
+    for raw in params:
+        if not isinstance(raw, dict) or not raw.get("name"):
+            continue
+        name = str(raw["name"])
+        lower_name = name.lower()
+        hits: list[dict[str, Any]] = []
+        for index, line in enumerate(lines):
+            if lower_name not in line.lower():
+                continue
+            start = max(0, index - 5)
+            end = min(len(lines), index + 6)
+            hits.append(
+                {
+                    "line": index + 1,
+                    "snippet": "\n".join(lines[start:end])[:1600],
+                }
+            )
+            if len(hits) >= 3:
+                break
+        out.append(
+            {
+                "name": name,
+                "param_type": raw.get("param_type"),
+                "default": raw.get("default"),
+                "range": [raw.get("range_min"), raw.get("range_max")],
+                "current_value": laya_material_params.get(name, raw.get("default")),
+                "active_defines": sorted(active_defines),
+                "source_usages": hits,
+                "candidate_groups": _candidate_groups_from_param_name(name),
+            }
+        )
+    return out
+
+
+def _candidate_groups_from_param_name(name: str) -> list[str]:
+    text = name.lower().replace("_", "")
+    mapping = [
+        (("base", "albedo", "ucolor", "maincolor", "tint", "texpower", "maintex"), "base_color"),
+        (("shadow", "occlusion", "diffuse", "aopower"), "shadow_diffuse"),
+        (("specular", "smooth", "metallic", "roughness", "ggx", "spetex", "speoffet", "speoffset"), "specular_smoothness"),
+        (("reflect", "ibl", "matcap", "environment", "skyrotate", "indirectstrength"), "reflection_matcap"),
+        (("normal", "bump"), "normal_detail"),
+        (("lmap", "gammapower"), "shared_mask_lmap"),
+        (("lightrotate", "lightdirection"), "light_direction"),
+        (("alphatest", "alphacutoff", "cutoff"), "alpha_cutout"),
+        (("fresnel", "rim"), "fresnel"),
+        (("emission", "emissive"), "emission"),
+        (("hue", "saturation", "lightness", "contrast"), "color_grade"),
+    ]
+    groups: list[str] = []
+    for tokens, group in mapping:
+        if any(token in text for token in tokens) and group not in groups:
+            groups.append(group)
+    return groups or ["misc"]
 
 
 def validate_llm_semantics_output(
@@ -198,6 +290,9 @@ def validate_llm_semantics_output(
             ],
             searchable=bool(item.get("searchable", True)),
             reason=str(item.get("reason", "")),
+            confidence=_confidence(item.get("confidence")),
+            evidence=_string_list(item.get("evidence"), limit=8),
+            risk=str(item.get("risk", "")),
         )
         out.append(asdict(sem))
     return {
@@ -241,6 +336,10 @@ _GROUPS = {
     "shadow_diffuse",
     "specular_smoothness",
     "reflection_matcap",
+    "normal_detail",
+    "shared_mask_lmap",
+    "light_direction",
+    "alpha_cutout",
     "fresnel",
     "emission",
     "color_grade",

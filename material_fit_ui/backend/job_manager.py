@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import case_loader
 from .case_loader import LoaderConfig
 from .project_store import (
     derive_fit_config,
@@ -166,8 +167,8 @@ def start_job(
         args.append("--dry-run")
     if (not editor_capture_enabled) and algo.get("use_capture_contract", False):
         args.append("--capture")
-    fit_score_mode = str(algo.get("fit_score_mode", "linear")).lower()
-    if fit_score_mode in ("linear", "perceptual"):
+    fit_score_mode = str(algo.get("fit_score_mode", "research")).lower()
+    if fit_score_mode in ("linear", "perceptual", "human_accept", "research"):
         args.extend(["--fit-score-mode", fit_score_mode])
     region = fit_config.get("screen_capture", {}).get("region")
     if (not editor_capture_enabled) and region:
@@ -320,6 +321,13 @@ def get_job(job_id: str, config: LoaderConfig | None = None) -> dict[str, Any]:
     if registered:
         return registered.to_dict()
     # Fall back to disk lookup across all projects
+    data = _find_job_dict(job_id, config)
+    if data:
+        return data
+    raise FileNotFoundError(f"job not found: {job_id}")
+
+
+def _find_job_dict(job_id: str, config: LoaderConfig) -> dict[str, Any] | None:
     for project_dir in config.output_dir.iterdir() if config.output_dir.exists() else []:
         if not project_dir.is_dir():
             continue
@@ -329,26 +337,94 @@ def get_job(job_id: str, config: LoaderConfig | None = None) -> dict[str, Any]:
             data = _load_job_dict(job_id, project_dir / "jobs")
             if data:
                 return data
-    raise FileNotFoundError(f"job not found: {job_id}")
+    return None
+
+
+def _job_from_dict(data: dict[str, Any]) -> Job:
+    return Job(
+        job_id=str(data.get("job_id") or ""),
+        project_id=str(data.get("project_id") or ""),
+        pid=int(data["pid"]) if data.get("pid") not in (None, "") else None,
+        status=str(data.get("status") or "queued"),
+        started_at=str(data.get("started_at")) if data.get("started_at") else None,
+        ended_at=str(data.get("ended_at")) if data.get("ended_at") else None,
+        return_code=int(data["return_code"]) if data.get("return_code") not in (None, "") else None,
+        error=str(data.get("error")) if data.get("error") else None,
+        args=[str(item) for item in data.get("args", [])] if isinstance(data.get("args"), list) else [],
+        run_id=str(data.get("run_id")) if data.get("run_id") else None,
+        run_dir=str(data.get("run_dir")) if data.get("run_dir") else None,
+        iterations_observed=int(data.get("iterations_observed") or 0),
+        last_iter_id=str(data.get("last_iter_id")) if data.get("last_iter_id") else None,
+        last_decision_summary=data.get("last_decision_summary") if isinstance(data.get("last_decision_summary"), dict) else None,
+    )
+
+
+def _terminate_process_tree(pid: int) -> str | None:
+    try:
+        if os.name == "nt":
+            result = subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if result.returncode not in (0, 128):
+                return (result.stderr or f"taskkill exited with {result.returncode}").strip()
+            return None
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return None
+        return None
+    except (PermissionError, ProcessLookupError, OSError) as exc:
+        return str(exc)
+
+
+def _clear_active_job_if_current(job: Job, config: LoaderConfig) -> None:
+    try:
+        project = get_project(job.project_id, config)
+        patch: dict[str, Any] = {
+            "last_job_id": job.job_id,
+            "last_run_id": job.run_id,
+        }
+        if project.get("active_job_id") == job.job_id:
+            patch["active_job_id"] = None
+        if project.get("active_run_id") == job.run_id:
+            patch["active_run_id"] = None
+        patch_project(job.project_id, patch, config=config)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def cancel_job(job_id: str, config: LoaderConfig | None = None) -> dict[str, Any]:
     config = config or LoaderConfig()
     with _REGISTRY_LOCK:
         job = _JOB_REGISTRY.get(job_id)
-    if not job or not job.pid:
-        raise FileNotFoundError(f"job {job_id} not running in this server instance")
-    if job.status not in {"running", "queued"}:
+    if job is None:
+        data = _find_job_dict(job_id, config)
+        if not data:
+            raise FileNotFoundError(f"job not found: {job_id}")
+        job = _job_from_dict(data)
+    if not job.pid:
+        raise FileNotFoundError(f"job {job_id} has no recorded pid")
+    if job.status not in {"running", "queued", "cancelling"}:
+        _clear_active_job_if_current(job, config)
         return job.to_dict()
-    try:
-        if os.name == "nt":
-            os.kill(job.pid, signal.CTRL_BREAK_EVENT)
-        else:
-            os.kill(job.pid, signal.SIGTERM)
-    except (PermissionError, ProcessLookupError, OSError) as exc:
-        job.error = f"cancel failed: {exc}"
     job.status = "cancelling"
     _save_job(job, _state_path_for(job, config))
+    kill_error = _terminate_process_tree(job.pid)
+    if kill_error:
+        job.error = f"cancel failed: {kill_error}"
+    else:
+        # When the watcher is alive it will overwrite this with the real
+        # return code. If the backend was restarted and only job.json remains,
+        # this disk update prevents the UI from being stuck in "running".
+        job.status = "cancelled"
+        job.ended_at = job.ended_at or _now_iso()
+    _save_job(job, _state_path_for(job, config))
+    _save_job_result(job, _state_path_for(job, config).parent)
+    _clear_active_job_if_current(job, config)
     return job.to_dict()
 
 
@@ -371,6 +447,40 @@ def get_job_log(job_id: str, config: LoaderConfig | None = None, *, tail_kb: int
             except OSError:
                 return ""
     raise FileNotFoundError(f"job log not found: {job_id}")
+
+
+def list_job_iterations(job_id: str, config: LoaderConfig | None = None) -> list[dict[str, Any]]:
+    config = config or LoaderConfig()
+    job = get_job(job_id, config)
+    run_dir = _job_run_dir(job, config)
+    if run_dir is None:
+        return []
+    return case_loader._list_auto_adjust_iterations(run_dir, config)  # noqa: SLF001
+
+
+def get_job_iteration_detail(job_id: str, iter_id: str, config: LoaderConfig | None = None) -> dict[str, Any]:
+    config = config or LoaderConfig()
+    job = get_job(job_id, config)
+    run_dir = _job_run_dir(job, config)
+    if run_dir is None:
+        raise FileNotFoundError(f"job run artifacts not found: {job_id}")
+    if not iter_id.startswith("iter_"):
+        raise ValueError(f"unknown iter_id format: {iter_id!r}")
+    return case_loader._load_auto_adjust_detail(job.get("project_id") or job_id, run_dir, iter_id, config)  # noqa: SLF001
+
+
+def _job_run_dir(job: dict[str, Any], config: LoaderConfig) -> Path | None:
+    raw = job.get("run_dir")
+    if not raw:
+        return None
+    path = Path(str(raw))
+    if not path.is_absolute():
+        path = config.project_root / path
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return None
+    return resolved if resolved.exists() and resolved.is_dir() else None
 
 
 def _watch_job(
@@ -399,7 +509,7 @@ def _watch_job(
                     job.iterations_observed = len(seen)
                     job.last_iter_id, job.last_decision_summary = last
                 job.return_code = ret
-                if job.status == "cancelling":
+                if job.status in {"cancelling", "cancelled"}:
                     job.status = "cancelled"
                 elif ret == 0:
                     job.status = "completed"
@@ -462,11 +572,14 @@ def _summarize_decision(path: Path) -> dict[str, Any] | None:
     inner = data.get("decision") if isinstance(data.get("decision"), dict) else {}
     perceptual = data.get("perceptual_signals") if isinstance(data.get("perceptual_signals"), dict) else {}
     human = perceptual.get("human_accept") if isinstance(perceptual.get("human_accept"), dict) else {}
+    research = perceptual.get("research_metrics") if isinstance(perceptual.get("research_metrics"), dict) else {}
     return {
         "iteration": data.get("iteration"),
         "selected_stage": data.get("selected_stage"),
         "fit_score_before": data.get("fit_score_before"),
         "diff_score_before": data.get("diff_score_before"),
+        "research_score": research.get("score"),
+        "research_loss": research.get("loss"),
         "human_accept_score": human.get("score"),
         "perceptual_fit_score": perceptual.get("fit_score"),
         "weighted_mae": perceptual.get("weighted_mae"),

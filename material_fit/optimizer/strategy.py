@@ -44,8 +44,13 @@ from .adjustment_algorithm import (
     propose_next_params,
     update_stage_progress,
 )
+from .acceptance_policy import AcceptancePolicy
+from .branch_guard import BranchDriftGuard
+from .breakthrough_candidates import BreakthroughCandidateQueue
 from .effective_bounds import effective_bounds_for_param
+from .search_evidence import InfluenceTracker, ParamInfluenceTracker, TopKArchive, metric_vector_from_analysis
 from .semantic_graph import ShaderEffectGraph, graph_from_dict
+from .trust_region import TrustRegionBranch
 
 
 # ---------------------------------------------------------------------
@@ -120,6 +125,11 @@ class OptimizerStrategy(ABC):
         strategy its own decision.
         """
         return True
+
+    def research_summary(self) -> dict[str, Any]:
+        """Optional optimizer-specific research diagnostics."""
+
+        return {}
 
 
 # ---------------------------------------------------------------------
@@ -594,6 +604,517 @@ class CmaesStrategy(OptimizerStrategy):
 # Semantic group strategy
 
 
+class SemanticCandidateGenerator:
+    """Generate semantic-group candidates without owning scheduling state."""
+
+    def __init__(
+        self,
+        *,
+        graph: ShaderEffectGraph,
+        shader_params: Sequence[ShaderParam],
+        encoder_cls: Any,
+        step_schedule: Sequence[float],
+    ) -> None:
+        self._graph = graph
+        self._shader_params = list(shader_params)
+        self._encoder_cls = encoder_cls
+        self._step_schedule = list(step_schedule)
+
+    def candidate_group_params(self, group: Any) -> list[str]:
+        if group.search_params:
+            return list(group.search_params)
+        if not group.current_active and group.gate_params:
+            return list(group.gate_params)
+        return list(group.params)
+
+    def searchable_params_for_group(self, group: Any, params: dict[str, Any]) -> list[str]:
+        return [
+            name
+            for name in self.candidate_group_params(group)
+            if name in params
+            and self._graph.params.get(name) is not None
+            and self._graph.params[name].searchable
+        ]
+
+    def probe_candidate(self, base_params: dict[str, Any], group: Any) -> tuple[dict[str, Any], list[str]]:
+        candidate = dict(base_params)
+        probe_order = list(group.gate_params) + list(group.search_params) + list(group.params)
+        seen: set[str] = set()
+        changed: list[str] = []
+        for name in probe_order:
+            if name in seen or name not in candidate:
+                continue
+            seen.add(name)
+            sem = self._graph.params.get(name)
+            if sem is None or not sem.searchable:
+                continue
+            before = candidate.get(name)
+            candidate[name] = self._probe_value(name, before, sem)
+            if candidate.get(name) != before:
+                changed.append(name)
+                break
+        return candidate, changed
+
+    def pattern_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        group: Any,
+        state: dict[str, Any],
+        analysis: dict[str, Any],
+        iteration: int,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        whitelist = self.searchable_params_for_group(group, base_params)
+        if not whitelist:
+            state["status"] = "exhausted"
+            return dict(base_params), {}
+        combo_candidate = self._base_color_combo_candidate(
+            base_params=base_params,
+            group=group,
+            state=state,
+            analysis=analysis,
+            iteration=iteration,
+        )
+        if combo_candidate is not None:
+            return combo_candidate
+        encoder = self._encoder_cls(
+            base_params,
+            self._shader_params,
+            param_whitelist=whitelist,
+            semantics=self._graph,
+        )
+        if encoder.dim == 0:
+            state["status"] = "exhausted"
+            return dict(base_params), {}
+        joint_candidate = self._joint_group_candidate(
+            base_params=base_params,
+            group=group,
+            state=state,
+            analysis=analysis,
+            iteration=iteration,
+            encoder=encoder,
+        )
+        if joint_candidate is not None:
+            return joint_candidate
+        return self._single_axis_candidate(
+            base_params=base_params,
+            state=state,
+            analysis=analysis,
+            iteration=iteration,
+            encoder=encoder,
+        )
+
+    def cross_group_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        groups: Sequence[Any],
+        group_cycle: int,
+        analysis: dict[str, Any],
+        base_fit_score: float,
+        iteration: int,
+        step_scale: float = 0.35,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        candidate = dict(base_params)
+        changed_params: list[str] = []
+        axes_payload: list[dict[str, Any]] = []
+        for group in groups:
+            updated, payload = self._nudge_first_axis_for_group(
+                base_params=candidate,
+                group=group,
+                analysis=analysis,
+                step_scale=step_scale,
+                group_cycle=group_cycle,
+            )
+            if updated is None:
+                continue
+            candidate = updated
+            changed_params.extend(str(item) for item in payload.get("changed_params", []) if isinstance(item, str))
+            axes_payload.append(payload)
+        if len(set(changed_params)) < 2 or not CmaesStrategy._diff_params(base_params, candidate):
+            return None
+        return candidate, {
+            "cross_groups": [str(group.name) for group in groups],
+            "changed_params": sorted(set(changed_params)),
+            "axes": axes_payload,
+            "base_fit_score": base_fit_score,
+            "iteration": iteration,
+        }
+
+    def nudge_group_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        group: Any,
+        analysis: dict[str, Any],
+        step_scale: float,
+        group_cycle: int,
+        axis_offset: int = 0,
+        direction_override: float | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        updated, payload = self._nudge_first_axis_for_group(
+            base_params=base_params,
+            group=group,
+            analysis=analysis,
+            step_scale=step_scale,
+            group_cycle=group_cycle,
+            axis_offset=axis_offset,
+            direction_override=direction_override,
+        )
+        if updated is None:
+            return None
+        return updated, payload
+
+    def nudge_param_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        param_name: str,
+        step_scale: float,
+        group_cycle: int,
+        axis_offset: int = 0,
+        direction_override: float | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if param_name not in base_params:
+            return None
+        sem = self._graph.params.get(param_name)
+        if sem is None or not sem.searchable:
+            return None
+        encoder = self._encoder_cls(
+            base_params,
+            self._shader_params,
+            param_whitelist=[param_name],
+            semantics=self._graph,
+        )
+        if encoder.dim == 0:
+            return None
+        vec = encoder.encode(base_params)
+        axis_index = max(0, min(int(axis_offset), encoder.dim - 1))
+        axis = encoder.axes[axis_index]
+        direction = direction_override if direction_override is not None else 1.0
+        step_ratio = self._step_schedule[min(group_cycle, len(self._step_schedule) - 1)] * step_scale
+        width = max(float(axis.high) - float(axis.low), 1e-9)
+        vec[axis_index] = max(
+            encoder.lower_bounds[axis_index],
+            min(encoder.upper_bounds[axis_index], vec[axis_index] + direction * step_ratio * width),
+        )
+        proposed = encoder.decode(vec)
+        changes = CmaesStrategy._diff_params(base_params, proposed)
+        if not changes:
+            return None
+        return proposed, {
+            "param": param_name,
+            "axis_index": axis_index,
+            "axis_param": axis.param_name,
+            "direction": direction,
+            "step_ratio": step_ratio,
+            "changed_params": [str(change.get("param")) for change in changes if isinstance(change, dict)],
+        }
+
+    def _single_axis_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        state: dict[str, Any],
+        analysis: dict[str, Any],
+        iteration: int,
+        encoder: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        vec = encoder.encode(base_params)
+        axis_index = int(state.get("axis_cursor", 0)) % encoder.dim
+        axis = encoder.axes[axis_index]
+        hinted = self._hint_direction(analysis, axis.param_name)
+        direction = hinted or float(state.get("direction", 1.0) or 1.0)
+        step_index = min(int(state.get("step_index", 0)), len(self._step_schedule) - 1)
+        step_ratio = self._step_schedule[step_index]
+        width = max(float(axis.high) - float(axis.low), 1e-9)
+        vec[axis_index] = max(
+            encoder.lower_bounds[axis_index],
+            min(encoder.upper_bounds[axis_index], vec[axis_index] + direction * step_ratio * width),
+        )
+        proposed = encoder.decode(vec)
+        state["last_axis"] = axis.param_name
+        state["last_direction"] = direction
+        return proposed, {
+            "axis_index": axis_index,
+            "param": axis.param_name,
+            "sub_index": axis.sub_index,
+            "transform": axis.transform,
+            "direction": direction,
+            "hint_direction": hinted,
+            "step_ratio": step_ratio,
+            "step_index": step_index,
+            "iteration": iteration,
+        }
+
+    def _joint_group_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        group: Any,
+        state: dict[str, Any],
+        analysis: dict[str, Any],
+        iteration: int,
+        encoder: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if encoder.dim < 2:
+            return None
+        joint_index = int(state.get("joint_cursor", 0))
+        variants = ("hinted_positive", "hinted_negative")
+        if joint_index >= len(variants):
+            return None
+        variant = variants[joint_index]
+        vec = encoder.encode(base_params)
+        step_index = min(int(state.get("step_index", 0)), len(self._step_schedule) - 1)
+        step_ratio = self._step_schedule[step_index] * 0.55
+        touched_axes: list[int] = []
+        touched_params: list[str] = []
+        for axis_index, axis in enumerate(encoder.axes):
+            if axis.param_name not in touched_params:
+                if len(touched_params) >= 3:
+                    continue
+                touched_params.append(axis.param_name)
+            if len(touched_axes) >= 6:
+                break
+            hinted = self._hint_direction(analysis, axis.param_name)
+            fallback = 1.0 if variant == "hinted_positive" else -1.0
+            direction = hinted or fallback
+            width = max(float(axis.high) - float(axis.low), 1e-9)
+            vec[axis_index] = max(
+                encoder.lower_bounds[axis_index],
+                min(encoder.upper_bounds[axis_index], vec[axis_index] + direction * step_ratio * width),
+            )
+            touched_axes.append(axis_index)
+        if len(touched_axes) < 2:
+            return None
+        proposed = encoder.decode(vec)
+        changes = CmaesStrategy._diff_params(base_params, proposed)
+        if not changes:
+            state["joint_cursor"] = joint_index + 1
+            return None
+        changed_params = [str(change.get("param")) for change in changes if isinstance(change, dict)]
+        state["last_axis"] = f"joint:{variant}"
+        state["last_direction"] = 0.0
+        return proposed, {
+            "joint": True,
+            "joint_index": joint_index,
+            "joint_name": variant,
+            "param": "joint:" + ",".join(changed_params),
+            "changed_params": changed_params,
+            "axis_indices": touched_axes,
+            "step_ratio": step_ratio,
+            "step_index": step_index,
+            "iteration": iteration,
+        }
+
+    def _base_color_combo_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        group: Any,
+        state: dict[str, Any],
+        analysis: dict[str, Any],
+        iteration: int,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if group.name != "base_color":
+            return None
+        base_name = next((name for name in group.search_params if name in base_params and "basecolor" in name.lower()), "")
+        gamma_name = next((name for name in group.search_params if name in base_params and "gamma" in name.lower()), "")
+        if not base_name or not isinstance(base_params.get(base_name), list):
+            return None
+        channels = analysis.get("material_channels") if isinstance(analysis, dict) else None
+        channel = channels.get("base_color_main_texture", {}) if isinstance(channels, dict) else {}
+        rgb_bias = channel.get("rgb_bias_candidate_minus_reference") if isinstance(channel, dict) else None
+        if not isinstance(rgb_bias, list) or len(rgb_bias) < 3:
+            rgb_bias = [0.0, 0.0, 0.0]
+        rgb_bias = [float(v) if isinstance(v, (int, float)) and math.isfinite(float(v)) else 0.0 for v in rgb_bias[:3]]
+        luma_bias = channel.get("luma_bias_candidate_minus_reference") if isinstance(channel, dict) else 0.0
+        luma_bias = float(luma_bias) if isinstance(luma_bias, (int, float)) and math.isfinite(float(luma_bias)) else 0.0
+        combos = [
+            ("inverse_rgb_bias", 0.55, 1.0, "bias"),
+            ("strong_inverse_rgb_bias", 0.90, 1.0, "bias"),
+            ("darken_desaturate", 0.0, 0.78, "desaturate"),
+            ("cool_shadow", 0.0, 1.0, "scale:0.65,0.75,0.95"),
+            ("purple_shadow", 0.0, 1.0, "scale:0.65,0.55,0.90"),
+            ("reduce_red_lift_blue", 0.0, 1.0, "offset:-0.20,-0.10,+0.10"),
+        ]
+        combo_index = int(state.get("combo_cursor", 0))
+        if combo_index >= len(combos):
+            return None
+        combo_name, bias_gain, value_scale, mode = combos[combo_index]
+        current = list(base_params.get(base_name) or [])
+        if len(current) < 3:
+            return None
+        rgb = self._combo_rgb(current, rgb_bias, bias_gain, value_scale, mode)
+        proposed = dict(base_params)
+        new_color = list(current)
+        for i in range(3):
+            new_color[i] = rgb[i]
+        proposed[base_name] = new_color
+        changed = [base_name]
+        if gamma_name and isinstance(base_params.get(gamma_name), (int, float)):
+            gamma = self._combo_gamma(float(base_params[gamma_name]), luma_bias, combo_name)
+            if abs(gamma - float(base_params[gamma_name])) > 1e-8:
+                proposed[gamma_name] = gamma
+                changed.append(gamma_name)
+        if not CmaesStrategy._diff_params(base_params, proposed):
+            state["combo_cursor"] = combo_index + 1
+            return self._base_color_combo_candidate(
+                base_params=base_params,
+                group=group,
+                state=state,
+                analysis=analysis,
+                iteration=iteration,
+            )
+        state["last_axis"] = f"combo:{combo_name}"
+        state["last_direction"] = 0.0
+        return proposed, {
+            "combo": True,
+            "combo_index": combo_index,
+            "combo_name": combo_name,
+            "param": base_name,
+            "changed_params": changed,
+            "rgb_bias_candidate_minus_reference": rgb_bias,
+            "luma_bias_candidate_minus_reference": luma_bias,
+            "step_ratio": self._step_schedule[min(int(state.get("step_index", 0)), len(self._step_schedule) - 1)],
+            "iteration": iteration,
+        }
+
+    def _nudge_first_axis_for_group(
+        self,
+        *,
+        base_params: dict[str, Any],
+        group: Any,
+        analysis: dict[str, Any],
+        step_scale: float,
+        group_cycle: int,
+        axis_offset: int = 0,
+        direction_override: float | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        whitelist = self.searchable_params_for_group(group, base_params)
+        if not whitelist:
+            return None, {}
+        encoder = self._encoder_cls(
+            base_params,
+            self._shader_params,
+            param_whitelist=whitelist,
+            semantics=self._graph,
+        )
+        if encoder.dim == 0:
+            return None, {}
+        vec = encoder.encode(base_params)
+        axis_index = max(0, min(int(axis_offset), encoder.dim - 1))
+        axis = encoder.axes[axis_index]
+        direction = direction_override if direction_override is not None else (self._hint_direction(analysis, axis.param_name) or 1.0)
+        step_ratio = self._step_schedule[min(group_cycle, len(self._step_schedule) - 1)] * step_scale
+        width = max(float(axis.high) - float(axis.low), 1e-9)
+        vec[axis_index] = max(
+            encoder.lower_bounds[axis_index],
+            min(encoder.upper_bounds[axis_index], vec[axis_index] + direction * step_ratio * width),
+        )
+        proposed = encoder.decode(vec)
+        changes = CmaesStrategy._diff_params(base_params, proposed)
+        if not changes:
+            return None, {}
+        return proposed, {
+            "group": group.name,
+            "axis_index": axis_index,
+            "param": axis.param_name,
+            "direction": direction,
+            "step_ratio": step_ratio,
+            "changed_params": [str(change.get("param")) for change in changes if isinstance(change, dict)],
+        }
+
+    def _probe_value(self, name: str, value: Any, sem: Any) -> Any:
+        if isinstance(value, bool):
+            return True
+        if isinstance(value, (int, float)):
+            low, high = self._bounds_for_value(name, float(value), sem)
+            if float(value) <= low + 1e-8:
+                return max(min(low + (high - low) * 0.35, high), low)
+            step = max((high - low) * 0.18, 1e-4)
+            return max(low, min(high, float(value) + step))
+        if isinstance(value, list) and value and all(isinstance(item, (int, float)) for item in value):
+            out = list(value)
+            for idx in range(min(3, len(out))):
+                out[idx] = max(0.0, min(1.0, float(out[idx]) + 0.18))
+            return out
+        return value
+
+    def _bounds_for_value(self, name: str, value: float, sem: Any) -> tuple[float, float]:
+        lower = name.lower()
+        if (bounds := effective_bounds_for_param(name)) is not None:
+            return bounds
+        low = sem.range_min if getattr(sem, "range_min", None) is not None else None
+        high = sem.range_max if getattr(sem, "range_max", None) is not None else None
+        if low is not None and high is not None and float(low) < float(high):
+            return float(low), float(high)
+        if any(token in lower for token in ("intensity", "strength", "scale")):
+            return 0.0, 8.0
+        if any(token in lower for token in ("threshold", "smooth", "metallic", "occlusion")):
+            return 0.0, 1.0
+        if "pow" in lower or "power" in lower:
+            return 0.0, 10.0
+        if "gamma" in lower:
+            return 0.05, 10.0
+        return min(value - 1.0, 0.0), max(value + 1.0, 1.0)
+
+    @classmethod
+    def _combo_rgb(cls, current: list[Any], rgb_bias: list[float], bias_gain: float, value_scale: float, mode: str) -> list[float]:
+        rgb = [cls._clamp01(float(current[i])) for i in range(3)]
+        if mode == "bias":
+            return [cls._clamp01(rgb[i] - bias_gain * rgb_bias[i]) for i in range(3)]
+        if mode == "desaturate":
+            mean = sum(rgb) / 3.0
+            return [cls._clamp01((mean + (rgb[i] - mean) * 0.65) * value_scale) for i in range(3)]
+        if mode.startswith("scale:"):
+            scales = [float(item) for item in mode.split(":", 1)[1].split(",")]
+            return [cls._clamp01(rgb[i] * scales[i]) for i in range(3)]
+        if mode.startswith("offset:"):
+            offsets = [float(item) for item in mode.split(":", 1)[1].split(",")]
+            return [cls._clamp01(rgb[i] + offsets[i]) for i in range(3)]
+        return rgb
+
+    @staticmethod
+    def _combo_gamma(gamma: float, luma_bias: float, combo_name: str) -> float:
+        if luma_bias > 0.02:
+            gamma *= 0.65
+        elif luma_bias < -0.02:
+            gamma *= 1.25
+        if combo_name in {"darken_desaturate", "cool_shadow", "purple_shadow"}:
+            gamma *= 0.80
+        return max(0.05, min(10.0, gamma))
+
+    @staticmethod
+    def _hint_direction(analysis: dict[str, Any], param_name: str) -> float:
+        hints = analysis.get("adjustment_hints") if isinstance(analysis, dict) else None
+        if not isinstance(hints, list):
+            return 0.0
+        total = 0.0
+        for hint in hints:
+            if not isinstance(hint, dict):
+                continue
+            related = hint.get("related_params")
+            if not isinstance(related, list):
+                continue
+            if not any(CmaesStrategy._param_match(param_name.lower(), str(item).lower()) for item in related):
+                continue
+            direction = str(hint.get("direction", "")).lower()
+            if direction == "increase":
+                total += 1.0
+            elif direction == "decrease":
+                total -= 1.0
+        if total > 0.0:
+            return 1.0
+        if total < 0.0:
+            return -1.0
+        return 0.0
+
+    @staticmethod
+    def _clamp01(value: float) -> float:
+        return max(0.0, min(1.0, float(value)))
+
+
 class SemanticGroupStrategy(OptimizerStrategy):
     """Low-dimensional group search driven by :class:`ShaderEffectGraph`."""
 
@@ -627,9 +1148,16 @@ class SemanticGroupStrategy(OptimizerStrategy):
                 item[1],
             )
         )
+        self._step_schedule = [0.25, 0.14, 0.075, 0.040]
         self._group_order: list[str] = []
+        self._candidate_generator = SemanticCandidateGenerator(
+            graph=graph,
+            shader_params=shader_params,
+            encoder_cls=ParameterEncoder,
+            step_schedule=self._step_schedule,
+        )
         for _, _, group in groups_with_order:
-            candidate_params = self._candidate_group_params(group)
+            candidate_params = self._candidate_generator.candidate_group_params(group)
             if any(graph.params.get(p) and graph.params[p].searchable for p in candidate_params):
                 self._group_order.append(group.name)
         if not self._group_order:
@@ -644,7 +1172,6 @@ class SemanticGroupStrategy(OptimizerStrategy):
         # changes (typical ΔMAE ~5e-3 → Δfit ~2e-3) so the algorithm
         # can actually accept candidates instead of rolling back 30
         # iterations in a row.
-        self._step_schedule = [0.25, 0.14, 0.075, 0.040]
         # Same root cause: the relative threshold of 0.5% × fit was
         # too strict for the actual signal magnitude. We tighten the
         # absolute floor (5e-5 ≈ noise of two consecutive identical
@@ -660,12 +1187,37 @@ class SemanticGroupStrategy(OptimizerStrategy):
         # bouncing on u_BaseColor before fresnel ever gets a turn.
         self._max_group_no_improve = 8
         self._max_group_no_improve_small = 3
-        self._max_group_cycles = 3
+        self._max_group_cycles = 999
+        self._breakthrough_cycle = 3
         self._group_cycle = 0
+        self._group_order_revision = 0
         self._group_state: dict[str, dict[str, Any]] = {}
         self._pending: dict[str, Any] | None = None
+        self._influence = InfluenceTracker()
+        self._param_influence = ParamInfluenceTracker()
+        self._topk = TopKArchive(capacity=16)
+        self._acceptance_policy = AcceptancePolicy()
+        self._branch_guard = BranchDriftGuard()
+        self._breakthrough_queue = BreakthroughCandidateQueue(max_size=10)
         self._auto_adjust_mode = (auto_adjust_mode or "fresh_fit").strip().lower()
         self._isolation_done = False
+        self._cross_group_cycles_done: set[int] = set()
+        self._best_fit_history: list[tuple[int, float]] = []
+        self._force_breakthrough = False
+        self._plateau_window = 18
+        self._plateau_min_gain = 0.002
+        self._early_breakthrough_iteration = 36
+        self._plateau_min_exhausted_ratio = 0.55
+        self._param_candidate_pool_size = 10
+        self._trust_region = TrustRegionBranch()
+        self._current_iteration = 0
+        self._breakthrough_window_start: int | None = None
+        self._breakthrough_window_best = -math.inf
+        self._breakthrough_window_no_improve = 0
+        self._breakthrough_window_max_iters = 30
+        self._breakthrough_window_max_no_improve = 16
+        self._breakthrough_cooldown_until = -1
+        self._breakthrough_cooldown_iters = 24
 
     def wants_global_no_improve_check(self) -> bool:
         # This strategy owns accept/reject and per-group exhaustion. The
@@ -673,7 +1225,38 @@ class SemanticGroupStrategy(OptimizerStrategy):
         # where a visible-but-worse candidate is still useful evidence.
         return False
 
+    def research_summary(self) -> dict[str, Any]:
+        bottleneck: dict[str, float] = {}
+        if self._topk.items:
+            latest_components = self._topk.items[0].get("components")
+            if isinstance(latest_components, dict):
+                bottleneck = {
+                    str(key): float(value)
+                    for key, value in sorted(
+                        latest_components.items(),
+                        key=lambda item: float(item[1]) if isinstance(item[1], (int, float)) else 0.0,
+                        reverse=True,
+                    )[:4]
+                    if isinstance(value, (int, float))
+                }
+        return {
+            "phase": self._scheduler_phase(),
+            "cycle": self._group_cycle,
+            "breakthrough_cycle": self._breakthrough_cycle,
+            "topk": self._topk.summary(limit=8),
+            "influence": self._influence.summary(bottleneck),
+            "influence_trial_count": self._influence.trial_count,
+            "param_priority": self._param_ranking({}, {"research_metrics": {"components": bottleneck}}, limit=None),
+            "param_candidate_pool_size": self._param_candidate_pool_size,
+            "breakthrough_queue": self._breakthrough_queue.summary(),
+            "trust_region": self._trust_region.summary(),
+            "branch_guard": self._branch_guard.summary(),
+            "acceptance_policy": self._acceptance_policy.summary(),
+            "group_order": list(self._group_order),
+        }
+
     def propose(self, ctx: StrategyContext) -> tuple[dict[str, Any], dict[str, Any]]:
+        self._current_iteration = int(ctx.iteration)
         if not self._group_order:
             return ctx.current_params, {
                 "optimizer": self.name,
@@ -681,6 +1264,9 @@ class SemanticGroupStrategy(OptimizerStrategy):
                 "stage": None,
             }
         previous_eval = self._consume_pending(ctx)
+        self._update_plateau_state(ctx)
+        if not previous_eval:
+            self._record_topk(ctx, group=None)
         base_params = previous_eval.get("next_base_params")
         if not isinstance(base_params, dict):
             base_params = dict(ctx.current_params)
@@ -693,6 +1279,7 @@ class SemanticGroupStrategy(OptimizerStrategy):
                 "kind": "isolation",
                 "base_params": dict(base_params),
                 "base_fit_score": float(ctx.fit_score),
+                "base_metrics": metric_vector_from_analysis(ctx.analysis, ctx.fit_score),
                 "changed_params": changed,
                 "force_accept": True,
             }
@@ -713,7 +1300,68 @@ class SemanticGroupStrategy(OptimizerStrategy):
                 "isolation_forced_accept": True,
             }
 
-        group_name = self._select_group(ctx.analysis, ctx.iteration, preferred=previous_eval.get("group"))
+        breakthrough = self._breakthrough_candidate(
+            base_params=base_params,
+            base_fit_score=ctx.fit_score,
+            analysis=ctx.analysis,
+            iteration=ctx.iteration,
+        )
+        if breakthrough is not None:
+            proposed, payload = breakthrough
+            changes = CmaesStrategy._diff_params(base_params, proposed)
+            self._pending = {
+                "group": "__breakthrough__",
+                "kind": str(payload.get("candidate_kind") or "breakthrough"),
+                "base_params": dict(base_params),
+                "base_fit_score": float(ctx.fit_score),
+                "base_metrics": metric_vector_from_analysis(ctx.analysis, ctx.fit_score),
+                "changed_params": [str(change.get("param")) for change in changes if isinstance(change, dict)],
+                "breakthrough": payload,
+            }
+            return proposed, {
+                "optimizer": self.name,
+                "stage": {"name": "breakthrough", "description": "archive/influence driven breakthrough candidate"},
+                "semantic_action": "breakthrough_candidate",
+                "scheduler": self._scheduler_state("breakthrough", ctx.analysis, base_params=base_params),
+                "changes": changes,
+                "stop_reason": "continue",
+                "previous_candidate": previous_eval or None,
+                **payload,
+            }
+
+        cross_group = self._cross_group_candidate(
+            base_params=base_params,
+            base_fit_score=ctx.fit_score,
+            analysis=ctx.analysis,
+            iteration=ctx.iteration,
+        )
+        if cross_group is not None:
+            proposed, payload = cross_group
+            self._pending = {
+                "group": "__cross_group__",
+                "kind": "cross_group",
+                "base_params": dict(base_params),
+                "base_fit_score": float(ctx.fit_score),
+                "base_metrics": metric_vector_from_analysis(ctx.analysis, ctx.fit_score),
+                "changed_params": payload["changed_params"],
+            }
+            return proposed, {
+                "optimizer": self.name,
+                "stage": {"name": "cross_group", "description": "combine best semantic groups from previous pass"},
+                "semantic_action": "cross_group_combo",
+                "scheduler": self._scheduler_state("cross_group", ctx.analysis, base_params=base_params),
+                "changes": CmaesStrategy._diff_params(base_params, proposed),
+                "stop_reason": "continue",
+                "previous_candidate": previous_eval or None,
+                **payload,
+            }
+
+        group_name = self._select_group(
+            ctx.analysis,
+            ctx.iteration,
+            preferred=previous_eval.get("group"),
+            base_params=base_params,
+        )
         if not group_name:
             return base_params, {
                 "optimizer": self.name,
@@ -733,61 +1381,15 @@ class SemanticGroupStrategy(OptimizerStrategy):
         return proposed, decision
 
     def _isolation_candidate(self, base_params: dict[str, Any]) -> tuple[dict[str, Any], list[str]] | None:
-        """Actively suppress detail layers before the first base pass.
+        """Do not write diagnostic isolation into the optimization path."""
 
-        Human artists usually do not tune body/base colour while strong
-        Fresnel, emission, matcap, IBL and specular lobes are still
-        dominating the viewport. Merely *skipping* those groups is not
-        enough: their current material defaults still contaminate the
-        screenshot. This candidate writes a temporary isolation preset
-        into the material so the following base_color candidates are
-        evaluated against a cleaner diffuse-like view.
-
-        The candidate is force-accepted by ``_consume_pending``. It is
-        an analysis setup step, not a claim that the full final score is
-        immediately better.
-        """
-
-        if self._isolation_done or self._auto_adjust_mode == "refine_current":
-            return None
-        if not self._group_order or self._group_order[0] != "base_color":
-            self._isolation_done = True
-            return None
-        suppress_values: dict[str, Any] = self._semantic_isolation_values(base_params)
-        suppress_values.update({
-            "u_FresnelIntensity": 0.0,
-            "u_FresnelPow": 0.0,
-            "u_EmissionScale": 0.0,
-            "u_EmissionPower": 0.0,
-            "u_MatcapStrength": 0.0,
-            "u_MatcapAddStrength": 0.0,
-            "u_IBLMapIntensity": 0.0,
-            "u_EnvironmentReflections": 0.0,
-            "u_SpecularIntensity": 0.0,
-            "u_SpecularSecondIntensity": 0.0,
-            "u_GGXSpecular": 0.0,
-        })
-        color_values: dict[str, Any] = {
-            "u_EmissionColor": [0.0, 0.0, 0.0, 0.0],
-            "u_FresnelColor": [0.0, 0.0, 0.0, 0.0],
-            "u_MatcapColor": [1.0, 1.0, 1.0, 1.0],
-            "u_MatcapAddColor": [1.0, 1.0, 1.0, 1.0],
-            "u_IBLMapColor": [1.0, 1.0, 1.0, 1.0],
-        }
-        candidate = dict(base_params)
-        changed: list[str] = []
-        for name, value in {**suppress_values, **color_values}.items():
-            if name not in candidate:
-                continue
-            before = candidate.get(name)
-            new_value = list(value) if isinstance(value, list) else value
-            if before != new_value:
-                candidate[name] = new_value
-                changed.append(name)
-        if not changed:
-            self._isolation_done = True
-            return None
-        return candidate, changed
+        # Full-image fitting scores the complete material. Suppressing
+        # reflection/specular/rim/emission can be useful for diagnostics,
+        # but force-accepting that preset corrupts fresh_fit trajectories.
+        # Keep isolation out of the real search until it has a separate
+        # diagnostic-only render path and metric.
+        self._isolation_done = True
+        return None
 
     def _semantic_isolation_values(self, base_params: dict[str, Any]) -> dict[str, Any]:
         """Choose suppress targets from the effect graph before falling back to names."""
@@ -816,7 +1418,7 @@ class SemanticGroupStrategy(OptimizerStrategy):
             ).lower()
             if group.name == "base_color" or not any(token in group_text for token in suppress_tokens):
                 continue
-            for name in self._candidate_group_params(group):
+            for name in self._candidate_generator.candidate_group_params(group):
                 if name not in base_params or name in targets:
                     continue
                 targets[name] = self._neutral_suppressed_value(name, base_params.get(name))
@@ -862,6 +1464,8 @@ class SemanticGroupStrategy(OptimizerStrategy):
         state = self._state_for_group(group_name)
         base_fit = float(pending.get("base_fit_score", ctx.fit_score))
         delta = float(ctx.fit_score) - base_fit
+        candidate_metrics = metric_vector_from_analysis(ctx.analysis, ctx.fit_score)
+        self._record_topk(ctx, group=group_name)
         # Both thresholds are now ``max(abs, rel * base_fit)`` so they
         # auto-scale: when fit_score is tiny (cold-start) almost any
         # measurable gain counts; when fit_score is high we demand a
@@ -874,9 +1478,28 @@ class SemanticGroupStrategy(OptimizerStrategy):
             self._probe_score_delta_abs,
             self._probe_score_delta_rel * abs(base_fit),
         )
-        accepted = delta >= min_improvement
-        if pending.get("force_accept"):
-            accepted = True
+        base_metrics = pending.get("base_metrics")
+        if not hasattr(base_metrics, "components"):
+            base_metrics = metric_vector_from_analysis({}, base_fit)
+        acceptance = self._acceptance_policy.evaluate(
+            base=base_metrics,
+            candidate=candidate_metrics,
+            fit_delta=delta,
+            min_improvement=min_improvement,
+            phase=self._scheduler_phase(),
+            force_accept=bool(pending.get("force_accept")),
+        )
+        run_best_params = getattr(ctx.state, "best_fit_params", {}) or getattr(ctx.state, "best_params", {})
+        run_best_score = float(getattr(ctx.state, "best_fit_score", -math.inf))
+        if isinstance(run_best_params, dict) and run_best_params:
+            self._branch_guard.update_checkpoint(params=run_best_params, fit_score=run_best_score)
+        branch_exploratory_accept = (
+            not acceptance.accepted
+            and acceptance.reason == "insufficient_gain"
+            and pending.get("kind") != "probe"
+            and self._branch_guard.allows_exploration(fit_score=float(ctx.fit_score))
+        )
+        accepted = acceptance.accepted or branch_exploratory_accept
         visibly_changed = abs(delta) >= probe_threshold
         if pending.get("kind") == "probe" and visibly_changed:
             state["phase"] = "optimize"
@@ -887,25 +1510,119 @@ class SemanticGroupStrategy(OptimizerStrategy):
             state["best_fit_score"] = max(float(state.get("best_fit_score", -math.inf)), float(ctx.fit_score))
             state["best_params"] = dict(ctx.current_params)
             state["axis_rejected_dirs"] = {}
-            next_base = dict(ctx.current_params)
-            outcome = "accepted_for_isolation" if pending.get("force_accept") else "accepted"
+            state["accepted_count"] = int(state.get("accepted_count", 0)) + 1
+            state["total_delta"] = float(state.get("total_delta", 0.0)) + max(delta, 0.0)
+            state["last_delta"] = delta
+            is_run_best = float(ctx.fit_score) >= run_best_score - 1.0e-9
+            drift = self._branch_guard.observe(
+                iteration=ctx.iteration,
+                params=ctx.current_params,
+                fit_score=float(ctx.fit_score),
+                metrics=candidate_metrics,
+            )
+            if drift.should_rollback and self._branch_guard.checkpoint_params:
+                next_base = self._branch_guard.checkpoint_params
+                outcome = "accepted_but_drift_rollback_to_checkpoint"
+                if pending.get("group") == "__breakthrough__":
+                    self._trust_region.record_failure()
+            else:
+                next_base = dict(ctx.current_params)
+                if pending.get("force_accept"):
+                    outcome = "accepted_for_isolation"
+                elif branch_exploratory_accept:
+                    outcome = "exploratory_accept_checkpoint_branch"
+                elif acceptance.provisional:
+                    outcome = "provisional_accept_component_gain"
+                elif pending.get("group") == "__breakthrough__" and not is_run_best:
+                    outcome = "accepted_trust_region_branch"
+                elif not is_run_best:
+                    outcome = "accepted_checkpoint_branch"
+                else:
+                    outcome = "accepted"
+                if pending.get("group") == "__breakthrough__":
+                    if self._trust_region.can_accept(
+                        fit_score=float(ctx.fit_score),
+                        global_best_score=run_best_score,
+                    ):
+                        self._trust_region.record_success(
+                            params=ctx.current_params,
+                            fit_score=float(ctx.fit_score),
+                            min_improvement=min_improvement,
+                        )
+                    else:
+                        self._trust_region.record_failure()
         else:
             state["no_improve"] = int(state.get("no_improve", 0)) + 1
-            next_base = dict(pending.get("base_params") or ctx.current_params)
-            outcome = "rejected_rollback_to_base"
+            state["last_delta"] = delta
+            base_drift = self._branch_guard.evaluate_without_record(fit_score=base_fit)
+            if pending.get("group") == "__breakthrough__" and self._trust_region.active:
+                self._trust_region.record_failure()
+                if self._trust_region.active:
+                    next_base = self._trust_region.center_params or dict(pending.get("base_params") or ctx.current_params)
+                else:
+                    next_base = dict(pending.get("base_params") or ctx.current_params)
+            elif base_drift.should_rollback and self._branch_guard.checkpoint_params:
+                next_base = self._branch_guard.checkpoint_params
+                outcome = "rejected_drift_rollback_to_checkpoint"
+            else:
+                next_base = dict(pending.get("base_params") or ctx.current_params)
+                outcome = "rejected_keep_branch_base"
+            if "outcome" not in locals() or not str(outcome).startswith("rejected_"):
+                outcome = "rejected_keep_branch_base"
             limit = self._effective_no_improve_limit(group_name)
             if pending.get("kind") == "probe" and not visibly_changed and state["no_improve"] >= 2:
                 state["status"] = "inactive_or_invisible"
             elif state["no_improve"] >= limit:
                 state["status"] = "exhausted"
-        if pending.get("kind") == "pattern" and not accepted:
+        if pending.get("kind") in {"pattern", "param_priority"} and not accepted:
             self._advance_after_reject(state, pending)
-        elif pending.get("kind") == "pattern" and accepted:
-            if pending.get("combo"):
+        elif pending.get("kind") in {"pattern", "param_priority"} and accepted:
+            if pending.get("joint"):
+                state["joint_cursor"] = int(pending.get("joint_index", state.get("joint_cursor", 0))) + 1
+            elif pending.get("combo"):
                 state["combo_cursor"] = int(pending.get("combo_index", state.get("combo_cursor", 0))) + 1
             else:
                 state["axis_cursor"] = int(pending.get("axis_index", 0)) + 1
             state["direction"] = 1.0
+        if pending.get("kind") in {"pattern", "param_priority"}:
+            state["visit_attempts"] = int(state.get("visit_attempts", 0)) + 1
+            if int(state["visit_attempts"]) >= self._effective_visit_limit(group_name):
+                if self._group_has_uncovered_priority_params(
+                    group_name,
+                    base_params=dict(pending.get("base_params") or {}),
+                    analysis=ctx.analysis,
+                ):
+                    state["status"] = "active"
+                    state["visit_attempts"] = max(0, self._effective_visit_limit(group_name) - 2)
+                else:
+                    state["status"] = "exhausted"
+        evidence_payload: dict[str, Any] | None = None
+        if hasattr(base_metrics, "components") and group_name and not str(group_name).startswith("__"):
+            evidence = self._influence.observe(
+                group=group_name,
+                kind=str(pending.get("kind") or ""),
+                before=base_metrics,
+                after=candidate_metrics,
+                fit_delta=delta,
+                accepted=accepted,
+                changed_params=[str(item) for item in pending.get("changed_params", [])],
+            )
+            evidence_payload = {
+                "group": evidence.group,
+                "kind": evidence.kind,
+                "fit_delta": evidence.fit_delta,
+                "component_improvement": evidence.component_improvement,
+                "accepted": evidence.accepted,
+                "changed_params": evidence.changed_params,
+            }
+        if hasattr(base_metrics, "components"):
+            self._param_influence.observe(
+                changed_params=[str(item) for item in pending.get("changed_params", [])],
+                before=base_metrics,
+                after=candidate_metrics,
+                fit_delta=delta,
+                accepted=accepted,
+            )
         return {
             "group": group_name,
             "kind": pending.get("kind"),
@@ -920,6 +1637,11 @@ class SemanticGroupStrategy(OptimizerStrategy):
             "changed_params": pending.get("changed_params", []),
             "next_base_params": next_base,
             "group_state": self._json_group_state(state),
+            "acceptance": acceptance.to_dict(),
+            "branch_exploratory_accept": branch_exploratory_accept,
+            "branch_guard": self._branch_guard.summary(),
+            "evidence": evidence_payload,
+            "topk": self._topk_summary(),
         }
 
     def _propose_for_group(
@@ -934,13 +1656,14 @@ class SemanticGroupStrategy(OptimizerStrategy):
         group = self._graph.groups[group_name]
         state = self._state_for_group(group_name)
         if state["phase"] == "probe":
-            probe_params, probe_changes = self._probe_candidate(base_params, group)
+            probe_params, probe_changes = self._candidate_generator.probe_candidate(base_params, group)
             if probe_changes:
                 self._pending = {
                     "group": group_name,
                     "kind": "probe",
                     "base_params": dict(base_params),
                     "base_fit_score": float(base_fit_score),
+                    "base_metrics": metric_vector_from_analysis(analysis, base_fit_score),
                     "changed_params": probe_changes,
                 }
                 return probe_params, self._decision(
@@ -949,11 +1672,45 @@ class SemanticGroupStrategy(OptimizerStrategy):
                     action="probe_group",
                     changes=CmaesStrategy._diff_params(base_params, probe_params),
                     stop_reason="continue",
+                    analysis=analysis,
+                    base_params=base_params,
                     extra={"probe_changed_params": probe_changes},
                 )
             state["phase"] = "optimize"
 
-        proposed, pattern_payload = self._pattern_candidate(
+        priority_result = self._priority_param_candidate(
+            group_name=group_name,
+            base_params=base_params,
+            analysis=analysis,
+        )
+        if priority_result is not None:
+            proposed, priority_payload, priority_row = priority_result
+            changes = CmaesStrategy._diff_params(base_params, proposed)
+            if changes:
+                self._pending = {
+                    "group": group_name,
+                    "kind": "param_priority",
+                    "base_params": dict(base_params),
+                    "base_fit_score": float(base_fit_score),
+                    "base_metrics": metric_vector_from_analysis(analysis, base_fit_score),
+                    "changed_params": [str(change.get("param")) for change in changes if isinstance(change, dict)],
+                    **priority_payload,
+                }
+                return proposed, self._decision(
+                    group=group,
+                    state=state,
+                    action="param_priority_search",
+                    changes=changes,
+                    stop_reason="continue",
+                    analysis=analysis,
+                    base_params=base_params,
+                    extra={
+                        "axis": priority_payload,
+                        "param_priority_choice": priority_row,
+                    },
+                )
+
+        proposed, pattern_payload = self._candidate_generator.pattern_candidate(
             base_params=base_params,
             group=group,
             state=state,
@@ -967,6 +1724,7 @@ class SemanticGroupStrategy(OptimizerStrategy):
                 "kind": "pattern",
                 "base_params": dict(base_params),
                 "base_fit_score": float(base_fit_score),
+                "base_metrics": metric_vector_from_analysis(analysis, base_fit_score),
                 "changed_params": [str(change.get("param")) for change in changes if isinstance(change, dict)],
                 **pattern_payload,
             }
@@ -978,235 +1736,86 @@ class SemanticGroupStrategy(OptimizerStrategy):
             action="pattern_search",
             changes=changes,
             stop_reason="continue" if changes else "no_effective_change",
+            analysis=analysis,
+            base_params=base_params,
             extra={"axis": pattern_payload} if pattern_payload else {},
         )
 
-    def _pattern_candidate(
+    def _cross_group_candidate(
         self,
         *,
         base_params: dict[str, Any],
-        group: Any,
-        state: dict[str, Any],
-        analysis: dict[str, Any],
-        iteration: int,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        whitelist = self._searchable_params_for_group(group, base_params)
-        if not whitelist:
-            state["status"] = "exhausted"
-            return dict(base_params), {}
-        combo_candidate = self._base_color_combo_candidate(
-            base_params=base_params,
-            group=group,
-            state=state,
-            analysis=analysis,
-            iteration=iteration,
-        )
-        if combo_candidate is not None:
-            return combo_candidate
-        encoder = self._encoder_cls(
-            base_params,
-            self._shader_params,
-            param_whitelist=whitelist,
-            semantics=self._graph,
-        )
-        if encoder.dim == 0:
-            state["status"] = "exhausted"
-            return dict(base_params), {}
-
-        vec = encoder.encode(base_params)
-        axis_index = int(state.get("axis_cursor", 0)) % encoder.dim
-        axis = encoder.axes[axis_index]
-        hinted = self._hint_direction(analysis, axis.param_name)
-        direction = hinted or float(state.get("direction", 1.0) or 1.0)
-        step_index = min(int(state.get("step_index", 0)), len(self._step_schedule) - 1)
-        step_ratio = self._step_schedule[step_index]
-        width = max(float(axis.high) - float(axis.low), 1e-9)
-        vec[axis_index] = max(
-            encoder.lower_bounds[axis_index],
-            min(encoder.upper_bounds[axis_index], vec[axis_index] + direction * step_ratio * width),
-        )
-        proposed = encoder.decode(vec)
-        state["last_axis"] = axis.param_name
-        state["last_direction"] = direction
-        return proposed, {
-            "axis_index": axis_index,
-            "param": axis.param_name,
-            "sub_index": axis.sub_index,
-            "transform": axis.transform,
-            "direction": direction,
-            "hint_direction": hinted,
-            "step_ratio": step_ratio,
-            "step_index": step_index,
-            "iteration": iteration,
-        }
-
-    def _base_color_combo_candidate(
-        self,
-        *,
-        base_params: dict[str, Any],
-        group: Any,
-        state: dict[str, Any],
+        base_fit_score: float,
         analysis: dict[str, Any],
         iteration: int,
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
-        if group.name != "base_color":
+        if self._group_cycle <= 0 or self._group_cycle in self._cross_group_cycles_done:
             return None
-        base_name = next((name for name in group.search_params if name in base_params and "basecolor" in name.lower()), "")
-        gamma_name = next((name for name in group.search_params if name in base_params and "gamma" in name.lower()), "")
-        if not base_name or not isinstance(base_params.get(base_name), list):
-            return None
-
-        channel = {}
-        channels = analysis.get("material_channels") if isinstance(analysis, dict) else None
-        if isinstance(channels, dict) and isinstance(channels.get("base_color_main_texture"), dict):
-            channel = channels["base_color_main_texture"]
-        rgb_bias = channel.get("rgb_bias_candidate_minus_reference") if isinstance(channel, dict) else None
-        if not isinstance(rgb_bias, list) or len(rgb_bias) < 3:
-            rgb_bias = [0.0, 0.0, 0.0]
-        rgb_bias = [float(v) if isinstance(v, (int, float)) and math.isfinite(float(v)) else 0.0 for v in rgb_bias[:3]]
-        luma_bias = channel.get("luma_bias_candidate_minus_reference") if isinstance(channel, dict) else 0.0
-        luma_bias = float(luma_bias) if isinstance(luma_bias, (int, float)) and math.isfinite(float(luma_bias)) else 0.0
-
-        combos = [
-            ("inverse_rgb_bias", 0.55, 1.0, "bias"),
-            ("strong_inverse_rgb_bias", 0.90, 1.0, "bias"),
-            ("darken_desaturate", 0.0, 0.78, "desaturate"),
-            ("cool_shadow", 0.0, 1.0, "scale:0.65,0.75,0.95"),
-            ("purple_shadow", 0.0, 1.0, "scale:0.65,0.55,0.90"),
-            ("reduce_red_lift_blue", 0.0, 1.0, "offset:-0.20,-0.10,+0.10"),
-        ]
-        combo_index = int(state.get("combo_cursor", 0))
-        if combo_index >= len(combos):
-            return None
-
-        combo_name, bias_gain, value_scale, mode = combos[combo_index]
-        current = list(base_params.get(base_name) or [])
-        if len(current) < 3:
-            return None
-        rgb = [self._clamp01(float(current[i])) for i in range(3)]
-        if mode == "bias":
-            rgb = [self._clamp01(rgb[i] - bias_gain * rgb_bias[i]) for i in range(3)]
-        elif mode == "desaturate":
-            mean = sum(rgb) / 3.0
-            rgb = [self._clamp01((mean + (rgb[i] - mean) * 0.65) * value_scale) for i in range(3)]
-        elif mode.startswith("scale:"):
-            scales = [float(item) for item in mode.split(":", 1)[1].split(",")]
-            rgb = [self._clamp01(rgb[i] * scales[i]) for i in range(3)]
-        elif mode.startswith("offset:"):
-            offsets = [float(item) for item in mode.split(":", 1)[1].split(",")]
-            rgb = [self._clamp01(rgb[i] + offsets[i]) for i in range(3)]
-
-        proposed = dict(base_params)
-        new_color = list(current)
-        for i in range(3):
-            new_color[i] = rgb[i]
-        proposed[base_name] = new_color
-        changed = [base_name]
-
-        if gamma_name and isinstance(base_params.get(gamma_name), (int, float)):
-            gamma = float(base_params[gamma_name])
-            if luma_bias > 0.02:
-                gamma *= 0.65
-            elif luma_bias < -0.02:
-                gamma *= 1.25
-            if combo_name in {"darken_desaturate", "cool_shadow", "purple_shadow"}:
-                gamma *= 0.80
-            gamma = max(0.05, min(10.0, gamma))
-            if abs(gamma - float(base_params[gamma_name])) > 1e-8:
-                proposed[gamma_name] = gamma
-                changed.append(gamma_name)
-
-        if not CmaesStrategy._diff_params(base_params, proposed):
-            state["combo_cursor"] = combo_index + 1
-            return self._base_color_combo_candidate(
-                base_params=base_params,
-                group=group,
-                state=state,
-                analysis=analysis,
-                iteration=iteration,
+        scored = [
+            (
+                self._group_utility(name, analysis),
+                name,
             )
-
-        state["last_axis"] = f"combo:{combo_name}"
-        state["last_direction"] = 0.0
-        return proposed, {
-            "combo": True,
-            "combo_index": combo_index,
-            "combo_name": combo_name,
-            "param": base_name,
-            "changed_params": changed,
-            "rgb_bias_candidate_minus_reference": rgb_bias,
-            "luma_bias_candidate_minus_reference": luma_bias,
-            "step_ratio": self._step_schedule[min(int(state.get("step_index", 0)), len(self._step_schedule) - 1)],
-            "iteration": iteration,
-        }
-
-    def _probe_candidate(self, base_params: dict[str, Any], group: Any) -> tuple[dict[str, Any], list[str]]:
-        candidate = dict(base_params)
-        probe_order = list(group.gate_params) + list(group.search_params) + list(group.params)
-        seen: set[str] = set()
-        changed: list[str] = []
-        for name in probe_order:
-            if name in seen or name not in candidate:
-                continue
-            seen.add(name)
-            sem = self._graph.params.get(name)
-            if sem is None or not sem.searchable:
-                continue
-            before = candidate.get(name)
-            candidate[name] = self._probe_value(name, before, sem)
-            if candidate.get(name) != before:
-                changed.append(name)
-                break
-        return candidate, changed
-
-    def _probe_value(self, name: str, value: Any, sem: Any) -> Any:
-        if isinstance(value, bool):
-            return True
-        if isinstance(value, (int, float)):
-            low, high = self._bounds_for_value(name, float(value), sem)
-            if float(value) <= low + 1e-8:
-                return max(min(low + (high - low) * 0.35, high), low)
-            step = max((high - low) * 0.18, 1e-4)
-            return max(low, min(high, float(value) + step))
-        if isinstance(value, list) and value and all(isinstance(item, (int, float)) for item in value):
-            out = list(value)
-            limit = min(3, len(out))
-            for idx in range(limit):
-                out[idx] = max(0.0, min(1.0, float(out[idx]) + 0.18))
-            return out
-        return value
-
-    @staticmethod
-    def _clamp01(value: float) -> float:
-        return max(0.0, min(1.0, float(value)))
-
-    def _bounds_for_value(self, name: str, value: float, sem: Any) -> tuple[float, float]:
-        lower = name.lower()
-        if (bounds := effective_bounds_for_param(name)) is not None:
-            return bounds
-        low = sem.range_min if getattr(sem, "range_min", None) is not None else None
-        high = sem.range_max if getattr(sem, "range_max", None) is not None else None
-        if low is not None and high is not None and float(low) < float(high):
-            return float(low), float(high)
-        if any(token in lower for token in ("intensity", "strength", "scale")):
-            return 0.0, 8.0
-        if any(token in lower for token in ("threshold", "smooth", "metallic", "occlusion")):
-            return 0.0, 1.0
-        if "pow" in lower or "power" in lower:
-            return 0.0, 10.0
-        if "gamma" in lower:
-            return 0.05, 10.0
-        return min(value - 1.0, 0.0), max(value + 1.0, 1.0)
-
-    def _searchable_params_for_group(self, group: Any, params: dict[str, Any]) -> list[str]:
-        names = self._candidate_group_params(group)
-        return [
-            name
-            for name in names
-            if name in params
-            and self._graph.params.get(name) is not None
-            and self._graph.params[name].searchable
+            for name in self._group_order
         ]
+        selected = [name for score, name in sorted(scored, reverse=True) if score > 0.0][:2]
+        if len(selected) < 2:
+            self._cross_group_cycles_done.add(self._group_cycle)
+            return None
+        self._cross_group_cycles_done.add(self._group_cycle)
+        groups = [self._graph.groups[name] for name in selected if name in self._graph.groups]
+        return self._candidate_generator.cross_group_candidate(
+            base_params=base_params,
+            groups=groups,
+            group_cycle=self._group_cycle,
+            analysis=analysis,
+            base_fit_score=base_fit_score,
+            iteration=iteration,
+        )
+
+    def _breakthrough_candidate(
+        self,
+        *,
+        base_params: dict[str, Any],
+        base_fit_score: float,
+        analysis: dict[str, Any],
+        iteration: int,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if self._scheduler_phase_for(analysis) != "breakthrough":
+            return None
+        if self._breakthrough_window_should_pause(iteration=iteration, fit_score=base_fit_score):
+            return None
+        self._trust_region.ensure(center_params=base_params, fit_score=base_fit_score)
+        active_groups = self._active_subspace_groups(analysis)
+        active_groups = {
+            name
+            for name in active_groups
+            if name in self._group_order and self._group_status(name) not in {"inactive_or_invisible"}
+        }
+        if not active_groups:
+            active_groups = {
+                name
+                for name in self._group_order
+                if self._group_status(name) not in {"inactive_or_invisible"}
+            }
+        group_scores = {name: self._group_utility(name, analysis) for name in self._group_order}
+        self._breakthrough_queue.ensure(
+            base_params=base_params,
+            base_fit_score=base_fit_score,
+            analysis=analysis,
+            iteration=iteration,
+            group_cycle=self._group_cycle,
+            groups_by_name=self._graph.groups,
+            group_order=self._group_order,
+            group_scores=group_scores,
+            active_groups=active_groups,
+            bottleneck=self._metric_bottleneck(analysis),
+            archive=self._topk,
+            generator=self._candidate_generator,
+            param_agenda=self._param_agenda(base_params, analysis, limit=self._param_candidate_pool_size),
+            radius_scale=self._trust_region.radius_scale,
+        )
+        return self._breakthrough_queue.pop()
 
     def _state_for_group(self, group_name: str) -> dict[str, Any]:
         state = self._group_state.get(group_name)
@@ -1223,6 +1832,11 @@ class SemanticGroupStrategy(OptimizerStrategy):
             "probe_passed": False,
             "best_fit_score": -math.inf,
             "best_params": dict(self._initial_params),
+            "visit_attempts": 0,
+            "accepted_count": 0,
+            "total_delta": 0.0,
+            "last_delta": 0.0,
+            "joint_cursor": 0,
         }
         self._group_state[group_name] = state
         return state
@@ -1236,14 +1850,32 @@ class SemanticGroupStrategy(OptimizerStrategy):
             return self._max_group_no_improve
         searchable = [
             name
-            for name in self._candidate_group_params(group)
+            for name in self._candidate_generator.candidate_group_params(group)
             if self._graph.params.get(name) is not None and self._graph.params[name].searchable
         ]
         if len(searchable) <= 2:
             return self._max_group_no_improve_small
         return self._max_group_no_improve
 
+    def _effective_visit_limit(self, group_name: str) -> int:
+        group = self._graph.groups.get(group_name)
+        if group is None:
+            return 6
+        searchable = [
+            name
+            for name in self._candidate_generator.candidate_group_params(group)
+            if self._graph.params.get(name) is not None and self._graph.params[name].searchable
+        ]
+        # A group pass is an exploration budget, not a proof that the
+        # group is globally solved. Without this cap, one-dimensional
+        # groups such as emission can keep resetting no_improve after
+        # small accepted moves and starve all later semantic groups.
+        return max(6, min(18, len(searchable) * 3))
+
     def _advance_after_reject(self, state: dict[str, Any], pending: dict[str, Any]) -> None:
+        if pending.get("joint"):
+            state["joint_cursor"] = int(pending.get("joint_index", state.get("joint_cursor", 0))) + 1
+            return
         if pending.get("combo"):
             state["combo_cursor"] = int(pending.get("combo_index", state.get("combo_cursor", 0))) + 1
             if int(state.get("no_improve", 0)) > 0 and int(state["no_improve"]) % 4 == 0:
@@ -1282,6 +1914,8 @@ class SemanticGroupStrategy(OptimizerStrategy):
         action: str,
         changes: list[dict[str, Any]],
         stop_reason: str,
+        analysis: dict[str, Any] | None = None,
+        base_params: dict[str, Any] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = {
@@ -1290,6 +1924,7 @@ class SemanticGroupStrategy(OptimizerStrategy):
             "semantic_group": group.to_dict(),
             "semantic_action": action,
             "group_state": self._json_group_state(state),
+            "scheduler": self._scheduler_state(group.name, analysis, base_params=base_params),
             "changes": changes,
             "stop_reason": stop_reason,
         }
@@ -1305,13 +1940,6 @@ class SemanticGroupStrategy(OptimizerStrategy):
             if key != "best_params"
         }
 
-    def _candidate_group_params(self, group: Any) -> list[str]:
-        if group.search_params:
-            return list(group.search_params)
-        if not group.current_active and group.gate_params:
-            return list(group.gate_params)
-        return list(group.params)
-
     @staticmethod
     def _group_order_key(group: Any) -> int:
         order = int(getattr(group, "order", 0) or 0)
@@ -1321,37 +1949,118 @@ class SemanticGroupStrategy(OptimizerStrategy):
             return 0
         return 10_000
 
-    def _select_group(self, analysis: dict[str, Any], iteration: int, preferred: Any = None) -> str:
-        # Stick with the preferred group as long as it's still working.
-        # This keeps a successful pattern_search going inside the group
-        # instead of jumping around channels every iteration.
-        preferred_name = str(preferred or "")
-        if (
-            preferred_name in self._group_order
-            and self._group_status(preferred_name) not in {"exhausted", "inactive_or_invisible"}
-        ):
-            return preferred_name
+    def _scheduler_state(
+        self,
+        selected_group: str,
+        analysis: dict[str, Any] | None = None,
+        *,
+        base_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        statuses: dict[str, dict[str, Any]] = {}
+        bottleneck = self._metric_bottleneck(analysis or {})
+        ranking = self._param_ranking(base_params or {}, analysis or {}, limit=None)
+        gated_rows = self._gated_param_rows(base_params or {})
+        activation_rows = self._activation_param_rows(base_params or {}, analysis or {})
+        for name in self._group_order:
+            state = self._state_for_group(name)
+            runtime_status = self._graph.runtime_group_status(name, base_params or {})
+            statuses[name] = {
+                "status": self._group_status(name),
+                "runtime_active": runtime_status.get("active"),
+                "runtime_gate_reason": runtime_status.get("reason"),
+                "runtime_blocked_by": runtime_status.get("blocked_by", []),
+                "visit_attempts": int(state.get("visit_attempts", 0) or 0),
+                "visit_limit": self._effective_visit_limit(name),
+                "accepted_count": int(state.get("accepted_count", 0) or 0),
+                "total_delta": float(state.get("total_delta", 0.0) or 0.0),
+                "diagnostic_score": self._diagnostic_score_for_group(name, analysis or {}),
+                "utility": self._group_utility(name, analysis or {}),
+                "influence": self._influence.summary_for(name, bottleneck),
+            }
+        return {
+            "phase": self._scheduler_phase_for(analysis or {}),
+            "raw_phase": self._scheduler_phase(),
+            "cycle": self._group_cycle,
+            "force_breakthrough": self._force_breakthrough,
+            "plateau": self._plateau_summary(),
+            "trust_region": self._trust_region.summary(),
+            "branch_guard": self._branch_guard.summary(),
+            "order_revision": self._group_order_revision,
+            "selected_group": selected_group,
+            "group_order": list(self._group_order),
+            "group_status": statuses,
+            "component_bottleneck": bottleneck,
+            "param_selection_rule": (
+                "Rank all searchable params by bottleneck relevance, observed gain, "
+                "exploration bonus, risk, failures, and oversampling penalty; "
+                "groups are used only as semantic constraints and coverage guards."
+            ),
+            "search_param_count": len(ranking),
+            "all_searchable_param_count": self._searchable_param_count(base_params or {}),
+            "gated_param_count": len(gated_rows),
+            "activation_candidate_count": len(activation_rows),
+            "param_ranking": ranking,
+            "param_candidate_pool_size": self._param_candidate_pool_size,
+            "param_candidate_pool": ranking[: self._param_candidate_pool_size],
+            "param_agenda": ranking[: self._param_candidate_pool_size],
+            "gated_params": gated_rows,
+            "activation_candidates": activation_rows,
+            "topk": self._topk_summary(),
+            "breakthrough_queue": self._breakthrough_queue.summary(),
+            "acceptance_policy": self._acceptance_policy.summary(),
+        }
 
-        # Walk through the human-curated UI panel order. Whichever group
-        # comes first and is still workable wins — this is what makes
-        # the run console panel order meaningful for the optimizer.
+    def _select_group(
+        self,
+        analysis: dict[str, Any],
+        iteration: int,
+        preferred: Any = None,
+        base_params: dict[str, Any] | None = None,
+    ) -> str:
+        if not self._metric_bottleneck(analysis):
+            for name in self._group_order:
+                if self._group_status(name) not in {"exhausted", "inactive_or_invisible"}:
+                    return name
+        ranking = self._param_ranking(base_params or {}, analysis, limit=None)
+        preferred_name = str(preferred or "")
+        if preferred_name in self._group_order and self._group_status(preferred_name) not in {"exhausted", "inactive_or_invisible"}:
+            global_best = float(ranking[0].get("priority", 0.0)) if ranking else 0.0
+            preferred_best = max(
+                (
+                    float(item.get("priority", 0.0))
+                    for item in ranking
+                    if item.get("group") == preferred_name
+                ),
+                default=0.0,
+            )
+            if preferred_best >= global_best * 0.85:
+                return preferred_name
+
+        for item in ranking:
+            group_name = str(item.get("group") or "")
+            if group_name in self._group_order and self._group_status(group_name) not in {"exhausted", "inactive_or_invisible"}:
+                return group_name
+
         for name in self._group_order:
             if self._group_status(name) not in {"exhausted", "inactive_or_invisible"}:
                 return name
-        if self._restart_exhausted_groups():
+        if self._restart_exhausted_groups(analysis):
             for name in self._group_order:
                 if self._group_status(name) not in {"exhausted", "inactive_or_invisible"}:
                     return name
         return ""
 
-    def _restart_exhausted_groups(self) -> bool:
+    def _restart_exhausted_groups(self, analysis: dict[str, Any]) -> bool:
         if self._group_cycle >= self._max_group_cycles:
             return False
         restarted = False
         self._group_cycle += 1
+        active_subset = self._active_subspace_groups(analysis) if self._scheduler_phase_for(analysis) == "breakthrough" else set(self._group_order)
         for name in self._group_order:
             state = self._state_for_group(name)
             if state.get("status") != "exhausted":
+                continue
+            if name not in active_subset:
                 continue
             state["status"] = "pending"
             state["phase"] = "optimize"
@@ -1361,34 +2070,481 @@ class SemanticGroupStrategy(OptimizerStrategy):
             state["direction"] = 1.0
             state["axis_rejected_dirs"] = {}
             state["step_index"] = min(int(state.get("step_index", 0)) + 1, len(self._step_schedule) - 1)
+            state["visit_attempts"] = 0
             restarted = True
+        if restarted:
+            self._reprioritize_groups_for_refinement(analysis)
         return restarted
 
-    @staticmethod
-    def _hint_direction(analysis: dict[str, Any], param_name: str) -> float:
-        hints = analysis.get("adjustment_hints") if isinstance(analysis, dict) else None
-        if not isinstance(hints, list):
-            return 0.0
-        total = 0.0
-        for hint in hints:
-            if not isinstance(hint, dict):
-                continue
-            related = hint.get("related_params")
-            if not isinstance(related, list):
-                continue
-            if not any(CmaesStrategy._param_match(param_name.lower(), str(item).lower()) for item in related):
-                continue
-            direction = str(hint.get("direction", "")).lower()
-            if direction == "increase":
-                total += 1.0
-            elif direction == "decrease":
-                total -= 1.0
-        if total > 0.0:
-            return 1.0
-        if total < 0.0:
-            return -1.0
-        return 0.0
+    def _active_subspace_groups(self, analysis: dict[str, Any]) -> set[str]:
+        """Choose a compact restart subspace from current bottlenecks.
 
+        This is the non-neural P1 version of learned sensitivity: combine
+        semantic diagnostic utility with online influence evidence, then
+        restart only the groups that still look capable of reducing the
+        largest component losses. If the evidence is sparse, keep all
+        groups to avoid premature exclusion.
+        """
+
+        protected = self._protected_groups_for_bottleneck(self._metric_bottleneck(analysis))
+        scored = [(self._group_utility(name, analysis), name) for name in self._group_order]
+        positive = [(score, name) for score, name in scored if score > 0.0]
+        if len(positive) < 2:
+            return set(self._group_order) if not protected else protected
+        positive.sort(reverse=True)
+        keep_count = max(2, min(4, len(positive)))
+        return {name for _, name in positive[:keep_count]} | protected
+
+    def _reprioritize_groups_for_refinement(self, analysis: dict[str, Any]) -> None:
+        previous_order = {name: index for index, name in enumerate(self._group_order)}
+
+        self._group_order.sort(
+            key=lambda name: (
+                self._group_utility(name, analysis) <= 0.0,
+                -self._group_utility(name, analysis),
+                previous_order.get(name, 10_000),
+            )
+        )
+        self._group_order_revision += 1
+
+    def _group_utility(self, group_name: str, analysis: dict[str, Any]) -> float:
+        state = self._state_for_group(group_name)
+        group = self._graph.groups.get(group_name)
+        priority = float(getattr(group, "search_priority", 0.0) or 0.0) if group is not None else 0.0
+        bottleneck = self._metric_bottleneck(analysis)
+        return (
+            float(state.get("total_delta", 0.0) or 0.0)
+            + 0.01 * float(state.get("accepted_count", 0) or 0)
+            + 0.25 * self._diagnostic_score_for_group(group_name, analysis)
+            + 0.50 * self._influence.utility_for(group_name, bottleneck)
+            + self._bottleneck_group_bonus(group_name, bottleneck)
+            + 0.001 * priority
+        )
+
+    def _scheduler_phase(self) -> str:
+        if self._current_iteration < self._breakthrough_cooldown_until:
+            return "refinement" if self._group_cycle > 0 else "exploration"
+        if self._force_breakthrough:
+            return "breakthrough"
+        if self._group_cycle <= 0:
+            return "exploration"
+        if self._group_cycle >= self._breakthrough_cycle:
+            return "breakthrough"
+        return "refinement"
+
+    def _breakthrough_window_should_pause(self, *, iteration: int, fit_score: float) -> bool:
+        if self._breakthrough_window_start is None:
+            self._breakthrough_window_start = int(iteration)
+            self._breakthrough_window_best = float(fit_score)
+            self._breakthrough_window_no_improve = 0
+            return False
+        if float(fit_score) > self._breakthrough_window_best + self._min_improvement_abs:
+            self._breakthrough_window_best = float(fit_score)
+            self._breakthrough_window_no_improve = 0
+        else:
+            self._breakthrough_window_no_improve += 1
+        elapsed = int(iteration) - int(self._breakthrough_window_start)
+        if (
+            elapsed < self._breakthrough_window_max_iters
+            and self._breakthrough_window_no_improve < self._breakthrough_window_max_no_improve
+        ):
+            return False
+        self._force_breakthrough = False
+        self._breakthrough_cooldown_until = int(iteration) + self._breakthrough_cooldown_iters
+        self._breakthrough_window_start = None
+        self._breakthrough_window_best = -math.inf
+        self._breakthrough_window_no_improve = 0
+        self._trust_region = TrustRegionBranch()
+        return True
+
+    def _scheduler_phase_for(self, analysis: dict[str, Any]) -> str:
+        raw_phase = self._scheduler_phase()
+        if raw_phase != "breakthrough":
+            return raw_phase
+        if self._breakthrough_ready(analysis):
+            return "breakthrough"
+        return "refinement"
+
+    def _breakthrough_ready(self, analysis: dict[str, Any]) -> bool:
+        required = self._required_groups_before_breakthrough(analysis)
+        if not required:
+            return True
+        for name in required:
+            if name not in self._group_order:
+                continue
+            if not self._group_ready_for_breakthrough(name):
+                return False
+        return True
+
+    def _group_ready_for_breakthrough(self, group_name: str) -> bool:
+        status = self._group_status(group_name)
+        if status == "inactive_or_invisible":
+            return True
+        state = self._state_for_group(group_name)
+        visits = int(state.get("visit_attempts", 0) or 0)
+        accepted = int(state.get("accepted_count", 0) or 0)
+        min_visits = self._minimum_group_coverage(group_name)
+        if visits < min_visits and accepted <= 0:
+            return False
+        if status == "exhausted":
+            return True
+        # Visit count is only a coverage floor. The real gate is marginal
+        # return: if a group is still pulling score upward, keep refining it
+        # before handing control to cross-group breakthrough.
+        if int(state.get("no_improve", 0) or 0) >= 2:
+            return True
+        last_delta = float(state.get("last_delta", 0.0) or 0.0)
+        if visits >= min_visits and last_delta <= self._min_improvement_abs:
+            return True
+        avg_gain = float(state.get("total_delta", 0.0) or 0.0) / max(visits, 1)
+        return visits >= max(min_visits + 2, 4) and avg_gain <= self._min_improvement_rel
+
+    def _minimum_group_coverage(self, group_name: str) -> int:
+        group = self._graph.groups.get(group_name)
+        if group is None:
+            return 1
+        searchable = [
+            name
+            for name in self._candidate_generator.candidate_group_params(group)
+            if self._graph.params.get(name) is not None and self._graph.params[name].searchable
+        ]
+        if group_name in {"shadow_diffuse", "specular_smoothness", "reflection_matcap"}:
+            return min(6, max(4, len(searchable)))
+        if group_name in {"base_color", "color_grade", "shared_mask_lmap", "normal_detail"}:
+            return min(4, max(2, len(searchable)))
+        return min(3, max(1, len(searchable)))
+
+    def _required_groups_before_breakthrough(self, analysis: dict[str, Any]) -> set[str]:
+        bottleneck = self._metric_bottleneck(analysis)
+        required = {"base_color", "color_grade", "shared_mask_lmap", "reflection_matcap"}
+        keys = set(bottleneck)
+        if keys & {"color_mean", "color_p95", "luminance_mae", "luminance_bias", "highlight"}:
+            required.update({"shadow_diffuse", "specular_smoothness"})
+        if keys & {"structure_ssim_l", "detail_texture"}:
+            required.update({"normal_detail"})
+        return {name for name in required if name in self._graph.groups}
+
+    def _metric_bottleneck(self, analysis: dict[str, Any]) -> dict[str, float]:
+        metrics = metric_vector_from_analysis(analysis, None)
+        components = metrics.bottleneck()
+        if not components:
+            return {}
+        ordered = sorted(components.items(), key=lambda item: item[1], reverse=True)
+        return dict(ordered[:4])
+
+    def _update_plateau_state(self, ctx: StrategyContext) -> None:
+        best_score = getattr(ctx.state, "best_fit_score", None)
+        if not isinstance(best_score, (int, float)) or not math.isfinite(float(best_score)):
+            best_score = ctx.fit_score
+        if not isinstance(best_score, (int, float)) or not math.isfinite(float(best_score)):
+            return
+        self._best_fit_history.append((int(ctx.iteration), float(best_score)))
+        self._best_fit_history = self._best_fit_history[-(self._plateau_window + 2):]
+        if self._force_breakthrough or int(ctx.iteration) < self._early_breakthrough_iteration:
+            return
+        if not self._plateau_search_space_ready():
+            return
+        if len(self._best_fit_history) < self._plateau_window:
+            return
+        old_iteration, old_best = self._best_fit_history[-self._plateau_window]
+        if int(ctx.iteration) - old_iteration < self._plateau_window - 1:
+            return
+        if float(best_score) - float(old_best) < self._plateau_min_gain:
+            self._force_breakthrough = True
+            self._reprioritize_groups_for_refinement(ctx.analysis)
+
+    def _plateau_search_space_ready(self) -> bool:
+        if self._group_cycle > 0:
+            return True
+        active = [
+            name
+            for name in self._group_order
+            if self._group_status(name) != "inactive_or_invisible"
+        ]
+        if not active:
+            return False
+        exhausted = [
+            name
+            for name in active
+            if self._group_status(name) == "exhausted"
+        ]
+        return (len(exhausted) / max(len(active), 1)) >= self._plateau_min_exhausted_ratio
+
+    def _plateau_summary(self) -> dict[str, Any]:
+        if not self._best_fit_history:
+            return {
+                "window": self._plateau_window,
+                "min_gain": self._plateau_min_gain,
+                "force_breakthrough": self._force_breakthrough,
+                "breakthrough_window_start": self._breakthrough_window_start,
+                "breakthrough_window_best": self._breakthrough_window_best if math.isfinite(self._breakthrough_window_best) else None,
+                "breakthrough_window_no_improve": self._breakthrough_window_no_improve,
+                "breakthrough_cooldown_until": self._breakthrough_cooldown_until,
+            }
+        oldest_iteration, oldest_best = self._best_fit_history[0]
+        latest_iteration, latest_best = self._best_fit_history[-1]
+        return {
+            "window": self._plateau_window,
+            "min_gain": self._plateau_min_gain,
+            "force_breakthrough": self._force_breakthrough,
+            "breakthrough_window_start": self._breakthrough_window_start,
+            "breakthrough_window_best": self._breakthrough_window_best if math.isfinite(self._breakthrough_window_best) else None,
+            "breakthrough_window_no_improve": self._breakthrough_window_no_improve,
+            "breakthrough_cooldown_until": self._breakthrough_cooldown_until,
+            "min_exhausted_ratio": self._plateau_min_exhausted_ratio,
+            "search_space_ready": self._plateau_search_space_ready(),
+            "oldest_iteration": oldest_iteration,
+            "latest_iteration": latest_iteration,
+            "best_gain": latest_best - oldest_best,
+        }
+
+    def _protected_groups_for_bottleneck(self, bottleneck: dict[str, float]) -> set[str]:
+        protected: set[str] = set()
+        keys = set(bottleneck)
+        if keys & {"color_mean", "color_p95", "luminance_mae", "luminance_bias"}:
+            protected.update({"base_color", "color_grade", "shared_mask_lmap", "shadow_diffuse", "reflection_matcap"})
+        if keys & {"highlight"}:
+            protected.update({"shadow_diffuse", "specular_smoothness", "fresnel", "reflection_matcap"})
+        if keys & {"structure_ssim_l", "detail_texture"}:
+            protected.update({"normal_detail", "base_color", "shadow_diffuse"})
+        return {name for name in protected if name in self._graph.groups}
+
+    def _bottleneck_group_bonus(self, group_name: str, bottleneck: dict[str, float]) -> float:
+        if group_name not in self._protected_groups_for_bottleneck(bottleneck):
+            return 0.0
+        if not bottleneck:
+            return 0.0
+        return 0.03 * max(float(value) for value in bottleneck.values())
+
+    def _priority_param_candidate(
+        self,
+        *,
+        group_name: str,
+        base_params: dict[str, Any],
+        analysis: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None:
+        if not self._metric_bottleneck(analysis):
+            return None
+        group = self._graph.groups.get(group_name)
+        if group is None:
+            return None
+        group_params = set(self._candidate_generator.candidate_group_params(group))
+        ranking = [
+            item
+            for item in self._param_ranking(base_params, analysis, limit=None)
+            if item.get("param") in group_params
+        ]
+        if not ranking:
+            return None
+        state = self._state_for_group(group_name)
+        direction = float(state.get("direction", 1.0) or 1.0)
+        for row in ranking[:4]:
+            param_name = str(row.get("param") or "")
+            result = self._candidate_generator.nudge_param_candidate(
+                base_params=base_params,
+                param_name=param_name,
+                step_scale=1.0,
+                group_cycle=self._group_cycle,
+                axis_offset=0,
+                direction_override=direction,
+            )
+            if result is None:
+                continue
+            proposed, payload = result
+            payload.update(
+                {
+                    "candidate_kind": "param_priority",
+                    "priority": row.get("priority"),
+                    "semantic_relevance": row.get("semantic_relevance"),
+                    "attempts": row.get("attempts"),
+                    "accepted": row.get("accepted"),
+                }
+            )
+            return proposed, payload, row
+        return None
+
+    def _param_agenda(self, base_params: dict[str, Any], analysis: dict[str, Any], limit: int = 12) -> list[dict[str, Any]]:
+        return self._param_ranking(base_params, analysis, limit=limit)
+
+    def _param_ranking(self, base_params: dict[str, Any], analysis: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+        bottleneck = self._metric_bottleneck(analysis)
+        source_names = (
+            self._graph.active_search_params_for(base_params)
+            if base_params
+            else self._graph.active_search_params()
+        )
+        names = [
+            name
+            for name in source_names
+            if not base_params or name in base_params
+        ]
+        rows: list[dict[str, Any]] = []
+        for name in names:
+            sem = self._graph.params.get(name)
+            group_name = str(getattr(sem, "group", "") or "")
+            relevance = self._semantic_relevance_for_param(name, bottleneck)
+            summary = self._param_influence.summary_for(name, bottleneck, semantic_relevance=relevance)
+            rows.append(
+                {
+                    "param": name,
+                    "group": group_name,
+                    "group_status": self._group_status(group_name) if group_name in self._graph.groups else "ungrouped",
+                    "role": str(getattr(sem, "role", "") or ""),
+                    "transform": str(getattr(sem, "transform", "") or ""),
+                    **summary,
+                }
+            )
+        rows.sort(key=lambda item: float(item.get("priority", 0.0)), reverse=True)
+        if limit is None:
+            return rows
+        return rows[: max(0, int(limit))]
+
+    def _searchable_param_count(self, base_params: dict[str, Any]) -> int:
+        return len(
+            [
+                name
+                for name, sem in self._graph.params.items()
+                if sem.searchable and (not base_params or name in base_params)
+            ]
+        )
+
+    def _gated_param_rows(self, base_params: dict[str, Any]) -> list[dict[str, Any]]:
+        rows = []
+        for item in self._graph.gated_search_params_for(base_params):
+            name = str(item.get("param") or "")
+            if base_params and name not in base_params:
+                continue
+            rows.append(item)
+        return rows
+
+    def _group_has_uncovered_priority_params(
+        self,
+        group_name: str,
+        *,
+        base_params: dict[str, Any],
+        analysis: dict[str, Any],
+    ) -> bool:
+        if not base_params:
+            return False
+        rows = [
+            item
+            for item in self._param_ranking(base_params, analysis, limit=None)
+            if item.get("group") == group_name
+        ]
+        if not rows:
+            return False
+        top_priority = float(rows[0].get("priority", 0.0) or 0.0)
+        for item in rows[:6]:
+            attempts = int(item.get("attempts", 0) or 0)
+            priority = float(item.get("priority", 0.0) or 0.0)
+            if attempts <= 0 and priority >= top_priority * 0.65:
+                return True
+        return False
+
+    def _activation_param_rows(self, base_params: dict[str, Any], analysis: dict[str, Any]) -> list[dict[str, Any]]:
+        bottleneck = self._metric_bottleneck(analysis)
+        rows: list[dict[str, Any]] = []
+        for item in self._graph.activation_params_for(base_params):
+            name = str(item.get("param") or "")
+            if base_params and name not in base_params:
+                continue
+            relevance = self._semantic_relevance_for_param(name, bottleneck)
+            summary = self._param_influence.summary_for(name, bottleneck, semantic_relevance=relevance)
+            rows.append({"param": name, **item, **summary})
+        rows.sort(key=lambda item: float(item.get("priority", 0.0)), reverse=True)
+        return rows
+
+    def _semantic_relevance_for_param(self, param_name: str, bottleneck: dict[str, float]) -> float:
+        sem = self._graph.params.get(param_name)
+        text = " ".join(
+            [
+                param_name,
+                str(getattr(sem, "group", "")),
+                str(getattr(sem, "role", "")),
+                str(getattr(sem, "transform", "")),
+            ]
+        ).lower()
+        keys = set(bottleneck)
+        score = 0.0
+        if keys & {"color_mean", "color_p95"}:
+            if any(token in text for token in ("color", "saturation", "hue", "gamma", "texpower", "reflect", "shadow")):
+                score += 0.055
+        if keys & {"luminance_mae", "luminance_bias"}:
+            if any(token in text for token in ("gamma", "power", "intensity", "shadow", "ao", "contrast", "reflect")):
+                score += 0.045
+        if keys & {"highlight"}:
+            if any(token in text for token in ("specular", "smooth", "threshold", "shadow", "rim", "fresnel", "reflect")):
+                score += 0.055
+        if keys & {"structure_ssim_l", "detail_texture"}:
+            if any(token in text for token in ("normal", "smooth", "threshold", "specular", "shadow", "power")):
+                score += 0.045
+        return score
+
+    def _record_topk(self, ctx: StrategyContext, group: str | None) -> None:
+        self._topk.add(
+            params=ctx.current_params,
+            fit_score=float(ctx.fit_score),
+            metrics=metric_vector_from_analysis(ctx.analysis, ctx.fit_score),
+            group=group,
+            iteration=int(ctx.iteration),
+        )
+
+    def _topk_summary(self) -> list[dict[str, Any]]:
+        return self._topk.summary(limit=5)
+
+    def _diagnostic_score_for_group(self, group_name: str, analysis: dict[str, Any]) -> float:
+        group = self._graph.groups.get(group_name)
+        if group is None or not isinstance(analysis, dict):
+            return 0.0
+        channels = analysis.get("material_channels")
+        if not isinstance(channels, dict):
+            return 0.0
+        scores = [
+            self._score_channel_diagnostic(channels.get(channel_name))
+            for channel_name in getattr(group, "channels", [])
+        ]
+        scores = [score for score in scores if score > 0.0]
+        if not scores:
+            return 0.0
+        # Use max rather than sum so broad groups do not win merely by
+        # owning more diagnostic channels.
+        return max(scores)
+
+    @classmethod
+    def _score_channel_diagnostic(cls, payload: Any) -> float:
+        if not isinstance(payload, dict) or payload.get("valid") is False:
+            return 0.0
+        key_weights = {
+            "rgb_mae": 1.0,
+            "avg_rgb_mae": 1.0,
+            "max_rgb_mae": 1.2,
+            "luma_mae": 0.8,
+            "gradient_loss": 0.8,
+            "laplacian_loss": 0.8,
+            "highlight_area_error": 0.8,
+            "peak_luminance_error": 0.8,
+        }
+        best = 0.0
+        for key, weight in key_weights.items():
+            value = cls._finite_float(payload.get(key))
+            if value is not None:
+                best = max(best, abs(value) * weight)
+        for key in (
+            "luma_bias_candidate_minus_reference",
+            "avg_luma_bias_candidate_minus_reference",
+            "saturation_bias_candidate_minus_reference",
+        ):
+            value = cls._finite_float(payload.get(key))
+            if value is not None:
+                best = max(best, abs(value) * 0.5)
+        return best
+
+    @staticmethod
+    def _finite_float(value: Any) -> float | None:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return None
+        parsed = float(value)
+        return parsed if math.isfinite(parsed) else None
 
 # ---------------------------------------------------------------------
 # Strategy factory

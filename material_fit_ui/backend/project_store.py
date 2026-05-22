@@ -30,6 +30,7 @@ do not have a ``project.json``.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import re
 import secrets
@@ -186,7 +187,9 @@ def create_project(
         },
         "algorithm_config": {
             "max_iterations": 6,
-            "target_score": 0.5,
+            "target_score": 0.9,
+            "perceptual_optional_interval": 50,
+            "diff_visual_interval": 50,
             "apply_lmat": True,
             "capture_screen_after_apply": False,
             "use_laya_editor_capture": True,
@@ -216,7 +219,7 @@ def create_project(
             },
             "use_capture_contract": False,
             "dry_run": False,
-            "fit_score_mode": "human_accept",
+            "fit_score_mode": "research",
             "multiview_scoring": {
                 "enabled": True,
                 "require_all_views": True,
@@ -489,7 +492,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "unity_shader_path": _abs(inputs.get("unity_shader_path")),
         "unity_material_params_path": _abs(inputs.get("unity_material_params_path")),
         "image_pairs": image_pairs,
-        "auto_adjust_target_score": float(algo.get("target_score", 0.5)),
+        "auto_adjust_target_score": float(algo.get("target_score", 0.9)),
         "capture_screen_after_apply": False if use_laya_editor_capture else bool(algo.get("capture_screen_after_apply", False)),
         "rerender_wait_ms": int(algo.get("rerender_wait_ms", 900)),
         "dynamic_rerender_wait": algo.get(
@@ -543,9 +546,11 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
             "target_base_pitch": 0.0,
             **(algo.get("laya_editor_capture") if isinstance(algo.get("laya_editor_capture"), dict) else {}),
         },
-        "fit_score_mode": str(algo.get("fit_score_mode", "human_accept")).lower(),
+        "fit_score_mode": _normalize_fit_score_mode(algo.get("fit_score_mode")),
         "multiview_scoring": _normalize_multiview_scoring(algo.get("multiview_scoring")),
         "auto_adjust_mode": str(algo.get("auto_adjust_mode", "fresh_fit")).lower(),
+        "perceptual_optional_interval": _coerce_optional_int(algo.get("perceptual_optional_interval")) or 50,
+        "diff_visual_interval": _coerce_optional_int(algo.get("diff_visual_interval")) or 50,
         "optimizer": optimizer_value,
         "cma_es": cma_es_payload,
         "laya_refresh_probe": _normalize_laya_refresh_probe(algo.get("laya_refresh_probe")),
@@ -562,6 +567,11 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
                 preanalysis.get("effective_laya_control_schema"),
                 algo.get("laya_control_group_overrides"),
             )
+            fit_config["semantic_schema_integrity"] = _semantic_schema_integrity(
+                preanalysis.get("manual_laya_control_schema"),
+                preanalysis.get("effective_laya_control_schema"),
+                fit_config.get("effect_graph"),
+            )
         if isinstance(preanalysis.get("module_plan"), list):
             fit_config["module_plan"] = _apply_module_plan_overrides(
                 preanalysis["module_plan"],
@@ -569,6 +579,11 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
             )
         if isinstance(preanalysis.get("effective_laya_control_schema"), dict):
             fit_config["effective_laya_control_schema"] = preanalysis["effective_laya_control_schema"]
+            fit_config.setdefault("semantic_schema_integrity", _semantic_schema_integrity(
+                preanalysis.get("manual_laya_control_schema"),
+                preanalysis.get("effective_laya_control_schema"),
+                fit_config.get("effect_graph"),
+            ))
     return fit_config
 
 
@@ -629,6 +644,44 @@ def _summary(data: dict[str, Any], project_dir: Path, config: LoaderConfig) -> d
         "last_run_id": last_run_id,
         "output_dir": _to_rel_posix(project_dir, config.project_root),
     }
+
+
+def _semantic_schema_integrity(manual_schema: Any, effective_schema: Any, effect_graph: Any) -> dict[str, Any]:
+    warnings: list[str] = []
+    expected: dict[str, str] = {}
+    if isinstance(effective_schema, dict):
+        for group in effective_schema.get("groups", []):
+            if not isinstance(group, dict):
+                continue
+            group_id = str(group.get("id") or "")
+            for control in group.get("controls", []):
+                if isinstance(control, dict) and control.get("name"):
+                    expected[str(control["name"])] = group_id
+    actual: dict[str, str] = {}
+    if isinstance(effect_graph, dict):
+        params = effect_graph.get("params") if isinstance(effect_graph.get("params"), dict) else {}
+        for name, payload in params.items():
+            if isinstance(payload, dict):
+                actual[str(name)] = str(payload.get("group") or "")
+    for name, group_id in sorted(expected.items()):
+        if actual.get(name) and actual[name] != group_id:
+            warnings.append(f"{name}: effective_schema={group_id}, effect_graph={actual[name]}")
+    return {
+        "schema_hash": _stable_hash(effective_schema),
+        "manual_schema_hash": _stable_hash(manual_schema),
+        "effective_schema_hash": _stable_hash(effective_schema),
+        "effect_graph_hash": _stable_hash(effect_graph),
+        "param_group_mismatch_count": len(warnings),
+        "warnings": warnings[:50],
+    }
+
+
+def _stable_hash(value: Any) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        text = json.dumps(str(value), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def _read_json(path: Path) -> Any:
@@ -858,6 +911,13 @@ def _normalize_laya_refresh_probe(value: Any) -> dict[str, float]:
     }
 
 
+def _normalize_fit_score_mode(value: Any) -> str:
+    mode = str(value or "research").strip().lower()
+    if mode in {"linear", "perceptual", "human_accept", "research"}:
+        return mode
+    return "research"
+
+
 def _normalize_multiview_scoring(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         value = {}
@@ -911,6 +971,7 @@ def _apply_effective_laya_control_schema(
             graph_group["probe_required"] = bool(raw_group.get("probe_required", False))
             graph_group["search_priority"] = float(raw_group.get("search_priority", 0.0) or 0.0)
             graph_group["order"] = int(raw_group.get("order", 0) or 0)
+            graph_group["source"] = str(raw_group.get("source") or graph_group.get("source") or "auto")
             graph_group["define_gates"] = [str(item) for item in raw_group.get("define_gates", []) if isinstance(item, str)]
             graph_group["gate_params"] = [str(item) for item in raw_group.get("gate_params", []) if isinstance(item, str)]
             controls = [item for item in raw_group.get("controls", []) if isinstance(item, dict) and item.get("name")]
@@ -919,7 +980,9 @@ def _apply_effective_laya_control_schema(
             graph_group["search_params"] = [
                 str(item["name"])
                 for item in controls
-                if item.get("searchable") is True and bool(raw_group.get("enabled", True))
+                if item.get("searchable") is True
+                and _effective_control_is_search_param(item)
+                and bool(raw_group.get("enabled", True))
             ]
             if not bool(raw_group.get("enabled", True)):
                 graph_group["manual_enabled"] = False
@@ -936,6 +999,13 @@ def _apply_effective_laya_control_schema(
                 param["role"] = str(control.get("role") or param.get("role") or "value")
                 param["transform"] = str(control.get("transform") or param.get("transform") or "linear")
                 param["searchable"] = bool(control.get("searchable", True) and raw_group.get("enabled", True))
+                param["source"] = str(control.get("source") or param.get("source") or "auto")
+                param["confidence"] = _coerce_optional_float(control.get("confidence"))
+                param["evidence"] = [str(item) for item in control.get("evidence", []) if isinstance(item, str)]
+                param["risk"] = str(control.get("risk") or "")
+                param["conflict_status"] = str(control.get("conflict_status") or "none")
+                param["auto_group"] = str(control.get("auto_group") or param.get("auto_group") or "")
+                param["semantic_sources"] = [str(item) for item in control.get("semantic_sources", []) if isinstance(item, str)]
                 range_min = control.get("range_min")
                 range_max = control.get("range_max")
                 if isinstance(range_min, (int, float)) and isinstance(range_max, (int, float)) and float(range_min) < float(range_max):
@@ -1003,6 +1073,22 @@ def _disabled_laya_control_groups(overrides: Any) -> set[str]:
         if enabled is False:
             disabled.add(str(group_name))
     return disabled
+
+
+def _effective_control_is_search_param(control: dict[str, Any]) -> bool:
+    """Resolve legacy searchable/is_search_param conflicts conservatively.
+
+    Older presets could lock only the ``searchable`` field while leaving a
+    stale ``is_search_param=false`` behind. In that case the UI says the
+    parameter is searchable, but the optimizer silently drops it from the
+    group search space. Treat ``is_search_param=false`` as authoritative only
+    when that field itself is locked.
+    """
+
+    if control.get("is_search_param", control.get("searchable", True)) is not False:
+        return True
+    locked = {str(item) for item in control.get("locked_fields", []) if isinstance(item, str)}
+    return "is_search_param" not in locked
 
 
 def _format_region(region: Any) -> str:

@@ -33,6 +33,10 @@ class LlmConfigError(RuntimeError):
     pass
 
 
+class LlmResponseParseError(RuntimeError):
+    pass
+
+
 def load_llm_runtime_config(project_root: Path | None = None) -> LlmRuntimeConfig:
     """Load OpenAI-compatible settings from environment plus repo-root .env."""
 
@@ -87,6 +91,9 @@ def run_shader_semantics_llm(
                 "content": (
                     "You are a shader semantic analyzer for Unity-to-Laya material fitting. "
                     "Return only one JSON object matching the requested schema. "
+                    "Laya shader source and exposed uniforms are the primary evidence for param_semantics. "
+                    "Classify only known exposed Laya parameters using source evidence, confidence, and risk notes. "
+                    "Unity data is optional auxiliary evidence; it may be absent or use a different shader structure. "
                     "Do not suggest file writes. Treat Unity values as visual evidence, not direct Laya targets."
                 ),
             },
@@ -119,14 +126,17 @@ def run_shader_semantics_llm(
     except URLError as exc:
         raise RuntimeError(f"LLM request failed: {exc.reason}") from exc
 
+    content = ""
     try:
         data = json.loads(raw)
         content = data["choices"][0]["message"]["content"]
         parsed = _parse_json_content(content)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("LLM response did not contain a valid JSON object") from exc
+        detail = _response_debug_summary(raw=raw, content=content, api_key=runtime.api_key)
+        raise LlmResponseParseError(f"LLM response did not contain a valid JSON object; {detail}") from exc
     if not isinstance(parsed, dict):
-        raise RuntimeError("LLM response JSON must be an object")
+        detail = _response_debug_summary(raw=raw, content=content, api_key=runtime.api_key)
+        raise LlmResponseParseError(f"LLM response JSON must be an object; {detail}")
     return parsed
 
 
@@ -167,6 +177,17 @@ def _redact_secret(text: str, secret: str) -> str:
     if len(secret) > 12:
         redacted = redacted.replace(secret[:8], "[REDACTED_API_KEY_PREFIX]")
     return redacted
+
+
+def _response_debug_summary(*, raw: str, content: str, api_key: str) -> str:
+    raw_summary = _redact_secret(str(raw or ""), api_key)
+    content_summary = _redact_secret(str(content or ""), api_key)
+    return (
+        "raw_response_head="
+        f"{raw_summary[:800]!r}; "
+        "message_content_head="
+        f"{content_summary[:800]!r}"
+    )
 
 
 def _parse_json_content(content: str) -> Any:

@@ -73,10 +73,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--fit-score-mode",
-        choices=("linear", "perceptual", "human_accept"),
+        choices=("linear", "perceptual", "human_accept", "research"),
         default=None,
         help=(
-            "How to pick the 0..1 fit score. 'human_accept' uses the tolerant "
+            "How to pick the 0..1 fit score. 'research' uses research_score/100; "
+            "'human_accept' uses the tolerant "
             "material similarity score; 'perceptual' uses the stricter "
             "channel-weighted MAE + SSIM score; 'linear' keeps legacy MAE."
         ),
@@ -183,12 +184,18 @@ def main() -> int:
     laya_material_path = _resolve_path(project_root, config["laya_material_path"])
     laya_material_params = lmat_io.extract_params(laya_material)
     initial_params = build_initial_params(laya_material_params, laya_shader.params)
+    configured_optimizer = (args.optimizer or str(config.get("optimizer", "heuristic"))).strip().lower()
+    if configured_optimizer not in ("heuristic", "cma_cold", "cma_warm", "semantic_group"):
+        configured_optimizer = "heuristic"
     adjustment_policies = build_adjustment_policies(laya_shader.params)
     adjustment_policies = _filter_policies_by_effect_graph(
         adjustment_policies,
         config.get("effect_graph"),
     )
     stages = policies_to_fit_stages(adjustment_policies) or build_stage_plan(laya_shader.params)
+    stage_plan_payload: list[dict[str, Any]] = [stage.__dict__ for stage in stages]
+    if configured_optimizer == "semantic_group":
+        stage_plan_payload = _semantic_stage_plan_from_effect_graph(config.get("effect_graph")) or stage_plan_payload
     unity_material_params = _load_unity_material_params(config, project_root)
 
     _write_json(output_dir / "laya_shader_params.json", shader_info_to_dict(laya_shader))
@@ -198,7 +205,7 @@ def main() -> int:
         _write_json(output_dir / "unity_material_params.json", unity_material_params)
     _write_json(output_dir / "laya_material_params.json", laya_material_params)
     _write_json(output_dir / "initial_params.json", initial_params)
-    _write_json(output_dir / "stage_plan.json", [stage.__dict__ for stage in stages])
+    _write_json(output_dir / "stage_plan.json", stage_plan_payload)
     _write_json(output_dir / "adjustment_policies.json", [policy.__dict__ for policy in adjustment_policies])
 
     driver = RenderDriver(
@@ -216,7 +223,7 @@ def main() -> int:
     image_analysis = []
     if args.analyze_images:
         image_pairs = _collect_image_pairs(config, project_root, output_dir)
-        fit_score_mode = args.fit_score_mode or str(config.get("fit_score_mode", "human_accept")).lower()
+        fit_score_mode = args.fit_score_mode or str(config.get("fit_score_mode", "research")).lower()
         if len(image_pairs) > 1:
             image_analysis = analyze_multiview_pairs(
                 image_pairs,
@@ -240,12 +247,10 @@ def main() -> int:
 
     adjustment_result: dict[str, Any] | None = None
     if args.auto_adjust:
-        fit_score_mode = args.fit_score_mode or str(config.get("fit_score_mode", "human_accept")).lower()
-        if fit_score_mode not in ("linear", "perceptual", "human_accept"):
-            fit_score_mode = "human_accept"
-        optimizer = (args.optimizer or str(config.get("optimizer", "heuristic"))).strip().lower()
-        if optimizer not in ("heuristic", "cma_cold", "cma_warm", "semantic_group"):
-            optimizer = "heuristic"
+        fit_score_mode = args.fit_score_mode or str(config.get("fit_score_mode", "research")).lower()
+        if fit_score_mode not in ("linear", "perceptual", "human_accept", "research"):
+            fit_score_mode = "research"
+        optimizer = configured_optimizer
         cma_es_config = cmaes_strategy_config_from_dict(config.get("cma_es"))
         cma_es_config = _override_cmaes_from_cli(args, cma_es_config)
         rerender_wait_ms_value = int(args.rerender_wait_ms if args.rerender_wait_ms is not None else config.get("rerender_wait_ms", 1200))
@@ -399,6 +404,47 @@ def _filter_policies_by_effect_graph(
     return out
 
 
+def _semantic_stage_plan_from_effect_graph(effect_graph: Any) -> list[dict[str, Any]]:
+    if not isinstance(effect_graph, dict):
+        return []
+    groups = effect_graph.get("groups")
+    params = effect_graph.get("params")
+    if not isinstance(groups, dict) or not isinstance(params, dict):
+        return []
+    plan: list[dict[str, Any]] = []
+    for name, raw in groups.items():
+        if not isinstance(raw, dict):
+            continue
+        search_params = [
+            str(param)
+            for param in raw.get("search_params", [])
+            if isinstance(param, str)
+            and isinstance(params.get(param), dict)
+            and params[param].get("searchable") is not False
+        ]
+        if not search_params:
+            continue
+        order = int(raw.get("order", 0) or 0)
+        plan.append(
+            {
+                "name": str(raw.get("name") or name),
+                "params": search_params,
+                "description": str(raw.get("reason") or "semantic group search"),
+                "order": order,
+                "channels": [str(item) for item in raw.get("channels", []) if isinstance(item, str)],
+                "scheduler": "semantic_group_round_robin",
+                "visit_budget_hint": max(6, min(18, len(search_params) * 3)),
+            }
+        )
+    plan.sort(
+        key=lambda item: (
+            int(item.get("order", 0) or 0) if int(item.get("order", 0) or 0) > 0 else 10_000,
+            str(item.get("name", "")),
+        )
+    )
+    return plan
+
+
 def _run_auto_adjustment(
     *,
     config: dict[str, Any],
@@ -429,12 +475,13 @@ def _run_auto_adjustment(
     auto_dir = output_dir / "auto_adjust"
     auto_dir.mkdir(parents=True, exist_ok=True)
     external_backup_dir = _resolve_external_backup_dir(config, project_root, output_dir)
-    state = AdjustmentState(best_params=dict(initial_params))
+    state = AdjustmentState(best_params=dict(initial_params), best_fit_params=dict(initial_params))
     current_params = dict(initial_params)
     result_iterations: list[dict[str, Any]] = []
     best_fit_score = -math.inf
     candidate_override: str | dict[str, str] | None = None
     require_real_closed_loop = apply_lmat and capture_screen_after_apply
+    terminal_reason: str | None = None
 
     warm_history: list[tuple[dict[str, Any], float]] = []
     if optimizer == "cma_warm":
@@ -479,13 +526,23 @@ def _run_auto_adjustment(
         _write_json(auto_dir / "auto_adjust_result.json", payload)
         return payload
 
+    p2_interval = _resolve_optional_metric_interval(config)
+    diff_visual_interval = _resolve_diff_visual_interval(config, p2_interval)
     for local_index in range(iterations):
+        iteration_started = time.perf_counter()
         iteration = state.iteration
+        timing: dict[str, Any] = {
+            "perceptual_optional_interval": p2_interval,
+            "perceptual_optional_enabled": _should_compute_optional_metrics(iteration, p2_interval),
+            "diff_visual_interval": diff_visual_interval,
+            "diff_visual_enabled": _should_generate_diff_visual(iteration, diff_visual_interval),
+        }
         iteration_dir = auto_dir / f"iter_{iteration:04d}"
         iteration_dir.mkdir(parents=True, exist_ok=True)
 
         initial_editor_capture_result: dict[str, Any] | None = None
         if candidate_override is None:
+            timing_step = time.perf_counter()
             try:
                 initial_editor_capture_result = trigger_editor_multiview_capture(
                     config=config,
@@ -500,13 +557,16 @@ def _run_auto_adjustment(
                     "error": str(exc),
                     "screenshots": [],
                 }
+            timing["initial_editor_capture_ms"] = _elapsed_ms(timing_step)
             if initial_editor_capture_result is not None:
                 candidate_overrides = initial_editor_capture_result.get("candidate_overrides")
                 if isinstance(candidate_overrides, dict) and candidate_overrides:
                     candidate_override = {str(key): str(value) for key, value in candidate_overrides.items()}
 
         try:
+            timing_step = time.perf_counter()
             image_pairs = _collect_image_pairs(config, project_root, output_dir, candidate_override=candidate_override)
+            timing["collect_image_pairs_ms"] = _elapsed_ms(timing_step)
         except ImagePairCollectionError as exc:
             payload = {
                 "status": "failed",
@@ -527,12 +587,16 @@ def _run_auto_adjustment(
             return payload
 
         pair = image_pairs[0]
+        timing_step = time.perf_counter()
         multiview_result = analyze_multiview_pairs(
             image_pairs,
             iteration_dir / "image_analysis",
             fit_score_mode=fit_score_mode,
             aggregation_config=config.get("multiview_scoring") if isinstance(config.get("multiview_scoring"), dict) else None,
+            compute_perceptual_optional=bool(timing["perceptual_optional_enabled"]),
+            generate_diff_image=bool(timing["diff_visual_enabled"]),
         )
+        timing["analyze_multiview_ms"] = _elapsed_ms(timing_step)
         multiview_analysis = (
             multiview_result.get("multiview_analysis")
             if isinstance(multiview_result.get("multiview_analysis"), dict)
@@ -548,6 +612,9 @@ def _run_auto_adjustment(
         analysis["multiview"] = multiview_analysis
         if fit_score > best_fit_score:
             best_fit_score = fit_score
+        if fit_score > state.best_fit_score:
+            state.best_fit_score = fit_score
+            state.best_fit_params = dict(current_params)
         if diff_score < state.best_score:
             state.best_score = diff_score
             state.best_params = dict(current_params)
@@ -565,10 +632,12 @@ def _run_auto_adjustment(
                 "perceptual_signals": _extract_perceptual_signals(analysis),
                 "multiview_analysis": multiview_analysis,
                 "initial_editor_capture_result": initial_editor_capture_result,
+                "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
             _write_json(iteration_dir / "decision.json", iteration_payload)
             result_iterations.append(iteration_payload)
             state.history.append(iteration_payload)
+            terminal_reason = "target_reached"
             break
 
         # E-010: stochastic strategies (CMA-ES) opt out of this check
@@ -593,10 +662,12 @@ def _run_auto_adjustment(
                 "perceptual_signals": _extract_perceptual_signals(analysis),
                 "multiview_analysis": multiview_analysis,
                 "initial_editor_capture_result": initial_editor_capture_result,
+                "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
             _write_json(iteration_dir / "decision.json", iteration_payload)
             result_iterations.append(iteration_payload)
             state.history.append(iteration_payload)
+            terminal_reason = "global_no_improvement"
             break
 
         if optimizer == "heuristic" and not policies:
@@ -604,6 +675,7 @@ def _run_auto_adjustment(
             _write_json(auto_dir / "auto_adjust_result.json", payload)
             return payload
 
+        timing_step = time.perf_counter()
         next_params, decision = strategy.propose(
             StrategyContext(
                 iteration=iteration,
@@ -614,6 +686,7 @@ def _run_auto_adjustment(
                 state=state,
             )
         )
+        timing["strategy_propose_ms"] = _elapsed_ms(timing_step)
         if decision.get("stop_reason") == "no_policies":
             payload = {"status": "pending", "reason": "No adjustable shader parameters available.", "target_score": target_score, "best_fit_score": best_fit_score, "iterations": result_iterations}
             _write_json(auto_dir / "auto_adjust_result.json", payload)
@@ -649,10 +722,12 @@ def _run_auto_adjustment(
                 "perceptual_signals": _extract_perceptual_signals(analysis),
                 "multiview_analysis": multiview_analysis,
                 "initial_editor_capture_result": initial_editor_capture_result,
+                "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
             _write_json(iteration_dir / "decision.json", iteration_payload)
             result_iterations.append(iteration_payload)
             state.history.append(iteration_payload)
+            terminal_reason = str(decision.get("stop_reason") or "strategy_stopped")
             break
         if diff_score < state.best_score - 1e-6:
             state.global_no_improve = 0
@@ -663,6 +738,7 @@ def _run_auto_adjustment(
         candidate_dir = iteration_dir / "candidate"
         candidate_dir.mkdir(parents=True, exist_ok=True)
         params_path = candidate_dir / "params.json"
+        timing_step = time.perf_counter()
         _write_json(params_path, next_params)
         candidate_lmat_path = ""
         if write_candidate_lmat or apply_lmat:
@@ -673,6 +749,7 @@ def _run_auto_adjustment(
                 next_params,
                 allow_missing_keys=True,
             )
+        timing["write_candidate_ms"] = _elapsed_ms(timing_step)
         focus_log: list[dict[str, Any]] = []
         if apply_lmat:
             # Focus Laya BEFORE the .lmat write so its file watcher
@@ -694,6 +771,7 @@ def _run_auto_adjustment(
             decision["applied_lmat"] = str(laya_material_path)
             decision["backup_lmat"] = str(backup_path)
 
+        timing_step = time.perf_counter()
         try:
             editor_capture_result = trigger_editor_multiview_capture(
                 config=config,
@@ -708,6 +786,7 @@ def _run_auto_adjustment(
                 "error": str(exc),
                 "screenshots": [],
             }
+        timing["candidate_capture_ms"] = _elapsed_ms(timing_step)
         if editor_capture_result is not None:
             render_result = editor_capture_result
         else:
@@ -721,6 +800,7 @@ def _run_auto_adjustment(
 
         screen_capture_result: dict[str, Any] | None = None
         if capture_screen_after_apply:
+            timing_step = time.perf_counter()
             if not apply_lmat:
                 decision["screen_capture_after_apply_skipped"] = "requires --apply-lmat because this mode verifies the real .lmat write path"
             else:
@@ -782,6 +862,7 @@ def _run_auto_adjustment(
                     max_keep=effective_max_keep,
                 )
                 candidate_override = str(screen_capture_result["output_path"])
+            timing["screen_capture_after_apply_ms"] = _elapsed_ms(timing_step)
         if focus_log:
             decision["focus_log"] = focus_log
         # P0 phase-summary 2026-05-08 follow-up: SemanticGroupStrategy
@@ -820,6 +901,7 @@ def _run_auto_adjustment(
             # component drift.
             "perceptual_signals": _extract_perceptual_signals(analysis),
             "multiview_analysis": multiview_analysis,
+            "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
         }
         strategy_stop = strategy.stop_reason()
         if strategy_stop:
@@ -830,15 +912,65 @@ def _run_auto_adjustment(
         current_params = next_params
         state.iteration += 1
         if strategy_stop:
+            terminal_reason = strategy_stop
             break
 
+    best_fit_params = dict(state.best_fit_params or state.best_params or current_params)
+    best_dir = auto_dir / "best"
+    _write_json(best_dir / "params.json", best_fit_params)
+    best_lmat_path = ""
+    if write_candidate_lmat or apply_lmat:
+        best_lmat_path = str(best_dir / laya_material_path.name)
+        lmat_io.write_candidate_lmat(
+            laya_material_path,
+            best_lmat_path,
+            best_fit_params,
+            allow_missing_keys=True,
+        )
+    if apply_lmat and best_fit_params:
+        backup_path = lmat_io.backup_lmat(
+            laya_material_path,
+            suffix=".auto_adjust_best_guard.bak",
+            target_dir=external_backup_dir,
+        )
+        lmat_io.write_candidate_lmat(
+            laya_material_path,
+            laya_material_path,
+            best_fit_params,
+            allow_missing_keys=True,
+        )
+        final_best_restore = {
+            "applied_lmat": str(laya_material_path),
+            "backup_lmat": str(backup_path),
+        }
+    else:
+        final_best_restore = None
+
     save_adjustment_state(auto_dir / "state.json", state)
+    optimizer_research_summary = strategy.research_summary()
+    final_status = _resolve_auto_adjust_status(
+        best_fit_score=best_fit_score,
+        target_score=target_score,
+        terminal_reason=terminal_reason,
+        completed_iterations=len(result_iterations),
+        requested_iterations=iterations,
+        optimizer_research_summary=optimizer_research_summary,
+    )
     payload = {
-        "status": "target_reached" if best_fit_score >= target_score else "max_iterations_reached",
+        "status": final_status,
+        "terminal_reason": terminal_reason,
         "target_score": target_score,
         "best_score": state.best_score,
         "best_fit_score": best_fit_score,
-        "best_params": state.best_params,
+        "best_params": best_fit_params,
+        "best_fit_params": best_fit_params,
+        "best_lmat_path": best_lmat_path,
+        "final_best_restore": final_best_restore,
+        "best_guard": {
+            "enabled": True,
+            "selection_metric": "fit_score",
+            "note": "Final output is restored to best-fit params instead of the last explored candidate.",
+        },
         "iterations": result_iterations,
         "state_path": str(auto_dir / "state.json"),
         "fit_score_mode": fit_score_mode,
@@ -850,9 +982,63 @@ def _run_auto_adjustment(
         ),
         "warm_start_history_size": len(warm_history) if optimizer == "cma_warm" else 0,
         "effect_graph": semantic_graph,
+        "optimizer_research_summary": optimizer_research_summary,
     }
     _write_json(auto_dir / "auto_adjust_result.json", payload)
     return payload
+
+
+def _resolve_auto_adjust_status(
+    *,
+    best_fit_score: float,
+    target_score: float,
+    terminal_reason: str | None,
+    completed_iterations: int,
+    requested_iterations: int,
+    optimizer_research_summary: dict[str, Any],
+) -> str:
+    if best_fit_score >= target_score:
+        return "target_reached"
+    if terminal_reason in {"all_semantic_groups_exhausted", "semantic_groups_exhausted"}:
+        phase = str(optimizer_research_summary.get("phase") or "")
+        return "breakthrough_exhausted" if phase == "breakthrough" else terminal_reason
+    if terminal_reason:
+        return terminal_reason
+    if completed_iterations >= requested_iterations:
+        return "max_iterations_reached"
+    return "stopped"
+
+
+def _resolve_optional_metric_interval(config: dict[str, Any]) -> int:
+    raw = config.get("perceptual_optional_interval", config.get("p2_perceptual_interval", 50))
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 50
+
+
+def _resolve_diff_visual_interval(config: dict[str, Any], fallback: int) -> int:
+    raw = config.get("diff_visual_interval", config.get("generate_diff_visual_interval", fallback))
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _should_compute_optional_metrics(iteration: int, interval: int) -> bool:
+    if interval <= 0:
+        return False
+    return iteration == 0 or iteration % interval == 0
+
+
+def _should_generate_diff_visual(iteration: int, interval: int) -> bool:
+    if interval <= 0:
+        return False
+    return iteration == 0 or iteration % interval == 0
+
+
+def _elapsed_ms(start: float) -> float:
+    return round((time.perf_counter() - start) * 1000.0, 3)
 
 
 def _resolve_external_backup_dir(config: dict[str, Any], project_root: Path, output_dir: Path) -> Path:

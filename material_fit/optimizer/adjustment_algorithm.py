@@ -41,6 +41,8 @@ class AdjustmentState:
     cycle: int = 0
     best_score: float = math.inf
     best_params: dict[str, Any] = field(default_factory=dict)
+    best_fit_score: float = -math.inf
+    best_fit_params: dict[str, Any] = field(default_factory=dict)
     history: list[dict[str, Any]] = field(default_factory=list)
     # Number of consecutive *global* iterations with no improvement to
     # ``best_score``. Used to abort the whole run when no stage helps.
@@ -451,6 +453,8 @@ def load_adjustment_state(path: str | Path) -> AdjustmentState:
         cycle=int(data.get("cycle", 0)),
         best_score=float(data.get("best_score", math.inf)),
         best_params=data.get("best_params", {}) if isinstance(data.get("best_params"), dict) else {},
+        best_fit_score=float(data.get("best_fit_score", -math.inf)),
+        best_fit_params=data.get("best_fit_params", {}) if isinstance(data.get("best_fit_params"), dict) else {},
         history=data.get("history", []) if isinstance(data.get("history"), list) else [],
         global_no_improve=int(data.get("global_no_improve", 0)),
     )

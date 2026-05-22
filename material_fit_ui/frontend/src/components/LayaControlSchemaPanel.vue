@@ -121,7 +121,36 @@ async function setControlSearchable(paramName: string, searchable: boolean): Pro
   await persist(schema);
 }
 
+async function acceptHighConfidenceLlm(): Promise<void> {
+  const schema = currentManualSchema();
+  let changed = 0;
+  for (const group of props.groups) {
+    for (const control of group.controls) {
+      if (control.source !== 'llm' || (control.confidence ?? 0) < 0.8) continue;
+      schema.controls[control.name] = {
+        ...(schema.controls[control.name] ?? {}),
+        group: control.group,
+        searchable: control.searchable,
+        is_search_param: control.is_search_param,
+        reason: control.reason || 'accepted high-confidence LLM semantic grouping',
+        locked_fields: Array.from(new Set([...(schema.controls[control.name]?.locked_fields as string[] ?? []), 'group', 'searchable'])),
+      };
+      changed += 1;
+    }
+  }
+  if (changed === 0) {
+    error.value = '没有可接受的高置信度 LLM 分类。';
+    return;
+  }
+  await persist(schema);
+}
+
 function percent(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function confidenceLabel(value: number | null | undefined): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—';
   return `${(value * 100).toFixed(0)}%`;
 }
@@ -177,6 +206,7 @@ function mergedEvidence(group: LayaControlGroup): string[] {
       </div>
       <div class="schema-actions">
         <button class="ghost" @click="editing = !editing">{{ editing ? '退出编辑' : '编辑分组' }}</button>
+        <button class="ghost" :disabled="saving" @click="acceptHighConfidenceLlm">接受高置信度 LLM 分类</button>
         <button v-if="editing" class="ghost" :disabled="saving" @click="addGroup">新增分组</button>
       </div>
     </div>
@@ -239,6 +269,17 @@ function mergedEvidence(group: LayaControlGroup): string[] {
               <span class="mono">{{ control.name }}</span>
               <span class="muted"> {{ control.param_type }} / {{ control.role }}</span>
             </div>
+            <div class="semantic-meta">
+              <span class="mini-tag">source {{ control.source || 'rule' }}</span>
+              <span class="mini-tag">conf {{ confidenceLabel(control.confidence) }}</span>
+              <span v-if="control.conflict_status && control.conflict_status !== 'none'" class="mini-tag warning">
+                {{ control.conflict_status }}
+              </span>
+              <span v-if="control.risk" class="mini-tag warning">{{ control.risk }}</span>
+            </div>
+            <ul v-if="control.evidence?.length" class="control-evidence">
+              <li v-for="item in control.evidence.slice(0, 2)" :key="item">{{ item }}</li>
+            </ul>
             <div v-if="editing" class="control-tools">
               <label class="small muted">
                 <input
@@ -310,6 +351,16 @@ function mergedEvidence(group: LayaControlGroup): string[] {
 }
 .control-chip.fixed { opacity: 0.62; }
 .control-chip.gate { border-color: rgba(210, 153, 34, 0.65); }
+.semantic-meta { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.mini-tag {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.mini-tag.warning { border-color: rgba(210, 153, 34, 0.65); color: #d29922; }
+.control-evidence { margin: 3px 0 0; padding-left: 16px; color: var(--text-muted); font-size: 10px; }
 .control-tools { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .control-tools select {
   background: var(--bg-panel);
