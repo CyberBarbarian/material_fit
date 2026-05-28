@@ -623,6 +623,7 @@ def build_strategy(
     * ``"cma_cold"`` — vanilla CMA-ES.
     * ``"cma_warm"`` — Warm-Started CMA-ES (E-006).
     * ``"semantic_group"`` — response-driven semantic scheduler.
+    * ``"adaptive_response_search"`` — global-best response search.
     * ``"semantic_group_legacy_081"`` — preserved pattern-search baseline.
     * ``"subspace_cma_es"`` — expensive CMA-ES inside a semantic subspace.
 
@@ -638,6 +639,17 @@ def build_strategy(
         if graph is None:
             raise ValueError("semantic_group optimizer requires a semantic effect graph")
         return SemanticGroupStrategy(
+            initial_params=initial_params,
+            shader_params=shader_params,
+            graph=graph,
+            auto_adjust_mode=auto_adjust_mode,
+        )
+    if optimizer == "adaptive_response_search":
+        if graph is None:
+            raise ValueError("adaptive_response_search optimizer requires a semantic effect graph")
+        from .adaptive_response_strategy import AdaptiveResponseSearchStrategy
+
+        return AdaptiveResponseSearchStrategy(
             initial_params=initial_params,
             shader_params=shader_params,
             graph=graph,
@@ -689,6 +701,7 @@ def build_strategy(
     raise ValueError(
         f"unknown optimizer: {optimizer!r} "
         "(expected 'heuristic', 'cma_cold', 'cma_warm', 'semantic_group', "
+        "'adaptive_response_search', "
         "'semantic_group_legacy_081', or 'subspace_cma_es')"
     )
 

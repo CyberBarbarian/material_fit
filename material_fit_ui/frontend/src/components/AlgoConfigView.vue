@@ -13,7 +13,7 @@ const ok = ref(false);
 
 function defaultConfig(): AlgorithmConfig {
   return {
-    max_iterations: 6,
+    max_iterations: 300,
     target_score: 0.9,
     apply_lmat: true,
     capture_screen_after_apply: false,
@@ -29,7 +29,7 @@ function defaultConfig(): AlgorithmConfig {
     dry_run: false,
     fit_score_mode: 'research',
     auto_adjust_mode: 'fresh_fit',
-    optimizer: 'semantic_group',
+    optimizer: 'adaptive_response_search',
     cma_es: {
       mode: 'warm',
       warm_start_iters: 12,
@@ -50,6 +50,7 @@ const optimizerHelp: Record<OptimizerKind, string> = {
   cma_cold: '黑盒 CMA-ES，从初始 .lmat 开始无任何 prior。适合作为 cma_warm 的对照基线；高维下 200 轮以内可能比 random 还差。',
   cma_warm: 'Warm-Started CMA-ES (Nomura et al., AAAI 2021)。把已有迭代的 (params, fit_score) 当 prior 初始化协方差，合成实验中比 cma_cold 快 2~3×。需要 ≥2 轮历史，否则自动降级到 cma_cold。',
   semantic_group: '当前 response-driven 调度器。用 ResponseMap 记录参数-指标响应，并通过预算审计避免单参塌缩。',
+  adaptive_response_search: '新主力算法。所有候选从 global best 出发，用真实响应证据排序参数，并只把预算集中给有效参数/参数对。',
   semantic_group_legacy_081: '旧高分复现基线。保留 probe_group / pattern_search / cross_group_combo，不接入 ResponseMap，适合复现 0.8 附近实验。',
   subspace_cma_es: '效果优先的昂贵黑盒路线。在当前 active 子空间内运行 CMA-ES；每轮仍需真实渲染，建议 500+ 轮做对照。',
 };
@@ -138,6 +139,7 @@ async function save(): Promise<void> {
             </td>
             <td>
               <select id="cfg-optimizer" v-model="form.optimizer">
+                <option value="adaptive_response_search">adaptive_response_search（新主力 best-centered 响应搜索）</option>
                 <option value="semantic_group">semantic_group（当前 response scheduler）</option>
                 <option value="semantic_group_legacy_081">semantic_group_legacy_081（旧 0.8 基线复现）</option>
                 <option value="subspace_cma_es">subspace_cma_es（昂贵子空间 CMA-ES）</option>

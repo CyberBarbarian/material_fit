@@ -125,6 +125,7 @@ class CandidateBuilder:
                 param_name=name,
                 step_scale=step_scale,
                 group_cycle=group_cycle,
+                axis_offset=int(row.get("axis_offset", 0) or 0),
                 direction_override=float(direction),
             )
             if result is None:

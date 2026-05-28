@@ -77,7 +77,10 @@ class LegacySemanticGroupStrategy(OptimizerStrategy):
         # bouncing on u_BaseColor before fresnel ever gets a turn.
         self._max_group_no_improve = 8
         self._max_group_no_improve_small = 3
-        self._max_group_cycles = 3
+        # Keep the original pattern-search mechanics, but allow more
+        # restart passes in modern control schemas where the active/searchable
+        # graph differs from the historical 0.81 run.
+        self._max_group_cycles = 6
         self._group_cycle = 0
         self._group_state: dict[str, dict[str, Any]] = {}
         self._pending: dict[str, Any] | None = None
@@ -136,6 +139,7 @@ class LegacySemanticGroupStrategy(OptimizerStrategy):
                 "optimizer": self.name,
                 "stop_reason": "all_semantic_groups_exhausted",
                 "stage": None,
+                "legacy_scheduler": self._legacy_scheduler_state(),
                 "previous_candidate": previous_eval or None,
             }
 
@@ -265,10 +269,19 @@ class LegacySemanticGroupStrategy(OptimizerStrategy):
         if (
             self._group_cycle >= self._max_group_cycles
             and self._group_order
-            and all(self._group_status(name) in {"exhausted", "inactive_or_invisible"} for name in self._group_order)
+            and all(
+                self._group_status(name) in {"exhausted", "inactive_or_invisible"}
+                for name in self._group_order
+            )
         ):
             return "semantic_groups_exhausted"
         return None
+
+    def research_summary(self) -> dict[str, Any]:
+        return {
+            "phase": "legacy_pattern_search",
+            **self._legacy_scheduler_state(),
+        }
 
     def _consume_pending(self, ctx: StrategyContext) -> dict[str, Any]:
         if self._pending is None:
@@ -647,6 +660,17 @@ class LegacySemanticGroupStrategy(OptimizerStrategy):
     def _group_status(self, group_name: str) -> str:
         return str(self._state_for_group(group_name).get("status", "pending"))
 
+    def _legacy_scheduler_state(self) -> dict[str, Any]:
+        return {
+            "group_cycle": self._group_cycle,
+            "max_group_cycles": self._max_group_cycles,
+            "group_order": list(self._group_order),
+            "group_status": {
+                name: self._json_group_state(self._state_for_group(name))
+                for name in self._group_order
+            },
+        }
+
     def _effective_no_improve_limit(self, group_name: str) -> int:
         group = self._graph.groups.get(group_name)
         if group is None:
@@ -703,10 +727,14 @@ class LegacySemanticGroupStrategy(OptimizerStrategy):
     ) -> dict[str, Any]:
         payload = {
             "optimizer": self.name,
-            "stage": {"name": group.name, "description": f"semantic group {action}: {group.reason}"},
+            "stage": {
+                "name": group.name,
+                "description": f"semantic group {action}: {group.reason}",
+            },
             "semantic_group": group.to_dict(),
             "semantic_action": action,
             "group_state": self._json_group_state(state),
+            "legacy_scheduler": self._legacy_scheduler_state(),
             "changes": changes,
             "stop_reason": stop_reason,
         }

@@ -186,7 +186,7 @@ def create_project(
             },
         },
         "algorithm_config": {
-            "max_iterations": 6,
+            "max_iterations": 300,
             "target_score": 0.9,
             "perceptual_optional_interval": 50,
             "diff_visual_interval": 50,
@@ -241,10 +241,10 @@ def create_project(
                 "mean_diff_change_threshold": 0.5,
                 "mean_diff_restore_threshold": 2.5,
             },
-            # E-006/E-014: optimizer is pluggable. 'semantic_group'
-            # is the current response scheduler; legacy/subspace variants
-            # remain available for comparison runs.
-            "optimizer": "semantic_group",
+            # E-006/E-014/E-015: optimizer is pluggable. The new
+            # adaptive_response_search is the global-best response scheduler;
+            # legacy/subspace variants remain available for comparison runs.
+            "optimizer": "adaptive_response_search",
             "cma_es": {
                 "mode": "warm",
                 "warm_start_iters": 12,
@@ -465,6 +465,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "cma_cold",
         "cma_warm",
         "semantic_group",
+        "adaptive_response_search",
         "semantic_group_legacy_081",
         "subspace_cma_es",
     ):

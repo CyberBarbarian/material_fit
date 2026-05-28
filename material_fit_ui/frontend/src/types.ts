@@ -433,6 +433,7 @@ export type OptimizerKind =
   | 'cma_cold'
   | 'cma_warm'
   | 'semantic_group'
+  | 'adaptive_response_search'
   | 'semantic_group_legacy_081'
   | 'subspace_cma_es';
 

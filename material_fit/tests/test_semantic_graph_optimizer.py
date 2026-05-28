@@ -576,10 +576,271 @@ def test_optimizer_factory_registers_comparison_strategies():
         unity_material_params=None,
         semantic_graph=graph,
     )
+    adaptive = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=params,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
 
     assert current.name == "semantic_group"
     assert legacy.name == "semantic_group_legacy_081"
     assert subspace.name == "subspace_cma_es"
+    assert adaptive.name == "adaptive_response_search"
+    assert adaptive.stop_reason() is None
+    assert adaptive.wants_global_no_improve_check() is False
+
+
+def test_adaptive_response_search_centers_candidates_on_global_best():
+    current = dict(_params())
+    current["u_FresnelIntensity"] = 1.0
+    best = dict(current)
+    best["u_EmissionScale"] = 4.0
+    graph = build_shader_effect_graph(_shader_params(), material_params=current)
+    strategy = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=current,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+
+    proposed, decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=current,
+            analysis={"research_metrics": {"components": {"color_mean": 0.7}}},
+            diff_score=0.5,
+            fit_score=0.5,
+            state=AdjustmentState(
+                best_params=best,
+                best_fit_params=best,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    changed = {
+        str(change.get("param"))
+        for change in decision["changes"]
+        if isinstance(change, dict)
+    }
+    if "u_EmissionScale" not in changed:
+        assert proposed["u_EmissionScale"] == pytest.approx(4.0)
+    assert decision["adaptive_response_search"]["center"] == "global_best"
+    assert decision["adaptive_response_search"]["best_fit_score"] == pytest.approx(0.8)
+
+
+def test_adaptive_response_search_iteration_zero_is_evaluation_only():
+    current = dict(_params())
+    current["u_FresnelIntensity"] = 1.0
+    graph = build_shader_effect_graph(_shader_params(), material_params=current)
+    strategy = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=current,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+
+    proposed, decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=current,
+            analysis={"research_metrics": {"components": {"color_mean": 0.7}}},
+            diff_score=0.5,
+            fit_score=0.8,
+            state=AdjustmentState(
+                best_params=current,
+                best_fit_params=current,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    assert proposed == current
+    assert decision["semantic_action"] == "baseline_evaluation"
+    assert decision["changes"] == []
+    assert decision["adaptive_response_search"]["baseline_evaluation_only"] is True
+
+    proposed_next, decision_next = strategy.propose(
+        StrategyContext(
+            iteration=1,
+            current_params=current,
+            analysis={"research_metrics": {"components": {"color_mean": 0.7}}},
+            diff_score=0.5,
+            fit_score=0.8,
+            state=AdjustmentState(
+                best_params=current,
+                best_fit_params=current,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    assert decision_next["semantic_action"] != "baseline_evaluation"
+    assert proposed_next != current
+
+
+def test_adaptive_response_search_records_response_evidence():
+    params = {
+        "u_EmissionScale": 1.0,
+    }
+    shader_params = [
+        ShaderParam("u_EmissionScale", "Float", default=1.0, range_min=0.0, range_max=8.0),
+    ]
+    graph = build_shader_effect_graph(shader_params, material_params=params)
+    strategy = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=params,
+        shader_params=shader_params,
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+    baseline, _ = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=params,
+            analysis={"research_metrics": {"components": {"highlight": 0.5}}},
+            diff_score=0.5,
+            fit_score=0.4,
+            state=AdjustmentState(best_params=params, best_fit_params=params, best_fit_score=0.4),
+        )
+    )
+    proposed, _ = strategy.propose(
+        StrategyContext(
+            iteration=1,
+            current_params=baseline,
+            analysis={"research_metrics": {"components": {"highlight": 0.4}}},
+            diff_score=0.4,
+            fit_score=0.45,
+            state=AdjustmentState(best_params=baseline, best_fit_params=baseline, best_fit_score=0.45),
+        )
+    )
+
+    _, decision = strategy.propose(
+        StrategyContext(
+            iteration=2,
+            current_params=proposed,
+            analysis={"research_metrics": {"components": {"highlight": 0.4}}},
+            diff_score=0.4,
+            fit_score=0.5,
+            state=AdjustmentState(best_params=proposed, best_fit_params=proposed, best_fit_score=0.5),
+        )
+    )
+
+    top = decision["adaptive_response_search"]["top_params"][0]
+    assert top["param"] == "u_EmissionScale"
+    assert top["positive_attempts"] == 1
+    assert top["best_delta"] == pytest.approx(0.05)
+
+
+def test_adaptive_response_search_scores_trials_against_global_best_center():
+    params = {"u_EmissionScale": 1.0}
+    best = {"u_EmissionScale": 4.0}
+    shader_params = [
+        ShaderParam("u_EmissionScale", "Float", default=1.0, range_min=0.0, range_max=8.0),
+    ]
+    graph = build_shader_effect_graph(shader_params, material_params=params)
+    strategy = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=params,
+        shader_params=shader_params,
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+    baseline, _ = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=params,
+            analysis={"research_metrics": {"components": {"highlight": 0.5}}},
+            diff_score=0.7,
+            fit_score=0.3,
+            state=AdjustmentState(
+                best_params=best,
+                best_fit_params=best,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+    proposed, _ = strategy.propose(
+        StrategyContext(
+            iteration=1,
+            current_params=baseline,
+            analysis={"research_metrics": {"components": {"highlight": 0.45}}},
+            diff_score=0.5,
+            fit_score=0.5,
+            state=AdjustmentState(
+                best_params=best,
+                best_fit_params=best,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    _, decision = strategy.propose(
+        StrategyContext(
+            iteration=2,
+            current_params=proposed,
+            analysis={"research_metrics": {"components": {"highlight": 0.45}}},
+            diff_score=0.5,
+            fit_score=0.5,
+            state=AdjustmentState(
+                best_params=best,
+                best_fit_params=best,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    response = decision["adaptive_response_search"]["last_response"]
+    top = decision["adaptive_response_search"]["top_params"][0]
+    assert response["center_fit_score"] == pytest.approx(0.8)
+    assert response["delta"] == pytest.approx(-0.3)
+    assert top["positive_attempts"] == 0
+
+
+def test_adaptive_response_search_keeps_gate_activation_reachable():
+    params = dict(_params())
+    params["u_FresnelIntensity"] = 0.0
+    graph = build_shader_effect_graph(_shader_params(), material_params=params)
+    strategy = build_strategy(
+        optimizer="adaptive_response_search",
+        initial_params=params,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+
+    seen: set[str] = set()
+    current = dict(params)
+    for iteration in range(12):
+        current, decision = strategy.propose(
+            StrategyContext(
+                iteration=iteration,
+                current_params=current,
+                analysis={"research_metrics": {"components": {"highlight": 0.7}}},
+                diff_score=0.5,
+                fit_score=0.5,
+                state=AdjustmentState(
+                    best_params=params,
+                    best_fit_params=params,
+                    best_fit_score=0.5,
+                ),
+            )
+        )
+        trial = decision["adaptive_response_search"]["selected_trial"]
+        if isinstance(trial, dict):
+            seen.update(str(name) for name in trial.get("params", []))
+
+    assert "u_FresnelIntensity" in seen
 
 
 def test_legacy_081_emits_pattern_search_without_response_scheduler():
@@ -611,6 +872,7 @@ def test_legacy_081_emits_pattern_search_without_response_scheduler():
     assert decision["semantic_action"] in {"probe_group", "pattern_search", "cross_group_combo"}
     assert "scheduler" not in decision
     assert "response_map" not in decision
+    assert decision["legacy_scheduler"]["max_group_cycles"] >= 6
 
 
 def test_subspace_cma_es_emits_subspace_diagnostics():
@@ -631,7 +893,14 @@ def test_subspace_cma_es_emits_subspace_diagnostics():
         StrategyContext(
             iteration=0,
             current_params=params,
-            analysis={"research_metrics": {"components": {"color_mean": 0.8, "luminance_mae": 0.4}}},
+            analysis={
+                "research_metrics": {
+                    "components": {
+                        "color_mean": 0.8,
+                        "luminance_mae": 0.4,
+                    }
+                }
+            },
             diff_score=0.5,
             fit_score=0.5,
             state=AdjustmentState(best_params=params),
@@ -642,6 +911,83 @@ def test_subspace_cma_es_emits_subspace_diagnostics():
     assert decision["semantic_action"] == "subspace_cma_candidate"
     assert decision["subspace_cma_es"]["subspace_params"]
     assert decision["subspace_cma_es"]["trainable_dim"] > 0
+
+
+def test_subspace_cma_es_rotates_subspaces_after_plateau_and_keeps_states():
+    pytest.importorskip("cmaes")
+    params = dict(_params())
+    params["u_FresnelIntensity"] = 1.0
+    graph = build_shader_effect_graph(_shader_params(), material_params=params)
+    strategy = build_strategy(
+        optimizer="subspace_cma_es",
+        initial_params=params,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+
+    current = dict(params)
+    decision = {}
+    for iteration in range(90):
+        current, decision = strategy.propose(
+            StrategyContext(
+                iteration=iteration,
+                current_params=current,
+                analysis={
+                    "research_metrics": {
+                        "components": {
+                            "color_mean": 0.8,
+                            "luminance_mae": 0.4,
+                        }
+                    }
+                },
+                diff_score=0.5,
+                fit_score=0.5,
+                state=AdjustmentState(best_params=current),
+            )
+        )
+
+    cma = decision["subspace_cma_es"]
+    assert cma["subspace_count"] > 1
+    assert cma["switch_count"] >= 1
+    assert cma["subspace_id"] in cma["subspace_order"]
+
+
+def test_subspace_cma_es_uses_global_best_as_proposal_center():
+    pytest.importorskip("cmaes")
+    current = dict(_params())
+    current["u_FresnelIntensity"] = 1.0
+    best = dict(current)
+    best["u_EmissionScale"] = 4.0
+    graph = build_shader_effect_graph(_shader_params(), material_params=current)
+    strategy = build_strategy(
+        optimizer="subspace_cma_es",
+        initial_params=current,
+        shader_params=_shader_params(),
+        policies=[],
+        unity_material_params=None,
+        semantic_graph=graph,
+    )
+
+    proposed, decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=current,
+            analysis={"research_metrics": {"components": {"color_mean": 0.8}}},
+            diff_score=0.5,
+            fit_score=0.5,
+            state=AdjustmentState(
+                best_params=best,
+                best_fit_params=best,
+                best_fit_score=0.8,
+            ),
+        )
+    )
+
+    if "u_EmissionScale" not in decision["subspace_cma_es"]["subspace_params"]:
+        assert proposed["u_EmissionScale"] == pytest.approx(4.0)
+    assert decision["subspace_cma_es"]["global_best_fit_score"] == pytest.approx(0.8)
 
 
 def test_semantic_group_rolls_branch_back_only_after_hard_drift():

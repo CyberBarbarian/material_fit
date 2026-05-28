@@ -111,6 +111,8 @@ def start_job(
     optimizer_value_for_default = str(algo.get("optimizer", "heuristic")).strip().lower()
     if optimizer_value_for_default in ("cma_cold", "cma_warm", "subspace_cma_es"):
         default_iterations = 30
+    elif optimizer_value_for_default == "adaptive_response_search":
+        default_iterations = 300
     elif optimizer_value_for_default in ("semantic_group", "semantic_group_legacy_081"):
         default_iterations = 12
     else:
@@ -192,6 +194,7 @@ def start_job(
         "cma_cold",
         "cma_warm",
         "semantic_group",
+        "adaptive_response_search",
         "semantic_group_legacy_081",
         "subspace_cma_es",
     ):

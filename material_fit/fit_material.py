@@ -89,6 +89,7 @@ def main() -> int:
             "cma_cold",
             "cma_warm",
             "semantic_group",
+            "adaptive_response_search",
             "semantic_group_legacy_081",
             "subspace_cma_es",
         ),
@@ -98,6 +99,7 @@ def main() -> int:
             "stage-aware channel-bias path; 'cma_cold' is vanilla CMA-ES; "
             "'cma_warm' is Warm-Started CMA-ES seeded from prior auto_adjust "
             "iterations; 'semantic_group' is the current response scheduler; "
+            "'adaptive_response_search' is a global-best response evidence scheduler; "
             "'semantic_group_legacy_081' preserves the old pattern-search baseline; "
             "'subspace_cma_es' runs expensive CMA-ES in a small active subspace. Defaults to "
             "config['optimizer'] or 'heuristic'."
@@ -198,6 +200,7 @@ def main() -> int:
         "cma_cold",
         "cma_warm",
         "semantic_group",
+        "adaptive_response_search",
         "semantic_group_legacy_081",
         "subspace_cma_es",
     ):
@@ -209,7 +212,12 @@ def main() -> int:
     )
     stages = policies_to_fit_stages(adjustment_policies) or build_stage_plan(laya_shader.params)
     stage_plan_payload: list[dict[str, Any]] = [stage.__dict__ for stage in stages]
-    if configured_optimizer in ("semantic_group", "semantic_group_legacy_081", "subspace_cma_es"):
+    if configured_optimizer in (
+        "semantic_group",
+        "adaptive_response_search",
+        "semantic_group_legacy_081",
+        "subspace_cma_es",
+    ):
         stage_plan_payload = _semantic_stage_plan_from_effect_graph(config.get("effect_graph")) or stage_plan_payload
     unity_material_params = _load_unity_material_params(config, project_root)
 
