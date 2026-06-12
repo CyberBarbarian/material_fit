@@ -91,7 +91,13 @@ function isSelected(p: Point): boolean {
   return p.iterId === props.selectedIterId;
 }
 
+function canOpen(iterId: string): boolean {
+  const entry = props.iterations.find((item) => item.iter_id === iterId);
+  return entry?.can_open_detail !== false;
+}
+
 function selectPoint(p: Point): void {
+  if (!canOpen(p.iterId)) return;
   emit('select', p.iterId);
 }
 </script>
@@ -163,10 +169,10 @@ function selectPoint(p: Point): void {
             fill="#f0883e"
             stroke="#0d1117"
             stroke-width="1"
-            style="cursor: pointer"
+            :style="{ cursor: canOpen(p.iterId) ? 'pointer' : 'default', opacity: canOpen(p.iterId) ? 1 : 0.45 }"
             @click="selectPoint(p)"
           >
-            <title>iter {{ p.iteration }} · MAE {{ p.mae == null ? '—' : p.mae.toFixed(4) }}</title>
+            <title>iter {{ p.iteration }} · MAE {{ p.mae == null ? '—' : p.mae.toFixed(4) }}{{ canOpen(p.iterId) ? '' : ' · 仅曲线点，无快照详情' }}</title>
           </circle>
           <circle
             v-if="p.fitY != null"
@@ -176,10 +182,10 @@ function selectPoint(p: Point): void {
             :fill="isSelected(p) ? '#f0883e' : '#58a6ff'"
             stroke="#0d1117"
             stroke-width="1"
-            style="cursor: pointer"
+            :style="{ cursor: canOpen(p.iterId) ? 'pointer' : 'default', opacity: canOpen(p.iterId) ? 1 : 0.45 }"
             @click="selectPoint(p)"
           >
-            <title>iter {{ p.iteration }} · fit {{ p.fit == null ? '—' : p.fit.toFixed(4) }}</title>
+            <title>iter {{ p.iteration }} · fit {{ p.fit == null ? '—' : p.fit.toFixed(4) }}{{ canOpen(p.iterId) ? '' : ' · 仅曲线点，无快照详情' }}</title>
           </circle>
         </template>
       </g>

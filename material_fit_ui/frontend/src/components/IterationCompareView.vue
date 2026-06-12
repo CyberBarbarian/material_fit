@@ -85,12 +85,16 @@ function iterationsForJob(jobId: string): JobIterationSummary[] {
   return props.jobIterationsById?.[jobId] ?? localJobIterations.value[jobId] ?? [];
 }
 
+function openable<T extends IterationSummary>(items: T[]): T[] {
+  return items.filter((entry) => entry.can_open_detail !== false);
+}
+
 function syncDefaultIter(side: 'left' | 'right'): void {
   const jobs = props.jobs ?? [];
   const current = side === 'left' ? leftIterId.value : rightIterId.value;
   const source = jobs.length
-    ? iterationsForJob(side === 'left' ? leftJobId.value : rightJobId.value)
-    : props.iterations;
+    ? openable(iterationsForJob(side === 'left' ? leftJobId.value : rightJobId.value))
+    : openable(props.iterations);
   if (!source.length) {
     if (side === 'left') leftIterId.value = '';
     else rightIterId.value = '';
@@ -103,8 +107,8 @@ function syncDefaultIter(side: 'left' | 'right'): void {
   }
 }
 
-const leftJobIterations = computed(() => iterationsForJob(leftJobId.value));
-const rightJobIterations = computed(() => iterationsForJob(rightJobId.value));
+const leftJobIterations = computed(() => openable(iterationsForJob(leftJobId.value)));
+const rightJobIterations = computed(() => openable(iterationsForJob(rightJobId.value)));
 
 watch(() => props.iterations, () => {
   if (!(props.jobs ?? []).length) {
@@ -240,7 +244,7 @@ function iterLabel(iter: IterationSummary): string {
 
 function selectedLabel(jobId: string, iterId: string): string {
   const job = (props.jobs ?? []).find((entry) => entry.job_id === jobId);
-  const iter = (job ? iterationsForJob(job.job_id) : props.iterations).find((entry) => entry.iter_id === iterId);
+  const iter = openable(job ? iterationsForJob(job.job_id) : props.iterations).find((entry) => entry.iter_id === iterId);
   const jobPart = job ? `${formatJobLabel(job)} · ` : '';
   return `${jobPart}${iter ? iterLabel(iter) : iterId}`;
 }
@@ -263,7 +267,7 @@ function selectedLabel(jobId: string, iterId: string): string {
         </select>
         <select v-model="leftIterId">
           <option
-            v-for="iter in ((jobs ?? []).length ? leftJobIterations : iterations)"
+            v-for="iter in ((jobs ?? []).length ? leftJobIterations : openable(iterations))"
             :key="iter.iter_id"
             :value="iter.iter_id"
           >
@@ -280,7 +284,7 @@ function selectedLabel(jobId: string, iterId: string): string {
         </select>
         <select v-model="rightIterId">
           <option
-            v-for="iter in ((jobs ?? []).length ? rightJobIterations : iterations)"
+            v-for="iter in ((jobs ?? []).length ? rightJobIterations : openable(iterations))"
             :key="iter.iter_id"
             :value="iter.iter_id"
           >

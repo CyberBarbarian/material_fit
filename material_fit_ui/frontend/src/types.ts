@@ -89,6 +89,9 @@ export interface IterationSummary {
   changes_count: number;
   applied_lmat: string | null;
   diff_image_url: string | null;
+  is_snapshot?: boolean;
+  can_open_detail?: boolean;
+  is_best?: boolean;
 }
 
 export interface JobIterationSummary extends IterationSummary {
@@ -477,9 +480,7 @@ export interface MultiviewScoringConfig {
 
 export interface AnalysisPerformanceConfig {
   multiview_workers: 'auto' | number | string;
-  perceptual_optional_interval: number;
-  diff_visual_interval: number;
-  artifact_save_interval: number;
+  snapshot_interval: number;
   keep_last_n_artifacts: number;
   always_keep_best_artifact: boolean;
   always_keep_first_artifact: boolean;

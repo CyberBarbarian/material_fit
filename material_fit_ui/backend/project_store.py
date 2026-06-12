@@ -17,9 +17,8 @@ Persistence:
 tools/material_fit/output/<project_id>/
 ├── project.json          # this module owns it
 ├── inputs/               # optional copies of small reference assets
-├── jobs/<job_id>.json    # job_manager owns these
-├── preanalysis.json      # preanalysis module owns
-└── runs/<date-settings>/ # one immutable-ish auto-adjust run artifact folder
+├── configs/              # project-level derived config/preanalysis
+└── jobs/<job_id>/        # job_manager owns run artifacts and job state
 ```
 
 We deliberately *do not* delete any of the existing ``case_loader`` paths;
@@ -48,7 +47,6 @@ PREANALYSIS_FILE = "preanalysis.json"
 INPUTS_DIR = "inputs"
 CONFIGS_DIR = "configs"
 JOBS_DIR = "jobs"
-RUNS_DIR = "runs"
 
 _PROJECT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
 _IMPORT_FILE_SLOTS: dict[str, str] = {
@@ -68,7 +66,6 @@ class ProjectPaths:
     preanalysis_json: Path
     inputs_dir: Path
     jobs_dir: Path
-    runs_dir: Path
 
 
 def project_paths(project_id: str, config: LoaderConfig) -> ProjectPaths:
@@ -81,7 +78,6 @@ def project_paths(project_id: str, config: LoaderConfig) -> ProjectPaths:
         preanalysis_json=project_dir / CONFIGS_DIR / PREANALYSIS_FILE,
         inputs_dir=project_dir / INPUTS_DIR,
         jobs_dir=project_dir / JOBS_DIR,
-        runs_dir=project_dir / RUNS_DIR,
     )
 
 
@@ -188,13 +184,9 @@ def create_project(
         "algorithm_config": {
             "max_iterations": 300,
             "target_score": 0.9,
-            "perceptual_optional_interval": 50,
-            "diff_visual_interval": 50,
             "analysis_performance": {
                 "multiview_workers": "auto",
-                "perceptual_optional_interval": 50,
-                "diff_visual_interval": 50,
-                "artifact_save_interval": 50,
+                "snapshot_interval": 50,
                 "keep_last_n_artifacts": 5,
                 "always_keep_best_artifact": True,
                 "always_keep_first_artifact": True,
@@ -567,8 +559,6 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "fit_score_mode": _normalize_fit_score_mode(algo.get("fit_score_mode")),
         "multiview_scoring": _normalize_multiview_scoring(algo.get("multiview_scoring")),
         "auto_adjust_mode": str(algo.get("auto_adjust_mode", "fresh_fit")).lower(),
-        "perceptual_optional_interval": analysis_performance["perceptual_optional_interval"],
-        "diff_visual_interval": analysis_performance["diff_visual_interval"],
         "analysis_performance": analysis_performance,
         "optimizer": optimizer_value,
         "cma_es": cma_es_payload,
@@ -633,17 +623,15 @@ def _summary(data: dict[str, Any], project_dir: Path, config: LoaderConfig) -> d
         )
         if inputs.get(key)
     )
-    last_run_id = data.get("last_run_id")
-    auto_dir = project_dir / "auto_adjust"
-    if isinstance(last_run_id, str) and last_run_id:
-        run_auto_dir = project_dir / RUNS_DIR / last_run_id / "auto_adjust"
-        if run_auto_dir.exists():
-            auto_dir = run_auto_dir
     auto_iters = 0
-    if auto_dir.exists():
-        for entry in auto_dir.iterdir():
-            if entry.is_dir() and entry.name.startswith("iter_"):
-                auto_iters += 1
+    job_id = data.get("active_job_id") or data.get("last_job_id")
+    if isinstance(job_id, str) and job_id:
+        series_path = project_dir / JOBS_DIR / job_id / "auto_adjust" / "iteration_series.json"
+        try:
+            series = json.loads(series_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            series = None
+        auto_iters = len(series) if isinstance(series, list) else 0
     return {
         "id": data.get("id"),
         "name": data.get("name") or data.get("id"),
@@ -660,7 +648,7 @@ def _summary(data: dict[str, Any], project_dir: Path, config: LoaderConfig) -> d
         "active_job_id": data.get("active_job_id"),
         "last_job_id": data.get("last_job_id"),
         "active_run_id": data.get("active_run_id"),
-        "last_run_id": last_run_id,
+        "last_run_id": data.get("last_run_id"),
         "output_dir": _to_rel_posix(project_dir, config.project_root),
     }
 
@@ -933,13 +921,7 @@ def _normalize_laya_refresh_probe(value: Any) -> dict[str, float]:
 def _normalize_analysis_performance(algo: dict[str, Any]) -> dict[str, Any]:
     value = algo.get("analysis_performance")
     value = value if isinstance(value, dict) else {}
-    p2 = _coerce_optional_int(value.get("perceptual_optional_interval"))
-    if p2 is None:
-        p2 = _coerce_optional_int(algo.get("perceptual_optional_interval"))
-    diff = _coerce_optional_int(value.get("diff_visual_interval"))
-    if diff is None:
-        diff = _coerce_optional_int(algo.get("diff_visual_interval"))
-    artifact = _coerce_optional_int(value.get("artifact_save_interval"))
+    snapshot = _coerce_optional_int(value.get("snapshot_interval"))
     keep_last = _coerce_optional_int(value.get("keep_last_n_artifacts"))
     workers_raw = value.get("multiview_workers", algo.get("multiview_analysis_workers", "auto"))
     if isinstance(workers_raw, str):
@@ -947,11 +929,10 @@ def _normalize_analysis_performance(algo: dict[str, Any]) -> dict[str, Any]:
     else:
         workers_int = _coerce_optional_int(workers_raw)
         workers = workers_int if workers_int is not None and workers_int > 0 else "auto"
+    interval = max(0, int(snapshot if snapshot is not None else 50))
     return {
         "multiview_workers": workers,
-        "perceptual_optional_interval": max(0, int(p2 if p2 is not None else 50)),
-        "diff_visual_interval": max(0, int(diff if diff is not None else 50)),
-        "artifact_save_interval": max(0, int(artifact if artifact is not None else 50)),
+        "snapshot_interval": interval,
         "keep_last_n_artifacts": max(0, int(keep_last if keep_last is not None else 5)),
         "always_keep_best_artifact": bool(value.get("always_keep_best_artifact", True)),
         "always_keep_first_artifact": bool(value.get("always_keep_first_artifact", True)),

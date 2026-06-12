@@ -115,6 +115,10 @@ def run_preanalysis(
         manual_laya_control_schema,
         run_overrides=(project.get("algorithm_config") or {}).get("laya_control_group_overrides"),
     )
+    manual_laya_control_schema = effective_laya_control_schema.get(
+        "manual_laya_control_schema",
+        manual_laya_control_schema,
+    )
     laya_control_groups = _schema_to_control_groups(effective_laya_control_schema)
 
     coverage = _compute_coverage(mapping_rows)
@@ -194,6 +198,11 @@ def save_manual_laya_control_schema(
     from .project_store import patch_project
 
     cleaned = _normalize_manual_laya_control_schema(manual_schema)
+    payload = get_preanalysis(project_id, config)
+    if isinstance(payload, dict):
+        auto_schema = payload.get("auto_laya_control_schema")
+        if isinstance(auto_schema, dict):
+            cleaned, _ = _filter_manual_schema_to_params(cleaned, _control_names_from_schema(auto_schema))
     patch_project(
         project_id,
         {
@@ -244,6 +253,11 @@ def apply_laya_control_schema_preset(
             raise ValueError(f"unknown laya control preset: {preset_id}")
         manual_schema = _normalize_manual_laya_control_schema(preset.get("manual_laya_control_schema"))
         manual_schema["base_auto_hash"] = preset_id
+    payload = get_preanalysis(project_id, config)
+    if isinstance(payload, dict):
+        auto_schema = payload.get("auto_laya_control_schema")
+        if isinstance(auto_schema, dict):
+            manual_schema, _ = _filter_manual_schema_to_params(manual_schema, _control_names_from_schema(auto_schema))
     patch_project(
         project_id,
         {
@@ -277,6 +291,11 @@ def save_laya_control_schema_preset(
     ]
     preset_id = _unique_preset_id(preset_name, presets)
     manual_schema = _normalize_manual_laya_control_schema(project.get("manual_laya_control_schema"))
+    payload = get_preanalysis(project_id, config)
+    if isinstance(payload, dict):
+        auto_schema = payload.get("auto_laya_control_schema")
+        if isinstance(auto_schema, dict):
+            manual_schema, _ = _filter_manual_schema_to_params(manual_schema, _control_names_from_schema(auto_schema))
     manual_schema["base_auto_hash"] = preset_id
     preset = {
         "id": preset_id,
@@ -1189,6 +1208,7 @@ def _refresh_laya_control_schema_payload(
         manual_schema,
         run_overrides=(project.get("algorithm_config") or {}).get("laya_control_group_overrides"),
     )
+    manual_schema = effective.get("manual_laya_control_schema", manual_schema)
     payload["auto_laya_control_schema"] = auto_schema
     payload["manual_laya_control_schema"] = manual_schema
     payload["effective_laya_control_schema"] = effective
@@ -1313,6 +1333,38 @@ def _normalize_manual_laya_control_schema(value: Any) -> dict[str, Any]:
     }
 
 
+def _control_names_from_schema(schema: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    groups = schema.get("groups") if isinstance(schema.get("groups"), list) else []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        controls = group.get("controls") if isinstance(group.get("controls"), list) else []
+        for control in controls:
+            if isinstance(control, dict) and control.get("name"):
+                names.add(str(control["name"]))
+    return names
+
+
+def _filter_manual_schema_to_params(manual_schema: dict[str, Any], valid_params: set[str]) -> tuple[dict[str, Any], list[str]]:
+    if not valid_params:
+        return manual_schema, []
+    filtered = json.loads(json.dumps(manual_schema))
+    controls = filtered.get("controls") if isinstance(filtered.get("controls"), dict) else {}
+    dropped = sorted(str(name) for name in controls if str(name) not in valid_params)
+    filtered["controls"] = {
+        str(name): patch
+        for name, patch in controls.items()
+        if str(name) in valid_params
+    }
+    filtered["hidden_controls"] = [
+        str(name)
+        for name in filtered.get("hidden_controls", [])
+        if isinstance(name, str) and name in valid_params
+    ]
+    return filtered, dropped
+
+
 def build_effective_laya_control_schema(
     auto_schema: dict[str, Any],
     manual_schema: dict[str, Any] | None,
@@ -1321,6 +1373,8 @@ def build_effective_laya_control_schema(
 ) -> dict[str, Any]:
     manual_schema = _normalize_manual_laya_control_schema(manual_schema)
     effective = json.loads(json.dumps(auto_schema if isinstance(auto_schema, dict) else {}))
+    valid_params = _control_names_from_schema(effective)
+    manual_schema, dropped_manual_controls = _filter_manual_schema_to_params(manual_schema, valid_params)
     effective["schema_version"] = int(effective.get("schema_version", 1) or 1)
     effective.setdefault("source", {})
     groups = effective.get("groups") if isinstance(effective.get("groups"), list) else []
@@ -1381,6 +1435,8 @@ def build_effective_laya_control_schema(
         for key in ("channels", "define_gates", "gate_params"):
             if isinstance(group.get(key), list):
                 group[key] = [str(item) for item in group[key] if isinstance(item, str)]
+        if valid_params and isinstance(group.get("gate_params"), list):
+            group["gate_params"] = [item for item in group["gate_params"] if item in valid_params]
         group["source"] = "manual" if patch else group.get("source", "auto")
 
     control_index: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
@@ -1486,7 +1542,15 @@ def build_effective_laya_control_schema(
         elif enabled is True and "enabled" not in manual_schema["groups"].get(str(group_id), {}):
             group["enabled"] = True
 
-    diagnostics: list[dict[str, Any]] = []
+    diagnostics: list[dict[str, Any]] = [
+        {
+            "level": "info",
+            "code": "dropped_manual_control_not_in_shader",
+            "param": param_name,
+            "message": "manual/preset control was ignored because the current Laya shader does not expose this parameter",
+        }
+        for param_name in dropped_manual_controls
+    ]
     for group in groups:
         if not isinstance(group, dict):
             continue

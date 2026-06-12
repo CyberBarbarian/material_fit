@@ -197,7 +197,8 @@ Laya 当前真实参数应来自 `.lmat` 或运行时材质对象，而不是 Sh
 unity_shader_params.json
 unity_material_params.json
 laya_shader_params.json
-laya_material_params.json
+initial_params.json
+run_manifest.json
 ```
 
 ### 7.2 阶段二：参数映射

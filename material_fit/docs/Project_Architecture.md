@@ -649,25 +649,26 @@ material_fit/output/<project_id>/
   preanalysis.json
   inputs/
   jobs/
-    job_*.json
-    job_*.log
-  preflight/
-    baseline.png
-    probe.png
-    restored.png
-    last.json
-  runs/
-    <run_id>/
+    <job_id>/
+      job.json
+      job.log
+      job_config.json
+      job_result.json
       fit_config.json
+      semantic_context.json
+      run_manifest.json
       laya_shader_params.json
-      laya_material_params.json
       initial_params.json
-      stage_plan.json
-      adjustment_policies.json
+      optimizer_artifacts/
+        <optimizer>/
+          research_summary.json
+          stage_plan.json              # only for stage-based optimizers
+          adjustment_policies.json     # only for stage-based optimizers
       auto_adjust/
-        preflight.json
         state.json
         auto_adjust_result.json
+        iteration_series.json
+        snapshot_index.json
         iter_0000/
           decision.json
           image_analysis/
@@ -679,6 +680,11 @@ material_fit/output/<project_id>/
             laya_multiview/
       external_backups/
       report.md
+  preflight/
+    baseline.png
+    probe.png
+    restored.png
+    last.json
   unity_reference/
 ```
 

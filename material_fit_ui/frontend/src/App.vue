@@ -90,7 +90,11 @@ function persist(): void {
 
 function isValidView(view: string, iters: IterationSummary[]): boolean {
   if (isSyntheticView(view)) return true;
-  return iters.some((entry) => entry.iter_id === view);
+  return iters.some((entry) => entry.iter_id === view && entry.can_open_detail !== false);
+}
+
+function firstOpenableIter(iters: IterationSummary[]): IterationSummary | undefined {
+  return iters.find((entry) => entry.can_open_detail !== false);
 }
 
 function isLightweightProjectStartupView(view: string): boolean {
@@ -336,10 +340,10 @@ function isProjectNavActive(id: string): boolean {
 
 function selectProjectNav(id: string): void {
   if (id === EXPERIMENT_RESULTS_VIEW_ID) {
-    const currentIterValid = !isSyntheticView(selectedView.value) && iterations.value.some((entry) => entry.iter_id === selectedView.value);
+      const currentIterValid = !isSyntheticView(selectedView.value) && isValidView(selectedView.value, iterations.value);
     selectedView.value = currentIterValid
       ? selectedView.value
-      : (iterations.value[0]?.iter_id ?? EXPERIMENT_RESULTS_VIEW_ID);
+        : (firstOpenableIter(iterations.value)?.iter_id ?? EXPERIMENT_RESULTS_VIEW_ID);
     return;
   }
   selectedView.value = id;

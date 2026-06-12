@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { IterationKind, IterationSummary, JobState } from '../types';
 import {
   COMPARE_VIEW_ID,
@@ -21,7 +22,7 @@ defineEmits<{
   (e: 'update:selectedJobId', value: string): void;
 }>();
 
-void props;
+const openableIterations = computed(() => props.iterations.filter((entry) => entry.can_open_detail !== false));
 
 function severityClass(fitScore: number | null, target: number | null): string {
   if (fitScore == null) return 'severity-none';
@@ -115,7 +116,7 @@ function jobScore(job: JobState): string {
         <span class="iter-meta muted small">人类可读</span>
       </li>
       <li
-        v-if="iterations.length >= 2"
+        v-if="openableIterations.length >= 2"
         class="iter-item nav-item"
         :class="{ 'is-active': modelValue === COMPARE_VIEW_ID }"
         @click="$emit('update:modelValue', COMPARE_VIEW_ID)"
@@ -126,7 +127,7 @@ function jobScore(job: JobState): string {
       </li>
       <li class="iter-divider muted small">迭代</li>
       <li
-      v-for="entry in iterations"
+      v-for="entry in openableIterations"
       :key="entry.iter_id"
       class="iter-item"
       :class="{ 'is-active': entry.iter_id === modelValue }"
@@ -150,7 +151,7 @@ function jobScore(job: JobState): string {
         </span>
       </li>
 
-      <li v-if="!iterations.length" class="iter-empty muted small">
+      <li v-if="!openableIterations.length" class="iter-empty muted small">
         没有迭代记录。
       </li>
     </ul>

@@ -7,7 +7,7 @@
 - 原 Unity 项目只放必须由 Unity Editor 编译/执行的脚本，例如 `Assets/Editor/unity_multiview_capture.cs`。
 - 原 Laya 项目只写必须实时生效的目标 `.lmat` 文件。
 - 自动调参产生的截图、候选参数、候选 `.lmat`、报告、备份文件都应写在本仓库 `tools/material_fit/output/` 下。
-- 每次 UI job 使用独立 run 目录，历史实验默认保留，不再覆盖上一轮 `auto_adjust/iter_*`。
+- 每次 UI job 使用独立 `jobs/<job_id>/` 目录，历史实验默认保留，不再覆盖上一轮 `auto_adjust/iter_*`。
 
 ## UI 项目目录
 
@@ -17,26 +17,24 @@ tools/material_fit/output/<project_id>/
   preanalysis.json
   inputs/
   jobs/
-    job_*.json
-    job_*.log
-  preflight/
-    baseline.png
-    probe.png
-    restored.png
-    last.json
-  runs/
-    20260511_153012-semantic-group-human-accept-fresh-fit-a1b2/
+    job_20260612_211250_7e213c/
+      job.json
+      job.log
+      job_config.json
+      job_result.json
       fit_config.json
+      semantic_context.json
+      run_manifest.json
       laya_shader_params.json
-      laya_material_params.json
       initial_params.json
-      stage_plan.json
-      adjustment_policies.json
+      optimizer_artifacts/
+        adaptive_response_search/
+          research_summary.json
       auto_adjust/
-        preflight.json
-        preflight_captures/
         state.json
         auto_adjust_result.json
+        iteration_series.json
+        snapshot_index.json
         iter_0000/
           decision.json
           image_analysis/
@@ -46,26 +44,23 @@ tools/material_fit/output/<project_id>/
             params.json
             1580_body.lmat
             laya_multiview/
+        best/
+          params.json
+          1580_body.lmat
       captures/
         laya_candidate_00.png
         .capture_region.json
       external_backups/
         1580_body.lmat.auto_adjust_0000.bak
-        1580_body.lmat.refresh_probe.bak
       report.md
+  preflight/
+    baseline.png
+    probe.png
+    restored.png
+    last.json
 ```
 
-`runs/<run_id>/` 的命名格式是：
-
-```text
-YYYYMMDD_HHMMSS-<optimizer>-<fit_score_mode>-<auto_adjust_mode>-<short_random>
-```
-
-例如：
-
-```text
-20260511_153012-semantic-group-human-accept-fresh-fit-a1b2
-```
+`job_id` 已包含时间和短随机后缀；optimizer、评分模式、调参模式等描述信息写在 `job_config.json` / `run_manifest.json`，不再重复编码到目录名。
 
 ## Laya `.lmat` 备份
 
@@ -76,17 +71,17 @@ YYYYMMDD_HHMMSS-<optimizer>-<fit_score_mode>-<auto_adjust_mode>-<short_random>
 1580_body.lmat.refresh_probe.bak
 ```
 
-现在这些备份会写到当前 run 的：
+现在这些备份会写到当前 job 的：
 
 ```text
-runs/<run_id>/external_backups/
+jobs/<job_id>/external_backups/
 ```
 
 真实 `.lmat` 仍会被覆盖，因为 Laya 必须读取该文件才能实时刷新材质。但所有备份和诊断产物都不再堆在原 Laya 资源目录。
 
 ## 截图与迭代产物
 
-每个 run 拥有自己的 `captures/`，因此候选截图不会跨 run 复用或覆盖。UI 仍默认显示当前项目的 `active_run_id`，如果没有运行中的任务则显示 `last_run_id`。
+每个 job 拥有自己的 `captures/`，因此候选截图不会跨 job 复用或覆盖。UI 默认显示当前项目的 `active_job_id`，如果没有运行中的任务则显示 `last_job_id`。
 
 旧的项目根级 `auto_adjust/` 目录仍可被 legacy CLI 产物读取，但 UI 新启动的 job 会写入 `runs/<run_id>/auto_adjust/`。
 

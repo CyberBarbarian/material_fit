@@ -32,9 +32,7 @@ function defaultConfig(): AlgorithmConfig {
     optimizer: 'adaptive_response_search',
     analysis_performance: {
       multiview_workers: 'auto',
-      perceptual_optional_interval: 50,
-      diff_visual_interval: 50,
-      artifact_save_interval: 50,
+      snapshot_interval: 50,
       keep_last_n_artifacts: 5,
       always_keep_best_artifact: true,
       always_keep_first_artifact: true,
@@ -99,11 +97,18 @@ async function save(): Promise<void> {
   saving.value = true;
   ok.value = false;
   try {
+    const snapshotInterval = Number(form.analysis_performance.snapshot_interval ?? 50);
     const payload: AlgorithmConfig = {
       ...form,
       capture_screen_after_apply: false,
       use_laya_editor_capture: true,
-      analysis_performance: { ...defaultConfig().analysis_performance, ...form.analysis_performance },
+      analysis_performance: {
+        multiview_workers: form.analysis_performance.multiview_workers,
+        snapshot_interval: snapshotInterval,
+        keep_last_n_artifacts: form.analysis_performance.keep_last_n_artifacts,
+        always_keep_best_artifact: form.analysis_performance.always_keep_best_artifact,
+        always_keep_first_artifact: form.analysis_performance.always_keep_first_artifact,
+      },
       cma_es: { ...form.cma_es, mode: form.optimizer === 'cma_cold' ? 'cold' : 'warm' },
     };
     const result = await patchProject(project.value.id, {
@@ -302,30 +307,19 @@ async function save(): Promise<void> {
                   </tr>
                   <tr>
                     <td>
-                      <label for="perf-p2">perceptual_optional_interval</label>
-                      <p class="muted small">LPIPS/DISTS 等 P2 感知指标计算间隔；0 = 关闭。默认 50。</p>
+                      <label for="perf-snapshot">snapshot_interval</label>
+                      <p class="muted small">统一快照间隔：P2 指标、diff 图和完整迭代详情都按这个轮数保留；0 = 只保留第 0 轮、best、final 和最近 N 轮。</p>
                     </td>
                     <td>
-                      <input id="perf-p2" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.perceptual_optional_interval" />
+                      <input id="perf-snapshot" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.snapshot_interval" />
                     </td>
                   </tr>
                   <tr>
                     <td>
-                      <label for="perf-diff">diff_visual_interval</label>
-                      <p class="muted small">差异图 diff_visual.png 生成间隔；0 = 不生成。默认 50。</p>
+                      <label>derived intervals</label>
+                      <p class="muted small">为避免“有 diff 没截图/有截图没 P2”的错位，P2、diff 和完整产物保留现在统一跟随 snapshot_interval。</p>
                     </td>
-                    <td>
-                      <input id="perf-diff" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.diff_visual_interval" />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <label for="perf-artifact">artifact_save_interval</label>
-                      <p class="muted small">重图像产物保留间隔；0 = 仅保留 first/best/lastN。不会删除 decision.json。</p>
-                    </td>
-                    <td>
-                      <input id="perf-artifact" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.artifact_save_interval" />
-                    </td>
+                    <td class="muted small mono">p2/diff/artifact = {{ form.analysis_performance.snapshot_interval }}</td>
                   </tr>
                   <tr>
                     <td>
@@ -339,7 +333,7 @@ async function save(): Promise<void> {
                   <tr>
                     <td>
                       <label><input type="checkbox" v-model="form.analysis_performance.always_keep_best_artifact" /> always_keep_best_artifact</label>
-                      <p class="muted small">保留 best 轮及其前一轮的图像产物，便于复盘最优截图。</p>
+                      <p class="muted small">保留 best 轮的可用图像产物，便于复盘最优截图。</p>
                     </td>
                     <td class="muted small mono">{{ form.analysis_performance.always_keep_best_artifact ? 'true' : 'false' }}</td>
                   </tr>

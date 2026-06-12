@@ -8,7 +8,7 @@ Case kinds
 ----------
 A case directory is classified into one of:
 
-- ``auto_adjust``: real auto-adjust loop has run; ``auto_adjust/iter_*/decision.json`` exist.
+- ``auto_adjust``: real auto-adjust loop has run; ``auto_adjust/iteration_series.json`` exists.
 - ``probe``: only dry-run probe candidates exist under ``iterations/iter_*/params.json``.
 - ``diff_only``: a one-shot ``analyze_diff`` invocation that wrote ``diff_analysis.json`` and
   ``diff_visual.png`` at the case root.
@@ -69,14 +69,16 @@ def get_case_overview(case_id: str, config: LoaderConfig | None = None) -> dict[
     summary = _build_case_summary(case_dir, config)
     auto_dir = artifact_dir / "auto_adjust"
     auto_result = _read_json(auto_dir / "auto_adjust_result.json") if auto_dir.exists() else None
+    optimizer_dir = _optimizer_artifact_dir(artifact_dir)
+    initial_params = _read_json(artifact_dir / "initial_params.json")
     return {
         **summary,
         "auto_adjust_result": _strip_iterations(auto_result) if isinstance(auto_result, dict) else None,
-        "stage_plan": _read_json(artifact_dir / "stage_plan.json"),
-        "adjustment_policies": _read_json(artifact_dir / "adjustment_policies.json"),
+        "stage_plan": _read_json(optimizer_dir / "stage_plan.json") if optimizer_dir else None,
+        "adjustment_policies": _read_json(optimizer_dir / "adjustment_policies.json") if optimizer_dir else None,
         "laya_shader_params": _read_json(artifact_dir / "laya_shader_params.json"),
-        "laya_material_params": _read_json(artifact_dir / "laya_material_params.json"),
-        "initial_params": _read_json(artifact_dir / "initial_params.json"),
+        "laya_material_params": initial_params,
+        "initial_params": initial_params,
         "unity_shader_params": _read_json(artifact_dir / "unity_shader_params.json"),
         "unity_material_params": _read_json(artifact_dir / "unity_material_params.json"),
         "report_path": _to_image_url_unsafe(artifact_dir / "report.md", config),
@@ -253,15 +255,7 @@ def _build_case_summary(case_dir: Path, config: LoaderConfig) -> dict[str, Any]:
             inputs = data.get("inputs") or {}
             artifact_dir = _project_artifact_dir(case_dir)
             auto_dir_for_count = (artifact_dir or case_dir) / "auto_adjust"
-            iterations_count = (
-                sum(
-                    1
-                    for entry in auto_dir_for_count.iterdir()
-                    if entry.is_dir() and _ITER_RE.match(entry.name)
-                )
-                if auto_dir_for_count.exists()
-                else 0
-            )
+            iterations_count = len(_read_iteration_series(auto_dir_for_count))
             active = data.get("active_job_id")
             last_run = data.get("last_run_id")
             last_job = data.get("last_job_id")
@@ -285,7 +279,7 @@ def _build_case_summary(case_dir: Path, config: LoaderConfig) -> dict[str, Any]:
             summary_parts.append("project")
     elif kind == "auto_adjust" and isinstance(auto_result, dict):
         iters = auto_result.get("iterations") if isinstance(auto_result.get("iterations"), list) else []
-        iterations_count = sum(1 for path in auto_dir.iterdir() if _ITER_RE.match(path.name)) if auto_dir.exists() else 0
+        iterations_count = len(_read_iteration_series(auto_dir))
         best_fit = auto_result.get("best_fit_score")
         target = auto_result.get("target_score")
         status = auto_result.get("status")
@@ -336,34 +330,58 @@ def _list_auto_adjust_iterations(case_dir: Path, config: LoaderConfig) -> list[d
     auto_dir = case_dir / "auto_adjust"
     if not auto_dir.exists():
         return []
-    items: list[dict[str, Any]] = []
-    for iter_dir in sorted(auto_dir.iterdir(), key=lambda path: path.name.lower()):
-        match = _ITER_RE.match(iter_dir.name)
-        if not iter_dir.is_dir() or not match:
-            continue
+    series = _read_iteration_series(auto_dir)
+    snapshot_iterations = _read_snapshot_iterations(auto_dir)
+    return [_normalize_series_item(auto_dir, item, config, snapshot_iterations) for item in series]
+
+
+def _read_iteration_series(auto_dir: Path) -> list[dict[str, Any]]:
+    payload = _read_json(auto_dir / "iteration_series.json")
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def _read_snapshot_iterations(auto_dir: Path) -> set[int]:
+    payload = _read_json(auto_dir / "snapshot_index.json")
+    values = payload.get("snapshot_iterations") if isinstance(payload, dict) else None
+    if not isinstance(values, list):
+        return set()
+    result: set[int] = set()
+    for value in values:
+        if isinstance(value, int):
+            result.add(value)
+    return result
+
+
+def _normalize_series_item(auto_dir: Path, item: dict[str, Any], config: LoaderConfig, snapshot_iterations: set[int]) -> dict[str, Any]:
+    iteration = item.get("iteration")
+    iteration_int = int(iteration) if isinstance(iteration, int) else 0
+    iter_id = str(item.get("iter_id") or f"iter_{iteration_int:04d}")
+    iter_dir = auto_dir / iter_id
+    diff_image_url = None
+    can_open_detail = bool(item.get("can_open_detail") or item.get("is_snapshot") or iteration_int in snapshot_iterations)
+    if can_open_detail and iter_dir.is_dir():
         decision_payload = _read_json(iter_dir / "decision.json")
-        if not isinstance(decision_payload, dict):
-            continue
-        decision = decision_payload.get("decision") if isinstance(decision_payload.get("decision"), dict) else {}
-        diff_image_url = _decision_diff_image_url(iter_dir, decision_payload, config)
-        items.append(
-            {
-                "iter_id": iter_dir.name,
-                "iteration": decision_payload.get("iteration", int(match.group(1))),
-                "kind": "auto_adjust",
-                "selected_stage": decision_payload.get("selected_stage"),
-                "diff_score_before": decision_payload.get("diff_score_before"),
-                "fit_score_before": decision_payload.get("fit_score_before"),
-                "target_score": decision_payload.get("target_score"),
-                "stop_reason": decision.get("stop_reason"),
-                "iteration_gain": decision.get("iteration_gain"),
-                "changes_count": len(decision.get("changes", []) if isinstance(decision.get("changes"), list) else []),
-                "applied_lmat": decision.get("applied_lmat"),
-                "diff_image_url": diff_image_url,
-            }
-        )
-    items.sort(key=lambda item: int(item["iteration"]) if isinstance(item.get("iteration"), int) else 0)
-    return items
+        if isinstance(decision_payload, dict):
+            diff_image_url = _decision_diff_image_url(iter_dir, decision_payload, config)
+    return {
+        "iter_id": iter_id,
+        "iteration": iteration_int,
+        "kind": item.get("kind") or "auto_adjust",
+        "selected_stage": item.get("selected_stage"),
+        "diff_score_before": item.get("diff_score_before"),
+        "fit_score_before": item.get("fit_score_before"),
+        "target_score": item.get("target_score"),
+        "stop_reason": item.get("stop_reason"),
+        "iteration_gain": item.get("iteration_gain"),
+        "changes_count": item.get("changes_count") if isinstance(item.get("changes_count"), int) else 0,
+        "applied_lmat": item.get("applied_lmat"),
+        "diff_image_url": diff_image_url,
+        "is_snapshot": can_open_detail,
+        "can_open_detail": can_open_detail,
+        "is_best": bool(item.get("is_best")),
+    }
 
 
 def _list_probe_iterations(case_dir: Path, config: LoaderConfig) -> list[dict[str, Any]]:
@@ -522,24 +540,15 @@ def _project_artifact_dir(case_dir: Path) -> Path | None:
     project = _read_json(project_json)
     if not isinstance(project, dict):
         return None
-    run_id = project.get("active_run_id") or project.get("last_run_id")
     job_id = project.get("active_job_id") or project.get("last_job_id")
-    if isinstance(job_id, str) and job_id and isinstance(run_id, str) and run_id:
-        run_dir = (case_dir / "jobs" / job_id / "runs" / run_id).resolve()
+    if isinstance(job_id, str) and job_id:
+        job_dir = (case_dir / "jobs" / job_id).resolve()
         try:
-            _ensure_within(run_dir, (case_dir / "jobs" / job_id / "runs").resolve())
+            _ensure_within(job_dir, (case_dir / "jobs").resolve())
         except ValueError:
             return None
-        if run_dir.is_dir():
-            return run_dir
-    if isinstance(run_id, str) and run_id:
-        run_dir = (case_dir / "runs" / run_id).resolve()
-        try:
-            _ensure_within(run_dir, (case_dir / "runs").resolve())
-        except ValueError:
-            return None
-        if run_dir.is_dir():
-            return run_dir
+        if job_dir.is_dir():
+            return job_dir
     return None
 
 
@@ -565,6 +574,22 @@ def _strip_iterations(auto_result: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in auto_result.items() if key != "iterations"}
 
 
+def _optimizer_artifact_dir(artifact_dir: Path) -> Path | None:
+    fit_config = _read_json(artifact_dir / "fit_config.json")
+    optimizer = str(fit_config.get("optimizer") or "") if isinstance(fit_config, dict) else ""
+    if optimizer:
+        candidate = artifact_dir / "optimizer_artifacts" / optimizer
+        if candidate.is_dir():
+            return candidate
+    root = artifact_dir / "optimizer_artifacts"
+    if not root.is_dir():
+        return None
+    for entry in sorted(root.iterdir(), key=lambda path: path.name.lower()):
+        if entry.is_dir():
+            return entry
+    return None
+
+
 def _decision_diff_image_url(iter_dir: Path, decision_payload: dict[str, Any], config: LoaderConfig) -> str | None:
     diff_image = iter_dir / "image_analysis" / "diff_visual.png"
     if diff_image.exists():
@@ -574,8 +599,7 @@ def _decision_diff_image_url(iter_dir: Path, decision_payload: dict[str, Any], c
         views = multiview.get("views") if isinstance(multiview.get("views"), list) else []
         for view in views:
             if isinstance(view, dict) and view.get("diff_image_path"):
-                remapped = _remap_moved_run_path(view.get("diff_image_path"), iter_dir)
-                return to_image_url(str(remapped or ""), config)
+                return to_image_url(str(view.get("diff_image_path") or ""), config)
     diff_analysis = decision_payload.get("diff_analysis") if isinstance(decision_payload.get("diff_analysis"), dict) else None
     if diff_analysis:
         return to_image_url(diff_analysis.get("diff_image_path", ""), config)
@@ -623,29 +647,20 @@ def _collect_multiview_images(iter_dir: Path, decision: Any, config: LoaderConfi
             or _extract_view_id(str(pair.get("reference") or view_payload.get("reference") or ""))
             or f"view_{index:03d}"
         )
-        reference_path = _remap_moved_run_path(
-            (
+        reference_path = (
             pair_analysis.get("reference_path")
             if isinstance(pair_analysis, dict) and pair_analysis.get("reference_path")
             else view_payload.get("reference") or pair.get("reference")
-            ),
-            iter_dir,
         )
-        candidate_path = _remap_moved_run_path(
-            (
+        candidate_path = (
             pair_analysis.get("candidate_path")
             if isinstance(pair_analysis, dict) and pair_analysis.get("candidate_path")
             else view_payload.get("candidate") or pair.get("candidate")
-            ),
-            iter_dir,
         )
-        diff_path = _remap_moved_run_path(
-            (
+        diff_path = (
             pair_analysis.get("diff_image_path")
             if isinstance(pair_analysis, dict) and pair_analysis.get("diff_image_path")
             else view_payload.get("diff_image_path")
-            ),
-            iter_dir,
         )
         rows.append(
             {
@@ -678,10 +693,8 @@ def _collect_multiview_images(iter_dir: Path, decision: Any, config: LoaderConfi
                     else None
                 ),
                 "analysis_path": str(
-                    _remap_moved_run_path(
-                        view_payload.get("analysis_path") or (iter_dir / "image_analysis" / f"pair_{index:02d}" / "diff_analysis.json"),
-                        iter_dir,
-                    )
+                    view_payload.get("analysis_path")
+                    or (iter_dir / "image_analysis" / f"pair_{index:02d}" / "diff_analysis.json")
                 ),
             }
         )
@@ -691,27 +704,6 @@ def _collect_multiview_images(iter_dir: Path, decision: Any, config: LoaderConfi
 def _extract_view_id(value: str) -> str | None:
     match = re.search(r"(v\d{3}_yaw-?\d+(?:\.\d+)?_pitch-?\d+(?:\.\d+)?)", value)
     return match.group(1) if match else None
-
-
-def _remap_moved_run_path(value: Any, iter_dir: Path) -> Any:
-    """Map legacy absolute run paths after a run is moved under jobs/<job>/runs."""
-
-    if not value:
-        return value
-    raw = Path(str(value))
-    if raw.exists():
-        return value
-    parts = list(raw.parts)
-    if "auto_adjust" not in parts:
-        return value
-    try:
-        auto_index = parts.index("auto_adjust")
-        relative = Path(*parts[auto_index:])
-        run_dir = iter_dir.parents[1]
-        candidate = run_dir / relative
-    except (IndexError, ValueError):
-        return value
-    return str(candidate) if candidate.exists() else value
 
 
 def _first_lmat_text(candidate_dir: Path) -> str | None:

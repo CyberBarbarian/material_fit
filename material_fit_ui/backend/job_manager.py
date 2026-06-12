@@ -2,11 +2,11 @@
 
 Each job:
 
-- creates ``jobs/<job_id>/runs/<date-settings>/`` and writes that run's ``fit_config.json``;
+- creates ``jobs/<job_id>/`` and writes that job's ``fit_config.json``;
 - spawns ``python -m tools.material_fit.fit_material --config <path> ...``;
 - captures stdout/stderr to ``jobs/<job_id>/job.log``;
 - maintains ``jobs/<job_id>/job.json`` with status, observed iterations, etc.;
-- a watcher thread tails ``jobs/<job_id>/runs/<run_id>/auto_adjust/iter_*/decision.json`` so the UI can
+- a watcher thread tails ``jobs/<job_id>/auto_adjust/iteration_series.json`` so the UI can
   poll the project's iteration list and immediately see the latest decision
   without waiting for the whole run to finish.
 
@@ -21,7 +21,6 @@ import json
 import os
 import secrets
 import signal
-import shutil
 import subprocess
 import sys
 import threading
@@ -55,7 +54,6 @@ class Job:
     return_code: int | None = None
     error: str | None = None
     args: list[str] = field(default_factory=list)
-    run_id: str | None = None
     run_dir: str | None = None
     iterations_observed: int = 0
     last_iter_id: str | None = None
@@ -72,7 +70,6 @@ class Job:
             "return_code": self.return_code,
             "error": self.error,
             "args": list(self.args),
-            "run_id": self.run_id,
             "run_dir": self.run_dir,
             "iterations_observed": self.iterations_observed,
             "last_iter_id": self.last_iter_id,
@@ -118,9 +115,8 @@ def start_job(
     else:
         default_iterations = 6
     job_id = _new_job_id()
-    run_id = _new_run_id(algo)
     job_dir = paths.jobs_dir / job_id
-    run_dir = job_dir / "runs" / run_id
+    run_dir = job_dir
     run_dir.mkdir(parents=True, exist_ok=False)
     fit_config = _fit_config_for_run(fit_config, run_dir)
     fit_config["project_preflight_dir"] = str((paths.project_dir / "preflight").resolve())
@@ -137,7 +133,6 @@ def start_job(
             {
                 "job_id": job_id,
                 "project_id": project_id,
-                "run_id": run_id,
                 "run_dir": str(run_dir),
                 "fit_config_path": str(fit_config_path),
                 "algorithm_config": algo,
@@ -244,7 +239,6 @@ def start_job(
         status="running",
         started_at=_now_iso(),
         args=args,
-        run_id=run_id,
         run_dir=str(run_dir),
     )
 
@@ -266,8 +260,8 @@ def start_job(
         {
             "active_job_id": job_id,
             "last_job_id": job_id,
-            "active_run_id": run_id,
-            "last_run_id": run_id,
+            "active_run_id": None,
+            "last_run_id": None,
         },
         config=config,
     )
@@ -280,30 +274,6 @@ def start_job(
     )
     watcher.start()
     return job.to_dict()
-
-
-def _clear_previous_iteration_outputs(project_dir: Path) -> None:
-    """Reset per-run iteration artifacts before launching a new job.
-
-    Job history remains under ``jobs/``; only the files that drive the
-    timeline/detail UI are removed so every new auto-adjust run starts
-    from ``iter_0000`` visually and analytically.
-    """
-
-    auto_dir = project_dir / "auto_adjust"
-    if auto_dir.exists():
-        for entry in auto_dir.iterdir():
-            if entry.is_dir() and entry.name.startswith("iter_"):
-                shutil.rmtree(entry, ignore_errors=True)
-        for name in ("state.json", "auto_adjust_result.json"):
-            target = auto_dir / name
-            if target.exists():
-                target.unlink()
-    iter_dir = project_dir / "iterations"
-    if iter_dir.exists():
-        for entry in iter_dir.iterdir():
-            if entry.is_dir() and entry.name.startswith("iter_"):
-                shutil.rmtree(entry, ignore_errors=True)
 
 
 def list_jobs(project_id: str, config: LoaderConfig | None = None) -> list[dict[str, Any]]:
@@ -361,7 +331,6 @@ def _job_from_dict(data: dict[str, Any]) -> Job:
         return_code=int(data["return_code"]) if data.get("return_code") not in (None, "") else None,
         error=str(data.get("error")) if data.get("error") else None,
         args=[str(item) for item in data.get("args", [])] if isinstance(data.get("args"), list) else [],
-        run_id=str(data.get("run_id")) if data.get("run_id") else None,
         run_dir=str(data.get("run_dir")) if data.get("run_dir") else None,
         iterations_observed=int(data.get("iterations_observed") or 0),
         last_iter_id=str(data.get("last_iter_id")) if data.get("last_iter_id") else None,
@@ -396,12 +365,11 @@ def _clear_active_job_if_current(job: Job, config: LoaderConfig) -> None:
         project = get_project(job.project_id, config)
         patch: dict[str, Any] = {
             "last_job_id": job.job_id,
-            "last_run_id": job.run_id,
+            "last_run_id": None,
         }
         if project.get("active_job_id") == job.job_id:
             patch["active_job_id"] = None
-        if project.get("active_run_id") == job.run_id:
-            patch["active_run_id"] = None
+        patch["active_run_id"] = None
         patch_project(job.project_id, patch, config=config)
     except Exception:  # noqa: BLE001
         pass
@@ -547,7 +515,7 @@ def _watch_job(
                     "active_job_id": None,
                     "last_job_id": job.job_id,
                     "active_run_id": None,
-                    "last_run_id": job.run_id,
+                    "last_run_id": None,
                 },
                 config=config,
             )
@@ -558,46 +526,47 @@ def _watch_job(
 def _scan_iterations(auto_dir: Path, seen: set[str]) -> tuple[str, dict[str, Any]] | None:
     if not auto_dir.is_dir():
         return None
-    new_one: tuple[str, dict[str, Any]] | None = None
-    for entry in sorted(auto_dir.iterdir(), key=lambda path: path.name.lower()):
-        if not entry.is_dir() or not entry.name.startswith("iter_"):
-            continue
-        decision = entry / "decision.json"
-        if not decision.exists() or entry.name in seen:
-            continue
-        seen.add(entry.name)
-        summary = _summarize_decision(decision)
-        if summary is not None:
-            new_one = (entry.name, summary)
-    return new_one
+    return _scan_iteration_series(auto_dir, seen)
 
 
-def _summarize_decision(path: Path) -> dict[str, Any] | None:
+def _scan_iteration_series(auto_dir: Path, seen: set[str]) -> tuple[str, dict[str, Any]] | None:
+    series_path = auto_dir / "iteration_series.json"
+    if not series_path.exists():
+        return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        data = json.loads(series_path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
-    if not isinstance(data, dict):
+    if not isinstance(data, list):
         return None
-    inner = data.get("decision") if isinstance(data.get("decision"), dict) else {}
-    perceptual = data.get("perceptual_signals") if isinstance(data.get("perceptual_signals"), dict) else {}
-    human = perceptual.get("human_accept") if isinstance(perceptual.get("human_accept"), dict) else {}
-    research = perceptual.get("research_metrics") if isinstance(perceptual.get("research_metrics"), dict) else {}
-    return {
-        "iteration": data.get("iteration"),
-        "selected_stage": data.get("selected_stage"),
-        "fit_score_before": data.get("fit_score_before"),
-        "diff_score_before": data.get("diff_score_before"),
-        "research_score": research.get("score"),
-        "research_loss": research.get("loss"),
-        "human_accept_score": human.get("score"),
-        "perceptual_fit_score": perceptual.get("fit_score"),
-        "weighted_mae": perceptual.get("weighted_mae"),
-        "stop_reason": inner.get("stop_reason"),
-        "changes_count": len(inner.get("changes") or []) if isinstance(inner.get("changes"), list) else 0,
-        "optimizer": inner.get("optimizer"),
-        "cma_es": inner.get("cma_es"),
-    }
+    latest: tuple[str, dict[str, Any]] | None = None
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        iteration = item.get("iteration")
+        iter_id = str(item.get("iter_id") or (f"iter_{int(iteration):04d}" if isinstance(iteration, int) else ""))
+        if not iter_id or iter_id in seen:
+            continue
+        seen.add(iter_id)
+        latest = (
+            iter_id,
+            {
+                "iteration": iteration,
+                "selected_stage": item.get("selected_stage"),
+                "fit_score_before": item.get("fit_score_before"),
+                "diff_score_before": item.get("diff_score_before"),
+                "research_score": item.get("research_score"),
+                "research_loss": item.get("research_loss"),
+                "human_accept_score": item.get("human_accept_score"),
+                "perceptual_fit_score": item.get("perceptual_fit_score"),
+                "weighted_mae": item.get("weighted_mae"),
+                "stop_reason": item.get("stop_reason"),
+                "changes_count": item.get("changes_count"),
+                "optimizer": item.get("optimizer"),
+                "is_snapshot": bool(item.get("is_snapshot")),
+            },
+        )
+    return latest
 
 
 def _save_job(job: Job, state_path: Path) -> None:
@@ -614,7 +583,6 @@ def _save_job_result(job: Job, job_dir: Path) -> None:
         "error": job.error,
         "started_at": job.started_at,
         "ended_at": job.ended_at,
-        "run_id": job.run_id,
         "run_dir": job.run_dir,
         "iterations_observed": job.iterations_observed,
         "last_iter_id": job.last_iter_id,
@@ -652,31 +620,27 @@ def _new_job_id() -> str:
     return f"job_{stamp}_{secrets.token_hex(3)}"
 
 
-def _new_run_id(algo: dict[str, Any]) -> str:
-    stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-    optimizer = _slug(str(algo.get("optimizer", "optimizer")))
-    score_mode = _slug(str(algo.get("fit_score_mode", "score")))
-    adjust_mode = _slug(str(algo.get("auto_adjust_mode", "mode")))
-    return f"{stamp}-{optimizer}-{score_mode}-{adjust_mode}-{secrets.token_hex(2)}"
-
-
-def _slug(value: str) -> str:
-    safe = []
-    for ch in value.strip().lower():
-        if ch.isalnum():
-            safe.append(ch)
-        elif ch in {"_", "-"}:
-            safe.append("-")
-    slug = "".join(safe).strip("-")
-    while "--" in slug:
-        slug = slug.replace("--", "-")
-    return slug or "default"
-
-
 def _fit_config_for_run(fit_config: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     payload = dict(fit_config)
     payload["output_dir"] = str(run_dir.resolve())
     payload["external_backup_dir"] = str((run_dir / "external_backups").resolve())
+    semantic_context = {
+        key: payload.pop(key)
+        for key in (
+            "effect_graph",
+            "effective_laya_control_schema",
+            "module_plan",
+            "semantic_schema_integrity",
+        )
+        if key in payload
+    }
+    if semantic_context:
+        semantic_context_path = run_dir / "semantic_context.json"
+        semantic_context_path.write_text(
+            json.dumps(semantic_context, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        payload["semantic_context_path"] = str(semantic_context_path.resolve())
     screen_capture = dict(payload.get("screen_capture") or {})
     capture_dir = run_dir / "captures"
     screen_capture["capture_dir"] = str(capture_dir.resolve())

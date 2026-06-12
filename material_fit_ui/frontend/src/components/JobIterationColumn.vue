@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { IterationKind, IterationSummary } from '../types';
 
-defineProps<{
+const props = defineProps<{
   iterations: IterationSummary[];
   modelValue: string;
   selectedJobId: string;
@@ -37,12 +38,14 @@ function stageLabel(entry: IterationSummary): string {
   if (entry.kind === 'diff_only') return '一次性差异分析';
   return entry.selected_stage ?? entry.stop_reason ?? '—';
 }
+
+const openableIterations = computed(() => props.iterations.filter((entry) => entry.can_open_detail !== false));
 </script>
 
 <template>
   <div class="job-iteration-column">
     <button
-      v-for="entry in iterations"
+      v-for="entry in openableIterations"
       :key="entry.iter_id"
       type="button"
       class="iter-item"
@@ -70,7 +73,7 @@ function stageLabel(entry: IterationSummary): string {
     <p v-if="!selectedJobId" class="iter-empty muted small">
       请先选择一个实验 job。
     </p>
-    <p v-else-if="!iterations.length" class="iter-empty muted small">
+    <p v-else-if="!openableIterations.length" class="iter-empty muted small">
       当前 job 尚未跑出迭代。
     </p>
   </div>

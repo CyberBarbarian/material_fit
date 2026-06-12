@@ -52,7 +52,7 @@ def write_summary_report(
     if isinstance(adjustment_result, dict):
         lines.extend(_format_adjustment_result(adjustment_result))
     if extra:
-        lines.extend(["", "## Extra", "", "```json", json.dumps(extra, ensure_ascii=False, indent=2), "```"])
+        lines.extend(_format_extra_summary(extra))
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -130,6 +130,25 @@ def _format_adjustment_result(adjustment_result: dict[str, Any]) -> list[str]:
         else:
             lines.append("No parameter changes in this iteration.")
         lines.append("")
+    return lines
+
+
+def _format_extra_summary(extra: dict[str, Any]) -> list[str]:
+    emitted = extra.get("emitted_candidates")
+    image_analysis = extra.get("image_analysis")
+    adjustment_result = extra.get("adjustment_result")
+    lines = ["", "## Extra Summary", ""]
+    if isinstance(emitted, list):
+        lines.append(f"- Probe candidates emitted: `{len(emitted)}`")
+    if isinstance(image_analysis, dict):
+        lines.append(f"- Initial image analysis score: `{image_analysis.get('score', '')}`")
+        if image_analysis.get("report_path"):
+            lines.append(f"- Initial image analysis report: `{image_analysis.get('report_path')}`")
+    if isinstance(adjustment_result, dict):
+        if adjustment_result.get("iteration_series_path"):
+            lines.append(f"- Iteration series: `{adjustment_result.get('iteration_series_path')}`")
+        if adjustment_result.get("snapshot_index_path"):
+            lines.append(f"- Snapshot index: `{adjustment_result.get('snapshot_index_path')}`")
     return lines
 
 

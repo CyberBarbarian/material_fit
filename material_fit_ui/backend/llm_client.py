@@ -19,12 +19,14 @@ class LlmRuntimeConfig:
     api_key: str
     model: str
     timeout_seconds: float = 120.0
+    temperature: float | None = None
 
     def public_dict(self) -> dict[str, Any]:
         return {
             "base_url": self.base_url,
             "model": self.model,
             "timeout_seconds": self.timeout_seconds,
+            "temperature": self.temperature,
             "api_key_configured": bool(self.api_key),
         }
 
@@ -64,11 +66,13 @@ def load_llm_runtime_config(project_root: Path | None = None) -> LlmRuntimeConfi
     )
     model = pick("OPENAI_MODEL", "LLM_MODEL", default="gpt-4o-mini")
     timeout = _float(pick("OPENAI_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"), 120.0)
+    temperature = _optional_float(pick("OPENAI_TEMPERATURE", "LLM_TEMPERATURE"))
     return LlmRuntimeConfig(
         base_url=base_url.rstrip("/"),
         api_key=api_key,
         model=model,
         timeout_seconds=timeout,
+        temperature=temperature,
     )
 
 
@@ -83,7 +87,6 @@ def run_shader_semantics_llm(
     runtime = runtime or load_llm_runtime_config()
     body = {
         "model": runtime.model,
-        "temperature": 0,
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -103,6 +106,8 @@ def run_shader_semantics_llm(
             },
         ],
     }
+    if runtime.temperature is not None:
+        body["temperature"] = runtime.temperature
     if max_tokens is not None and max_tokens > 0:
         body["max_tokens"] = max_tokens
     payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -168,6 +173,15 @@ def _float(value: str, default: float) -> float:
     except ValueError:
         return default
     return parsed if parsed > 0 else default
+
+
+def _optional_float(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _redact_secret(text: str, secret: str) -> str:

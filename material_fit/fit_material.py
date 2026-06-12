@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import shutil
 import time
 from pathlib import Path
@@ -182,6 +183,7 @@ def main() -> int:
     config_path = Path(args.config)
     config = json.loads(config_path.read_text(encoding="utf-8"))
     project_root = config_path.resolve().parents[2]
+    config = _load_external_config_fragments(config, project_root)
     output_dir = _resolve_path(project_root, config.get("output_dir", "tools/material_fit/output/default"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -222,15 +224,29 @@ def main() -> int:
         stage_plan_payload = _semantic_stage_plan_from_effect_graph(config.get("effect_graph")) or stage_plan_payload
     unity_material_params = _load_unity_material_params(config, project_root)
 
+    _write_json(
+        output_dir / "run_manifest.json",
+        _build_run_manifest(
+            config=config,
+            optimizer=configured_optimizer,
+            laya_shader=laya_shader,
+            unity_shader=unity_shader,
+            initial_params=initial_params,
+            unity_material_params=unity_material_params,
+            auto_adjust=args.auto_adjust,
+            probe_candidates=bool(stages and not args.auto_adjust and max(args.max_candidates, 0) > 0),
+        ),
+    )
     _write_json(output_dir / "laya_shader_params.json", shader_info_to_dict(laya_shader))
     if unity_shader:
         _write_json(output_dir / "unity_shader_params.json", shader_info_to_dict(unity_shader))
     if unity_material_params:
         _write_json(output_dir / "unity_material_params.json", unity_material_params)
-    _write_json(output_dir / "laya_material_params.json", laya_material_params)
     _write_json(output_dir / "initial_params.json", initial_params)
-    _write_json(output_dir / "stage_plan.json", stage_plan_payload)
-    _write_json(output_dir / "adjustment_policies.json", [policy.__dict__ for policy in adjustment_policies])
+    if _optimizer_needs_stage_artifacts(configured_optimizer):
+        optimizer_dir = output_dir / "optimizer_artifacts" / configured_optimizer
+        _write_json(optimizer_dir / "stage_plan.json", stage_plan_payload)
+        _write_json(optimizer_dir / "adjustment_policies.json", [policy.__dict__ for policy in adjustment_policies])
 
     driver = RenderDriver(
         output_dir=output_dir,
@@ -239,7 +255,7 @@ def main() -> int:
         capture_config=config.get("laya_capture", {}),
     )
     emitted: list[dict[str, Any]] = []
-    if stages:
+    if stages and not args.auto_adjust:
         candidates = generate_probe_candidates(initial_params, stages[0], laya_shader.params)
         for index, candidate in enumerate(candidates[:max(args.max_candidates, 0)]):
             emitted.append(driver.capture_candidate(index, candidate) if args.capture else driver.render_candidate(index, candidate))
@@ -353,7 +369,7 @@ def main() -> int:
         laya_shader=laya_shader,
         unity_shader=unity_shader,
         laya_material_params=laya_material_params,
-        stages=stages,
+        stages=stages if _optimizer_needs_stage_artifacts(configured_optimizer) else [],
         extra={"emitted_candidates": emitted, "image_analysis": image_analysis, "adjustment_result": adjustment_result},
     )
     print(f"Material fit framework prepared: {output_dir}")
@@ -370,6 +386,73 @@ def main() -> int:
 def _resolve_path(project_root: Path, value: str | Path) -> Path:
     path = Path(value)
     return path if path.is_absolute() else project_root / path
+
+
+def _load_external_config_fragments(config: dict[str, Any], project_root: Path) -> dict[str, Any]:
+    """Load bulky run context files referenced by the lean fit_config."""
+
+    payload = dict(config)
+    semantic_context_path = payload.get("semantic_context_path")
+    if semantic_context_path:
+        path = _resolve_path(project_root, str(semantic_context_path))
+        try:
+            semantic_context = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"failed to load semantic_context_path: {path}") from exc
+        if isinstance(semantic_context, dict):
+            for key, value in semantic_context.items():
+                payload.setdefault(key, value)
+    return payload
+
+
+def _optimizer_needs_stage_artifacts(optimizer: str) -> bool:
+    return optimizer in {"heuristic", "semantic_group", "semantic_group_legacy_081"}
+
+
+def _build_run_manifest(
+    *,
+    config: dict[str, Any],
+    optimizer: str,
+    laya_shader: Any,
+    unity_shader: Any,
+    initial_params: dict[str, Any],
+    unity_material_params: dict[str, Any],
+    auto_adjust: bool,
+    probe_candidates: bool,
+) -> dict[str, Any]:
+    semantic_context_path = config.get("semantic_context_path")
+    return {
+        "schema_version": 1,
+        "case_name": config.get("case_name"),
+        "optimizer": optimizer,
+        "fit_score_mode": config.get("fit_score_mode", "research"),
+        "auto_adjust_mode": config.get("auto_adjust_mode", "fresh_fit"),
+        "target_score": config.get("auto_adjust_target_score"),
+        "laya_shader": {
+            "path": str(getattr(laya_shader, "path", "") or ""),
+            "name": getattr(laya_shader, "name", ""),
+            "param_count": len(getattr(laya_shader, "params", []) or []),
+            "define_count": len(getattr(laya_shader, "defines", []) or []),
+        },
+        "unity_shader": (
+            {
+                "path": str(getattr(unity_shader, "path", "") or ""),
+                "name": getattr(unity_shader, "name", ""),
+                "param_count": len(getattr(unity_shader, "params", []) or []),
+                "define_count": len(getattr(unity_shader, "defines", []) or []),
+            }
+            if unity_shader is not None
+            else None
+        ),
+        "initial_param_count": len(initial_params),
+        "unity_material_param_count": len(unity_material_params),
+        "semantic_context_path": semantic_context_path,
+        "artifact_policy": {
+            "stage_artifacts": _optimizer_needs_stage_artifacts(optimizer),
+            "probe_candidates": bool(probe_candidates),
+            "auto_adjust": bool(auto_adjust),
+        },
+    }
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -502,6 +585,9 @@ def _run_auto_adjustment(
     state = AdjustmentState(best_params=dict(initial_params), best_fit_params=dict(initial_params))
     current_params = dict(initial_params)
     result_iterations: list[dict[str, Any]] = []
+    iteration_series: list[dict[str, Any]] = []
+    snapshot_iterations: set[int] = set()
+    full_payloads: dict[int, dict[str, Any]] = {}
     best_fit_score = -math.inf
     candidate_override: str | dict[str, str] | None = None
     require_real_closed_loop = apply_lmat and capture_screen_after_apply
@@ -551,20 +637,17 @@ def _run_auto_adjustment(
         return payload
 
     analysis_performance = _resolve_analysis_performance(config)
-    p2_interval = int(analysis_performance["perceptual_optional_interval"])
-    diff_visual_interval = int(analysis_performance["diff_visual_interval"])
-    artifact_save_interval = int(analysis_performance["artifact_save_interval"])
+    snapshot_interval = int(analysis_performance["snapshot_interval"])
     keep_last_n_artifacts = int(analysis_performance["keep_last_n_artifacts"])
     multiview_workers = analysis_performance["multiview_workers"]
     for local_index in range(iterations):
         iteration_started = time.perf_counter()
         iteration = state.iteration
         timing: dict[str, Any] = {
-            "perceptual_optional_interval": p2_interval,
-            "perceptual_optional_enabled": _should_compute_optional_metrics(iteration, p2_interval),
-            "diff_visual_interval": diff_visual_interval,
-            "diff_visual_enabled": _should_generate_diff_visual(iteration, diff_visual_interval),
-            "artifact_save_interval": artifact_save_interval,
+            "snapshot_interval": snapshot_interval,
+            "is_snapshot": _is_snapshot_iteration(iteration, snapshot_interval),
+            "perceptual_optional_enabled": _is_snapshot_iteration(iteration, snapshot_interval),
+            "diff_visual_enabled": _is_snapshot_iteration(iteration, snapshot_interval),
             "keep_last_n_artifacts": keep_last_n_artifacts,
             "multiview_workers": multiview_workers,
         }
@@ -648,7 +731,8 @@ def _run_auto_adjustment(
         analysis["optimization_fit_score"] = fit_score
         analysis["optimization_fit_score_source"] = multiview_summary.get("optimization_fit_score_source")
         analysis["multiview"] = multiview_analysis
-        if fit_score > best_fit_score:
+        is_new_best = fit_score > best_fit_score
+        if is_new_best:
             best_fit_score = fit_score
         if fit_score > state.best_fit_score:
             state.best_fit_score = fit_score
@@ -672,9 +756,16 @@ def _run_auto_adjustment(
                 "initial_editor_capture_result": initial_editor_capture_result,
                 "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
-            _write_json(iteration_dir / "decision.json", iteration_payload)
-            result_iterations.append(iteration_payload)
-            state.history.append(iteration_payload)
+            _record_iteration_outputs(
+                auto_dir=auto_dir,
+                iteration_payload=iteration_payload,
+                result_iterations=result_iterations,
+                iteration_series=iteration_series,
+                snapshot_iterations=snapshot_iterations,
+                full_payloads=full_payloads,
+            is_snapshot=True,
+                is_best=is_new_best,
+            )
             terminal_reason = "target_reached"
             break
 
@@ -702,9 +793,16 @@ def _run_auto_adjustment(
                 "initial_editor_capture_result": initial_editor_capture_result,
                 "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
-            _write_json(iteration_dir / "decision.json", iteration_payload)
-            result_iterations.append(iteration_payload)
-            state.history.append(iteration_payload)
+            _record_iteration_outputs(
+                auto_dir=auto_dir,
+                iteration_payload=iteration_payload,
+                result_iterations=result_iterations,
+                iteration_series=iteration_series,
+                snapshot_iterations=snapshot_iterations,
+                full_payloads=full_payloads,
+            is_snapshot=True,
+                is_best=is_new_best,
+            )
             terminal_reason = "global_no_improvement"
             break
 
@@ -762,9 +860,16 @@ def _run_auto_adjustment(
                 "initial_editor_capture_result": initial_editor_capture_result,
                 "timing": {**timing, "iteration_total_ms": _elapsed_ms(iteration_started)},
             }
-            _write_json(iteration_dir / "decision.json", iteration_payload)
-            result_iterations.append(iteration_payload)
-            state.history.append(iteration_payload)
+            _record_iteration_outputs(
+                auto_dir=auto_dir,
+                iteration_payload=iteration_payload,
+                result_iterations=result_iterations,
+                iteration_series=iteration_series,
+                snapshot_iterations=snapshot_iterations,
+                full_payloads=full_payloads,
+            is_snapshot=True,
+                is_best=is_new_best,
+            )
             terminal_reason = str(decision.get("stop_reason") or "strategy_stopped")
             break
         if diff_score < state.best_score - 1e-6:
@@ -944,17 +1049,27 @@ def _run_auto_adjustment(
         strategy_stop = strategy.stop_reason()
         if strategy_stop:
             iteration_payload["decision"]["strategy_stop_reason"] = strategy_stop
-        _write_json(iteration_dir / "decision.json", iteration_payload)
-        result_iterations.append(iteration_payload)
-        state.history.append(iteration_payload)
+        is_best_iteration = is_new_best
+        _record_iteration_outputs(
+            auto_dir=auto_dir,
+            iteration_payload=iteration_payload,
+            result_iterations=result_iterations,
+            iteration_series=iteration_series,
+            snapshot_iterations=snapshot_iterations,
+            full_payloads=full_payloads,
+            is_snapshot=bool(timing["is_snapshot"]),
+            is_best=is_best_iteration,
+        )
         _prune_iteration_artifacts(
             auto_dir,
-            result_iterations,
+            iteration_series,
             current_iteration=iteration,
-            artifact_save_interval=artifact_save_interval,
+            snapshot_interval=snapshot_interval,
             keep_last_n=keep_last_n_artifacts,
             always_keep_best=bool(analysis_performance["always_keep_best_artifact"]),
             always_keep_first=bool(analysis_performance["always_keep_first_artifact"]),
+            snapshot_iterations=snapshot_iterations,
+            full_payloads=full_payloads,
         )
         current_params = next_params
         state.iteration += 1
@@ -993,8 +1108,50 @@ def _run_auto_adjustment(
     else:
         final_best_restore = None
 
+    # The historical full state duplicated every iteration payload and made
+    # long runs huge. Persist only the resumable/high-level state plus a compact
+    # series file for UI timelines.
+    state.history = list(iteration_series)
     save_adjustment_state(auto_dir / "state.json", state)
+    if iteration_series:
+        final_iteration = int(iteration_series[-1].get("iteration", len(iteration_series) - 1))
+        snapshot_iterations.add(final_iteration)
+        if keep_last_n_artifacts > 0:
+            for item in iteration_series[-keep_last_n_artifacts:]:
+                value = item.get("iteration")
+                if isinstance(value, int):
+                    snapshot_iterations.add(value)
+        best_iteration = _best_recorded_iteration(iteration_series)
+        if best_iteration is not None:
+            snapshot_iterations.add(best_iteration)
+            best_payload = full_payloads.get(best_iteration)
+            if isinstance(best_payload, dict):
+                _write_json(auto_dir / f"iter_{best_iteration:04d}" / "decision.json", best_payload)
+        for snapshot_iteration in snapshot_iterations:
+            snapshot_payload = full_payloads.get(snapshot_iteration)
+            if isinstance(snapshot_payload, dict):
+                _write_json(auto_dir / f"iter_{snapshot_iteration:04d}" / "decision.json", snapshot_payload)
+        _mark_series_snapshots(iteration_series, snapshot_iterations)
+        _write_json(auto_dir / "iteration_series.json", iteration_series)
+        _write_snapshot_index(auto_dir, iteration_series, snapshot_iterations)
+        _prune_iteration_artifacts(
+            auto_dir,
+            iteration_series,
+            current_iteration=final_iteration,
+            snapshot_interval=snapshot_interval,
+            keep_last_n=keep_last_n_artifacts,
+            always_keep_best=bool(analysis_performance["always_keep_best_artifact"]),
+            always_keep_first=bool(analysis_performance["always_keep_first_artifact"]),
+            snapshot_iterations=snapshot_iterations,
+            full_payloads=full_payloads,
+            final_cleanup=True,
+        )
     optimizer_research_summary = strategy.research_summary()
+    if isinstance(optimizer_research_summary, dict) and optimizer_research_summary:
+        _write_json(
+            output_dir / "optimizer_artifacts" / optimizer / "research_summary.json",
+            optimizer_research_summary,
+        )
     final_status = _resolve_auto_adjust_status(
         best_fit_score=best_fit_score,
         target_score=target_score,
@@ -1018,7 +1175,9 @@ def _run_auto_adjustment(
             "selection_metric": "fit_score",
             "note": "Final output is restored to best-fit params instead of the last explored candidate.",
         },
-        "iterations": result_iterations,
+        "iterations": iteration_series,
+        "iteration_series_path": str(auto_dir / "iteration_series.json"),
+        "snapshot_index_path": str(auto_dir / "snapshot_index.json"),
         "state_path": str(auto_dir / "state.json"),
         "fit_score_mode": fit_score_mode,
         "optimizer": optimizer,
@@ -1059,15 +1218,10 @@ def _resolve_auto_adjust_status(
 def _resolve_analysis_performance(config: dict[str, Any]) -> dict[str, Any]:
     perf = config.get("analysis_performance")
     perf = perf if isinstance(perf, dict) else {}
-    p2_interval = _coerce_interval(
-        perf.get("perceptual_optional_interval"),
-        _resolve_optional_metric_interval(config),
+    snapshot_interval = _coerce_interval(
+        perf.get("snapshot_interval"),
+        50,
     )
-    diff_interval = _coerce_interval(
-        perf.get("diff_visual_interval"),
-        _resolve_diff_visual_interval(config, p2_interval),
-    )
-    artifact_interval = _coerce_interval(perf.get("artifact_save_interval"), 50)
     keep_last_n = _coerce_interval(perf.get("keep_last_n_artifacts"), 5)
     workers = perf.get("multiview_workers", config.get("multiview_analysis_workers", 1))
     if isinstance(workers, str):
@@ -1079,9 +1233,7 @@ def _resolve_analysis_performance(config: dict[str, Any]) -> dict[str, Any]:
             workers_value = 1
     return {
         "multiview_workers": workers_value,
-        "perceptual_optional_interval": p2_interval,
-        "diff_visual_interval": diff_interval,
-        "artifact_save_interval": artifact_interval,
+        "snapshot_interval": snapshot_interval,
         "keep_last_n_artifacts": keep_last_n,
         "always_keep_best_artifact": bool(perf.get("always_keep_best_artifact", True)),
         "always_keep_first_artifact": bool(perf.get("always_keep_first_artifact", True)),
@@ -1095,32 +1247,116 @@ def _coerce_interval(value: Any, fallback: int) -> int:
         return max(0, int(fallback))
 
 
-def _resolve_optional_metric_interval(config: dict[str, Any]) -> int:
-    raw = config.get("perceptual_optional_interval", config.get("p2_perceptual_interval", 50))
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return 50
+def _is_snapshot_iteration(iteration: int, interval: int) -> bool:
+    if iteration == 0:
+        return True
+    return interval > 0 and iteration % interval == 0
 
 
-def _resolve_diff_visual_interval(config: dict[str, Any], fallback: int) -> int:
-    raw = config.get("diff_visual_interval", config.get("generate_diff_visual_interval", fallback))
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return fallback
+def _record_iteration_outputs(
+    *,
+    auto_dir: Path,
+    iteration_payload: dict[str, Any],
+    result_iterations: list[dict[str, Any]],
+    iteration_series: list[dict[str, Any]],
+    snapshot_iterations: set[int],
+    full_payloads: dict[int, dict[str, Any]],
+    is_snapshot: bool,
+    is_best: bool,
+) -> None:
+    iteration = int(iteration_payload.get("iteration", len(iteration_series)))
+    summary = _iteration_series_entry(iteration_payload, is_snapshot=is_snapshot, is_best=is_best)
+    iteration_series.append(summary)
+    result_iterations.append(summary)
+    full_payloads[iteration] = iteration_payload
+    if is_snapshot:
+        snapshot_iterations.add(iteration)
+        _write_json(auto_dir / f"iter_{iteration:04d}" / "decision.json", iteration_payload)
+    _write_json(auto_dir / "iteration_series.json", iteration_series)
+    _write_snapshot_index(auto_dir, iteration_series, snapshot_iterations)
 
 
-def _should_compute_optional_metrics(iteration: int, interval: int) -> bool:
-    if interval <= 0:
-        return False
-    return iteration == 0 or iteration % interval == 0
+def _iteration_series_entry(
+    iteration_payload: dict[str, Any],
+    *,
+    is_snapshot: bool,
+    is_best: bool,
+) -> dict[str, Any]:
+    decision = iteration_payload.get("decision") if isinstance(iteration_payload.get("decision"), dict) else {}
+    perceptual = (
+        iteration_payload.get("perceptual_signals")
+        if isinstance(iteration_payload.get("perceptual_signals"), dict)
+        else {}
+    )
+    human = perceptual.get("human_accept") if isinstance(perceptual.get("human_accept"), dict) else {}
+    research = perceptual.get("research_metrics") if isinstance(perceptual.get("research_metrics"), dict) else {}
+    timing = iteration_payload.get("timing") if isinstance(iteration_payload.get("timing"), dict) else {}
+    iteration = int(iteration_payload.get("iteration", 0))
+    return {
+        "iter_id": f"iter_{iteration:04d}",
+        "iteration": iteration,
+        "kind": "auto_adjust",
+        "selected_stage": iteration_payload.get("selected_stage"),
+        "diff_score_before": iteration_payload.get("diff_score_before"),
+        "fit_score_before": iteration_payload.get("fit_score_before"),
+        "target_score": iteration_payload.get("target_score"),
+        "stop_reason": decision.get("stop_reason"),
+        "iteration_gain": decision.get("iteration_gain"),
+        "changes_count": len(decision.get("changes") or []) if isinstance(decision.get("changes"), list) else 0,
+        "applied_lmat": decision.get("applied_lmat"),
+        "research_score": research.get("score"),
+        "research_loss": research.get("loss"),
+        "human_accept_score": human.get("score"),
+        "perceptual_fit_score": perceptual.get("fit_score"),
+        "weighted_mae": perceptual.get("weighted_mae"),
+        "optimizer": decision.get("optimizer"),
+        "semantic_action": decision.get("semantic_action"),
+        "timing": {
+            key: timing.get(key)
+            for key in (
+                "iteration_total_ms",
+                "candidate_capture_ms",
+                "analyze_multiview_ms",
+                "strategy_propose_ms",
+                "multiview_workers",
+            )
+            if key in timing
+        },
+        "is_snapshot": bool(is_snapshot),
+        "can_open_detail": bool(is_snapshot),
+        "is_best": bool(is_best),
+    }
 
 
-def _should_generate_diff_visual(iteration: int, interval: int) -> bool:
-    if interval <= 0:
-        return False
-    return iteration == 0 or iteration % interval == 0
+def _write_snapshot_index(auto_dir: Path, series: list[dict[str, Any]], snapshot_iterations: set[int]) -> None:
+    by_iter = {
+        int(item.get("iteration")): item
+        for item in series
+        if isinstance(item.get("iteration"), int)
+    }
+    snapshots = [
+        {
+            **by_iter.get(iteration, {"iteration": iteration, "iter_id": f"iter_{iteration:04d}"}),
+            "is_snapshot": True,
+            "can_open_detail": True,
+        }
+        for iteration in sorted(snapshot_iterations)
+    ]
+    _write_json(
+        auto_dir / "snapshot_index.json",
+        {
+            "snapshots": snapshots,
+            "snapshot_iterations": sorted(snapshot_iterations),
+        },
+    )
+
+
+def _mark_series_snapshots(series: list[dict[str, Any]], snapshot_iterations: set[int]) -> None:
+    for item in series:
+        iteration = item.get("iteration")
+        if isinstance(iteration, int) and iteration in snapshot_iterations:
+            item["is_snapshot"] = True
+            item["can_open_detail"] = True
 
 
 def _prune_iteration_artifacts(
@@ -1128,29 +1364,36 @@ def _prune_iteration_artifacts(
     iterations: list[dict[str, Any]],
     *,
     current_iteration: int,
-    artifact_save_interval: int,
+    snapshot_interval: int,
     keep_last_n: int,
     always_keep_best: bool,
     always_keep_first: bool,
+    snapshot_iterations: set[int] | None = None,
+    full_payloads: dict[int, dict[str, Any]] | None = None,
+    final_cleanup: bool = False,
 ) -> None:
     if keep_last_n < 0:
         keep_last_n = 0
     protected: set[int] = set(range(max(0, current_iteration - keep_last_n + 1), current_iteration + 1))
     if always_keep_first:
         protected.add(0)
-    if artifact_save_interval > 0:
+    if snapshot_interval > 0:
         protected.update(
             iteration
             for iteration in range(0, current_iteration + 1)
-            if iteration % artifact_save_interval == 0
+            if iteration % snapshot_interval == 0
         )
     if always_keep_best:
         best_iteration = _best_recorded_iteration(iterations)
         if best_iteration is not None:
             protected.add(best_iteration)
-            if best_iteration > 0:
-                # Iteration N scores the candidate rendered by N-1, so keep both.
-                protected.add(best_iteration - 1)
+    if snapshot_iterations:
+        protected.update(snapshot_iterations)
+    if full_payloads:
+        for iteration in list(protected):
+            payload = full_payloads.get(iteration)
+            if isinstance(payload, dict):
+                protected.update(_referenced_iteration_numbers(payload))
     if not auto_dir.exists():
         return
     for entry in auto_dir.iterdir():
@@ -1162,7 +1405,40 @@ def _prune_iteration_artifacts(
             continue
         if iteration in protected or iteration > current_iteration:
             continue
+        if final_cleanup:
+            shutil.rmtree(entry, ignore_errors=True)
+            continue
         _delete_heavy_iteration_artifacts(entry)
+        decision_path = entry / "decision.json"
+        if decision_path.exists():
+            decision_path.unlink()
+        candidate_dir = entry / "candidate"
+        if candidate_dir.exists():
+            for name in ("params.json",):
+                target = candidate_dir / name
+                if target.exists():
+                    target.unlink()
+            for lmat in candidate_dir.glob("*.lmat"):
+                lmat.unlink(missing_ok=True)
+
+
+def _referenced_iteration_numbers(iteration_payload: dict[str, Any]) -> set[int]:
+    refs: set[int] = set()
+    stack: list[Any] = [iteration_payload.get("input_pair"), iteration_payload.get("input_pairs")]
+    pattern = re.compile(r"iter_(\d{4,})")
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            stack.extend(value.values())
+        elif isinstance(value, list):
+            stack.extend(value)
+        elif isinstance(value, str):
+            for match in pattern.finditer(value.replace("\\", "/")):
+                try:
+                    refs.add(int(match.group(1)))
+                except ValueError:
+                    continue
+    return refs
 
 
 def _best_recorded_iteration(iterations: list[dict[str, Any]]) -> int | None:
