@@ -475,6 +475,16 @@ export interface MultiviewScoringConfig {
   primary_view_id: string;
 }
 
+export interface AnalysisPerformanceConfig {
+  multiview_workers: 'auto' | number | string;
+  perceptual_optional_interval: number;
+  diff_visual_interval: number;
+  artifact_save_interval: number;
+  keep_last_n_artifacts: number;
+  always_keep_best_artifact: boolean;
+  always_keep_first_artifact: boolean;
+}
+
 export interface AlgorithmConfig {
   max_iterations: number;
   target_score: number;
@@ -487,6 +497,7 @@ export interface AlgorithmConfig {
   dry_run: boolean;
   fit_score_mode: FitScoreMode;
   multiview_scoring?: MultiviewScoringConfig;
+  analysis_performance: AnalysisPerformanceConfig;
   auto_adjust_mode?: AutoAdjustMode;
   laya_refresh_probe?: LayaRefreshProbeConfig;
   optimizer: OptimizerKind;

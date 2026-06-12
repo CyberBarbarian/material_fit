@@ -30,6 +30,15 @@ function defaultConfig(): AlgorithmConfig {
     fit_score_mode: 'research',
     auto_adjust_mode: 'fresh_fit',
     optimizer: 'adaptive_response_search',
+    analysis_performance: {
+      multiview_workers: 'auto',
+      perceptual_optional_interval: 50,
+      diff_visual_interval: 50,
+      artifact_save_interval: 50,
+      keep_last_n_artifacts: 5,
+      always_keep_best_artifact: true,
+      always_keep_first_artifact: true,
+    },
     cma_es: {
       mode: 'warm',
       warm_start_iters: 12,
@@ -66,6 +75,10 @@ async function load(): Promise<void> {
       capture_screen_after_apply: false,
       use_laya_editor_capture: true,
       cma_es: { ...defaultConfig().cma_es, ...(data.algorithm_config?.cma_es ?? {}) },
+      analysis_performance: {
+        ...defaultConfig().analysis_performance,
+        ...(data.algorithm_config?.analysis_performance ?? {}),
+      },
       laya_editor_capture: {
         ...defaultConfig().laya_editor_capture,
         ...(data.algorithm_config?.laya_editor_capture ?? {}),
@@ -90,6 +103,7 @@ async function save(): Promise<void> {
       ...form,
       capture_screen_after_apply: false,
       use_laya_editor_capture: true,
+      analysis_performance: { ...defaultConfig().analysis_performance, ...form.analysis_performance },
       cma_es: { ...form.cma_es, mode: form.optimizer === 'cma_cold' ? 'cold' : 'warm' },
     };
     const result = await patchProject(project.value.id, {
@@ -102,6 +116,10 @@ async function save(): Promise<void> {
       capture_screen_after_apply: false,
       use_laya_editor_capture: true,
       cma_es: { ...defaultConfig().cma_es, ...(result.algorithm_config?.cma_es ?? {}) },
+      analysis_performance: {
+        ...defaultConfig().analysis_performance,
+        ...(result.algorithm_config?.analysis_performance ?? {}),
+      },
       laya_editor_capture: {
         ...defaultConfig().laya_editor_capture,
         ...(result.algorithm_config?.laya_editor_capture ?? {}),
@@ -268,6 +286,74 @@ async function save(): Promise<void> {
               <input id="cfg-rerender" type="number" min="0" max="60000" step="100" v-model.number="form.rerender_wait_ms" />
             </td>
           </tr>
+          <tr class="analysis-performance-block">
+            <td colspan="2">
+              <h3 class="sub">分析性能与产物保留</h3>
+              <table class="cfg-subtable">
+                <tbody>
+                  <tr>
+                    <td>
+                      <label for="perf-workers">multiview_workers</label>
+                      <p class="muted small">多视角图像分析并行 worker 数。auto = min(view 数, CPU 核心数)。可手动填 1/2/4/8。</p>
+                    </td>
+                    <td>
+                      <input id="perf-workers" type="text" placeholder="auto" v-model="form.analysis_performance.multiview_workers" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-p2">perceptual_optional_interval</label>
+                      <p class="muted small">LPIPS/DISTS 等 P2 感知指标计算间隔；0 = 关闭。默认 50。</p>
+                    </td>
+                    <td>
+                      <input id="perf-p2" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.perceptual_optional_interval" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-diff">diff_visual_interval</label>
+                      <p class="muted small">差异图 diff_visual.png 生成间隔；0 = 不生成。默认 50。</p>
+                    </td>
+                    <td>
+                      <input id="perf-diff" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.diff_visual_interval" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-artifact">artifact_save_interval</label>
+                      <p class="muted small">重图像产物保留间隔；0 = 仅保留 first/best/lastN。不会删除 decision.json。</p>
+                    </td>
+                    <td>
+                      <input id="perf-artifact" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.artifact_save_interval" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-lastn">keep_last_n_artifacts</label>
+                      <p class="muted small">始终保留最近 N 轮截图/图像分析，保证前端实时查看和下一轮评分不受影响。</p>
+                    </td>
+                    <td>
+                      <input id="perf-lastn" type="number" min="1" max="200" step="1" v-model.number="form.analysis_performance.keep_last_n_artifacts" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.analysis_performance.always_keep_best_artifact" /> always_keep_best_artifact</label>
+                      <p class="muted small">保留 best 轮及其前一轮的图像产物，便于复盘最优截图。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.analysis_performance.always_keep_best_artifact ? 'true' : 'false' }}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.analysis_performance.always_keep_first_artifact" /> always_keep_first_artifact</label>
+                      <p class="muted small">保留第 0 轮图像产物，便于比较初始状态。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.analysis_performance.always_keep_first_artifact ? 'true' : 'false' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
           <tr>
             <td>
               <label><input type="checkbox" v-model="form.apply_lmat" /> apply_lmat</label>
@@ -384,7 +470,8 @@ async function save(): Promise<void> {
 }
 .cfg-table label { font-weight: 600; }
 .cfg-table p { margin: 2px 0 0; }
-.cfg-table input[type="number"] {
+.cfg-table input[type="number"],
+.cfg-table input[type="text"] {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text);
@@ -405,7 +492,8 @@ async function save(): Promise<void> {
   min-width: 240px;
 }
 .cma-block td,
-.editor-capture-block td {
+.editor-capture-block td,
+.analysis-performance-block td {
   background: rgba(255, 200, 80, 0.04);
   border-left: 3px solid var(--accent, #c79a3d);
   padding-left: 12px;
@@ -429,7 +517,8 @@ async function save(): Promise<void> {
   font-family: var(--mono);
   white-space: nowrap;
 }
-.cfg-subtable input[type="number"] {
+.cfg-subtable input[type="number"],
+.cfg-subtable input[type="text"] {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text);

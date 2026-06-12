@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -549,8 +550,12 @@ def _run_auto_adjustment(
         _write_json(auto_dir / "auto_adjust_result.json", payload)
         return payload
 
-    p2_interval = _resolve_optional_metric_interval(config)
-    diff_visual_interval = _resolve_diff_visual_interval(config, p2_interval)
+    analysis_performance = _resolve_analysis_performance(config)
+    p2_interval = int(analysis_performance["perceptual_optional_interval"])
+    diff_visual_interval = int(analysis_performance["diff_visual_interval"])
+    artifact_save_interval = int(analysis_performance["artifact_save_interval"])
+    keep_last_n_artifacts = int(analysis_performance["keep_last_n_artifacts"])
+    multiview_workers = analysis_performance["multiview_workers"]
     for local_index in range(iterations):
         iteration_started = time.perf_counter()
         iteration = state.iteration
@@ -559,6 +564,9 @@ def _run_auto_adjustment(
             "perceptual_optional_enabled": _should_compute_optional_metrics(iteration, p2_interval),
             "diff_visual_interval": diff_visual_interval,
             "diff_visual_enabled": _should_generate_diff_visual(iteration, diff_visual_interval),
+            "artifact_save_interval": artifact_save_interval,
+            "keep_last_n_artifacts": keep_last_n_artifacts,
+            "multiview_workers": multiview_workers,
         }
         iteration_dir = auto_dir / f"iter_{iteration:04d}"
         iteration_dir.mkdir(parents=True, exist_ok=True)
@@ -618,6 +626,7 @@ def _run_auto_adjustment(
             aggregation_config=config.get("multiview_scoring") if isinstance(config.get("multiview_scoring"), dict) else None,
             compute_perceptual_optional=bool(timing["perceptual_optional_enabled"]),
             generate_diff_image=bool(timing["diff_visual_enabled"]),
+            workers=multiview_workers,
         )
         timing["analyze_multiview_ms"] = _elapsed_ms(timing_step)
         multiview_analysis = (
@@ -628,10 +637,16 @@ def _run_auto_adjustment(
         multiview_summary = multiview_analysis.get("summary") if isinstance(multiview_analysis.get("summary"), dict) else {}
         analysis = dict(multiview_result.get("strategy_analysis") if isinstance(multiview_result.get("strategy_analysis"), dict) else {})
         diff_score = _number_or_default(multiview_summary.get("mean_diff_score"), math.inf)
-        fit_score = _number_or_default(multiview_summary.get("mean_fit_score"), -math.inf)
+        fit_score = _number_or_default(
+            multiview_summary.get("optimization_fit_score"),
+            _number_or_default(multiview_summary.get("mean_fit_score"), -math.inf),
+        )
         if not analysis:
             analysis = {"status": "pending", "score": diff_score, "multiview": multiview_analysis}
         analysis["score"] = diff_score
+        analysis["fit_score"] = fit_score
+        analysis["optimization_fit_score"] = fit_score
+        analysis["optimization_fit_score_source"] = multiview_summary.get("optimization_fit_score_source")
         analysis["multiview"] = multiview_analysis
         if fit_score > best_fit_score:
             best_fit_score = fit_score
@@ -932,6 +947,15 @@ def _run_auto_adjustment(
         _write_json(iteration_dir / "decision.json", iteration_payload)
         result_iterations.append(iteration_payload)
         state.history.append(iteration_payload)
+        _prune_iteration_artifacts(
+            auto_dir,
+            result_iterations,
+            current_iteration=iteration,
+            artifact_save_interval=artifact_save_interval,
+            keep_last_n=keep_last_n_artifacts,
+            always_keep_best=bool(analysis_performance["always_keep_best_artifact"]),
+            always_keep_first=bool(analysis_performance["always_keep_first_artifact"]),
+        )
         current_params = next_params
         state.iteration += 1
         if strategy_stop:
@@ -1032,6 +1056,45 @@ def _resolve_auto_adjust_status(
     return "stopped"
 
 
+def _resolve_analysis_performance(config: dict[str, Any]) -> dict[str, Any]:
+    perf = config.get("analysis_performance")
+    perf = perf if isinstance(perf, dict) else {}
+    p2_interval = _coerce_interval(
+        perf.get("perceptual_optional_interval"),
+        _resolve_optional_metric_interval(config),
+    )
+    diff_interval = _coerce_interval(
+        perf.get("diff_visual_interval"),
+        _resolve_diff_visual_interval(config, p2_interval),
+    )
+    artifact_interval = _coerce_interval(perf.get("artifact_save_interval"), 50)
+    keep_last_n = _coerce_interval(perf.get("keep_last_n_artifacts"), 5)
+    workers = perf.get("multiview_workers", config.get("multiview_analysis_workers", 1))
+    if isinstance(workers, str):
+        workers_value: int | str = workers.strip().lower() or "auto"
+    else:
+        try:
+            workers_value = int(workers)
+        except (TypeError, ValueError):
+            workers_value = 1
+    return {
+        "multiview_workers": workers_value,
+        "perceptual_optional_interval": p2_interval,
+        "diff_visual_interval": diff_interval,
+        "artifact_save_interval": artifact_interval,
+        "keep_last_n_artifacts": keep_last_n,
+        "always_keep_best_artifact": bool(perf.get("always_keep_best_artifact", True)),
+        "always_keep_first_artifact": bool(perf.get("always_keep_first_artifact", True)),
+    }
+
+
+def _coerce_interval(value: Any, fallback: int) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return max(0, int(fallback))
+
+
 def _resolve_optional_metric_interval(config: dict[str, Any]) -> int:
     raw = config.get("perceptual_optional_interval", config.get("p2_perceptual_interval", 50))
     try:
@@ -1058,6 +1121,70 @@ def _should_generate_diff_visual(iteration: int, interval: int) -> bool:
     if interval <= 0:
         return False
     return iteration == 0 or iteration % interval == 0
+
+
+def _prune_iteration_artifacts(
+    auto_dir: Path,
+    iterations: list[dict[str, Any]],
+    *,
+    current_iteration: int,
+    artifact_save_interval: int,
+    keep_last_n: int,
+    always_keep_best: bool,
+    always_keep_first: bool,
+) -> None:
+    if keep_last_n < 0:
+        keep_last_n = 0
+    protected: set[int] = set(range(max(0, current_iteration - keep_last_n + 1), current_iteration + 1))
+    if always_keep_first:
+        protected.add(0)
+    if artifact_save_interval > 0:
+        protected.update(
+            iteration
+            for iteration in range(0, current_iteration + 1)
+            if iteration % artifact_save_interval == 0
+        )
+    if always_keep_best:
+        best_iteration = _best_recorded_iteration(iterations)
+        if best_iteration is not None:
+            protected.add(best_iteration)
+            if best_iteration > 0:
+                # Iteration N scores the candidate rendered by N-1, so keep both.
+                protected.add(best_iteration - 1)
+    if not auto_dir.exists():
+        return
+    for entry in auto_dir.iterdir():
+        if not entry.is_dir() or not entry.name.startswith("iter_"):
+            continue
+        try:
+            iteration = int(entry.name.split("_", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        if iteration in protected or iteration > current_iteration:
+            continue
+        _delete_heavy_iteration_artifacts(entry)
+
+
+def _best_recorded_iteration(iterations: list[dict[str, Any]]) -> int | None:
+    best_iteration: int | None = None
+    best_score = -math.inf
+    for item in iterations:
+        score = _number_or_default(item.get("fit_score_before"), -math.inf)
+        iteration_value = item.get("iteration")
+        if score > best_score and isinstance(iteration_value, int):
+            best_score = score
+            best_iteration = iteration_value
+    return best_iteration
+
+
+def _delete_heavy_iteration_artifacts(iteration_dir: Path) -> None:
+    targets = [
+        iteration_dir / "image_analysis",
+        iteration_dir / "candidate" / "laya_multiview",
+    ]
+    for target in targets:
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
 
 
 def _elapsed_ms(start: float) -> float:

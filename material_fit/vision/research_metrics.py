@@ -13,6 +13,7 @@ except ImportError:  # pragma: no cover
 
 _PERCEPTUAL_CACHE: dict[str, Any] = {}
 _REFERENCE_FEATURE_CACHE: dict[str, dict[str, Any]] = {}
+_VALIDITY_FAILED_LOSS_FLOOR = 0.85
 
 
 def build_research_metrics(
@@ -136,7 +137,7 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
         for item in view_metrics
         if isinstance(item, dict) and item.get("status") == "ok" and _finite_float(item.get("loss")) is not None
     ]
-    scored_items = passed_items if passed_items else all_ok_items
+    scored_items = all_ok_items
     losses = [_finite_float(item.get("loss")) for item in scored_items]
     losses = [value for value in losses if value is not None]
     if not losses:
@@ -156,6 +157,11 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
     final_loss = _clamp01(0.65 * mean_loss + 0.20 * p90_loss + 0.15 * max_loss)
     worst_index = max(range(len(scored_items)), key=lambda idx: _finite_float(scored_items[idx].get("loss")) or -1.0)
     invalid_count = max(0, len(view_metrics) - len(passed_items))
+    scored_invalid_count = sum(
+        1
+        for item in scored_items
+        if not (isinstance(item.get("validity"), dict) and item["validity"].get("passed"))
+    )
     validity = _aggregate_validity(all_ok_items, passed_count=len(passed_items), view_count=len(view_metrics))
     return {
         "version": "research_metrics_p0_v1",
@@ -164,7 +170,9 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
         "valid_view_count": len(passed_items),
         "invalid_view_count": invalid_count,
         "scored_view_count": len(scored_items),
-        "score_uses_invalid_views": not passed_items and bool(scored_items),
+        "scored_invalid_view_count": scored_invalid_count,
+        "score_uses_invalid_views": scored_invalid_count > 0,
+        "invalid_view_policy": "validity_failed_views_are_penalized_and_kept_in_aggregation",
         "loss": final_loss,
         "score": 100.0 * (1.0 - final_loss),
         "mean_loss": mean_loss,
@@ -680,21 +688,31 @@ def _guidance_loss(
             "reason": "texture/detail guidance",
         }
     total_weight = sum(weights[key] for key in components)
-    loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
+    raw_loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
+    loss = raw_loss
+    validity_penalty_applied = False
     if not validity.get("passed"):
-        notes.append("validity failed; metrics are reported but this view should not be trusted for material judgement")
+        validity_penalty_applied = True
+        loss = max(loss, _VALIDITY_FAILED_LOSS_FLOOR)
+        notes.append(
+            "validity failed; optimizer guidance loss was raised to the validity penalty floor"
+        )
     normalized_weights = {key: weights[key] / max(total_weight, 1e-8) for key in components}
+    clamped_loss = _clamp01(loss)
     return {
-        "loss": _clamp01(loss),
-        "score": 100.0 * (1.0 - _clamp01(loss)),
+        "loss": clamped_loss,
+        "score": 100.0 * (1.0 - clamped_loss),
         "components": components,
         "weights": normalized_weights,
         "guidance": {
             "version": "optimizer_guidance_v1",
             "normalization": "soft_saturating_half_scale",
             "formula": "g(x; s) = x / (x + s)",
-            "loss": _clamp01(loss),
-            "score": 100.0 * (1.0 - _clamp01(loss)),
+            "loss": clamped_loss,
+            "score": 100.0 * (1.0 - clamped_loss),
+            "raw_loss_before_validity_penalty": _clamp01(raw_loss),
+            "validity_penalty_applied": validity_penalty_applied,
+            "validity_failed_loss_floor": _VALIDITY_FAILED_LOSS_FLOOR,
             "components": components,
             "weights": normalized_weights,
             "scales": scales,

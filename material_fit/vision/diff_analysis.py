@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -409,6 +411,7 @@ def analyze_multiview_pairs(
     aggregation_config: dict[str, Any] | None = None,
     compute_perceptual_optional: bool = True,
     generate_diff_image: bool = True,
+    workers: int | str | None = None,
 ) -> dict[str, Any]:
     """Analyze multi-view render pairs and build a strategy-compatible aggregate.
 
@@ -421,9 +424,14 @@ def analyze_multiview_pairs(
     output_root.mkdir(parents=True, exist_ok=True)
     aggregation = aggregation_config if isinstance(aggregation_config, dict) else {}
     pair_items = list(pairs)
-    analyses: list[dict[str, Any]] = []
-    views: list[dict[str, Any]] = []
-    for index, pair in enumerate(pair_items):
+    analyses: list[dict[str, Any] | None] = [None] * len(pair_items)
+    views: list[dict[str, Any] | None] = [None] * len(pair_items)
+    worker_count = _resolve_multiview_workers(workers, len(pair_items))
+    if compute_perceptual_optional:
+        worker_count = 1
+
+    def analyze_one(index_and_pair: tuple[int, dict[str, Any]]) -> tuple[int, dict[str, Any], dict[str, Any]]:
+        index, pair = index_and_pair
         pair_dir = output_root / f"pair_{index:02d}"
         result = analyze_image_diff(
             ImageDiffConfig(
@@ -463,8 +471,20 @@ def analyze_multiview_pairs(
             "research_metrics": result.get("research_metrics") if isinstance(result.get("research_metrics"), dict) else None,
             "status": str(result.get("status") or ""),
         }
-        analyses.append(result)
-        views.append(view_payload)
+        return index, result, view_payload
+
+    indexed_pairs = list(enumerate(pair_items))
+    if worker_count <= 1 or len(indexed_pairs) <= 1:
+        completed = [analyze_one(item) for item in indexed_pairs]
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="multiview") as pool:
+            completed = list(pool.map(analyze_one, indexed_pairs))
+    for index, result, view_payload in completed:
+        analyses[index] = result
+        views[index] = view_payload
+
+    analyses = [item for item in analyses if isinstance(item, dict)]
+    views = [item for item in views if isinstance(item, dict)]
 
     ok_analyses = [item for item in analyses if item.get("status") == "ok"]
     ok_views = [
@@ -499,6 +519,17 @@ def analyze_multiview_pairs(
             if isinstance(item.get("research_metrics"), dict)
         ]
     )
+    optimization_fit_score = fit_mean
+    optimization_fit_score_source = str(aggregation.get("fit_aggregation") or "mean")
+    if fit_score_mode == "research" and isinstance(aggregate_research, dict):
+        research_score = _optional_float(aggregate_research.get("score"))
+        research_loss = _optional_float(aggregate_research.get("loss"))
+        if research_score is not None:
+            optimization_fit_score = max(0.0, min(1.0, research_score / 100.0))
+            optimization_fit_score_source = "aggregate_research_score"
+        elif research_loss is not None:
+            optimization_fit_score = max(0.0, min(1.0, 1.0 - research_loss))
+            optimization_fit_score_source = "aggregate_research_loss"
     strategy_analysis = dict(base_analysis)
     strategy_analysis["metric"] = "material_oriented_multiview_diff_v1"
     strategy_analysis["score"] = diff_mean
@@ -520,6 +551,8 @@ def analyze_multiview_pairs(
     summary = {
         "mean_diff_score": diff_mean,
         "mean_fit_score": fit_mean,
+        "optimization_fit_score": optimization_fit_score,
+        "optimization_fit_score_source": optimization_fit_score_source,
         "min_fit_score": fit_min,
         "max_fit_score": fit_max,
         "p10_fit_score": fit_p10,
@@ -539,6 +572,7 @@ def analyze_multiview_pairs(
             "diff": str(aggregation.get("diff_aggregation") or "mean"),
             "channels": str(aggregation.get("channel_aggregation") or "mean_with_worst_severity"),
         },
+        "analysis_workers": worker_count,
         "pair_count": len(pair_items),
         "ok_count": len(ok_analyses),
         "diff_scores": diff_scores,
@@ -560,6 +594,24 @@ def analyze_multiview_pairs(
         encoding="utf-8",
     )
     return report
+
+
+def _resolve_multiview_workers(value: int | str | None, view_count: int) -> int:
+    if view_count <= 1:
+        return 1
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("", "auto"):
+            cpu_count = os.cpu_count() or 1
+            return max(1, min(view_count, cpu_count))
+        try:
+            parsed = int(text)
+        except ValueError:
+            return 1
+        return max(1, min(view_count, parsed))
+    if isinstance(value, int):
+        return max(1, min(view_count, value))
+    return 1
 
 
 def _metrics_from_arrays(context: dict[str, Any], mask: Any) -> dict[str, Any]:

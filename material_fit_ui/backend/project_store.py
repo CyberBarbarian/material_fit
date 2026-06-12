@@ -190,6 +190,15 @@ def create_project(
             "target_score": 0.9,
             "perceptual_optional_interval": 50,
             "diff_visual_interval": 50,
+            "analysis_performance": {
+                "multiview_workers": "auto",
+                "perceptual_optional_interval": 50,
+                "diff_visual_interval": 50,
+                "artifact_save_interval": 50,
+                "keep_last_n_artifacts": 5,
+                "always_keep_best_artifact": True,
+                "always_keep_first_artifact": True,
+            },
             "apply_lmat": True,
             "capture_screen_after_apply": False,
             "use_laya_editor_capture": True,
@@ -493,6 +502,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
     preanalysis_path = paths.preanalysis_json if paths.preanalysis_json.exists() else paths.project_dir / PREANALYSIS_FILE
     preanalysis = _read_json(preanalysis_path) if preanalysis_path.exists() else None
 
+    analysis_performance = _normalize_analysis_performance(algo)
     fit_config: dict[str, Any] = {
         "case_name": project.get("id"),
         "laya_shader_path": laya_shader,
@@ -557,8 +567,9 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "fit_score_mode": _normalize_fit_score_mode(algo.get("fit_score_mode")),
         "multiview_scoring": _normalize_multiview_scoring(algo.get("multiview_scoring")),
         "auto_adjust_mode": str(algo.get("auto_adjust_mode", "fresh_fit")).lower(),
-        "perceptual_optional_interval": _coerce_optional_int(algo.get("perceptual_optional_interval")) or 50,
-        "diff_visual_interval": _coerce_optional_int(algo.get("diff_visual_interval")) or 50,
+        "perceptual_optional_interval": analysis_performance["perceptual_optional_interval"],
+        "diff_visual_interval": analysis_performance["diff_visual_interval"],
+        "analysis_performance": analysis_performance,
         "optimizer": optimizer_value,
         "cma_es": cma_es_payload,
         "laya_refresh_probe": _normalize_laya_refresh_probe(algo.get("laya_refresh_probe")),
@@ -916,6 +927,34 @@ def _normalize_laya_refresh_probe(value: Any) -> dict[str, float]:
     return {
         "mean_diff_change_threshold": change if change is not None and change >= 0.0 else 0.5,
         "mean_diff_restore_threshold": restore if restore is not None and restore >= 0.0 else 2.5,
+    }
+
+
+def _normalize_analysis_performance(algo: dict[str, Any]) -> dict[str, Any]:
+    value = algo.get("analysis_performance")
+    value = value if isinstance(value, dict) else {}
+    p2 = _coerce_optional_int(value.get("perceptual_optional_interval"))
+    if p2 is None:
+        p2 = _coerce_optional_int(algo.get("perceptual_optional_interval"))
+    diff = _coerce_optional_int(value.get("diff_visual_interval"))
+    if diff is None:
+        diff = _coerce_optional_int(algo.get("diff_visual_interval"))
+    artifact = _coerce_optional_int(value.get("artifact_save_interval"))
+    keep_last = _coerce_optional_int(value.get("keep_last_n_artifacts"))
+    workers_raw = value.get("multiview_workers", algo.get("multiview_analysis_workers", "auto"))
+    if isinstance(workers_raw, str):
+        workers: str | int = workers_raw.strip().lower() or "auto"
+    else:
+        workers_int = _coerce_optional_int(workers_raw)
+        workers = workers_int if workers_int is not None and workers_int > 0 else "auto"
+    return {
+        "multiview_workers": workers,
+        "perceptual_optional_interval": max(0, int(p2 if p2 is not None else 50)),
+        "diff_visual_interval": max(0, int(diff if diff is not None else 50)),
+        "artifact_save_interval": max(0, int(artifact if artifact is not None else 50)),
+        "keep_last_n_artifacts": max(0, int(keep_last if keep_last is not None else 5)),
+        "always_keep_best_artifact": bool(value.get("always_keep_best_artifact", True)),
+        "always_keep_first_artifact": bool(value.get("always_keep_first_artifact", True)),
     }
 
 

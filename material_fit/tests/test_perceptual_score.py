@@ -202,6 +202,27 @@ def test_research_metrics_detects_bbox_misalignment():
     assert res["validity"]["passed"] is False
     assert res["validity"]["mask_iou"] < 0.99
     assert res["validity"]["bbox_center_error_px"] > 0
+    assert res["loss"] >= 0.85
+    assert res["guidance"]["validity_penalty_applied"] is True
+    assert res["guidance"]["raw_loss_before_validity_penalty"] < res["loss"]
+
+
+def test_research_multiview_aggregation_keeps_invalid_views_penalized():
+    good = build_research_metrics(_rgba_foreground((200, 40, 30)), _rgba_foreground((200, 40, 30)))
+    invalid = build_research_metrics(
+        _rgba_foreground((200, 40, 30), fg_box=(20, 14, 44, 34)),
+        _rgba_foreground((200, 40, 30), fg_box=(28, 14, 52, 34)),
+    )
+
+    agg = aggregate_research_metrics([good, invalid])
+
+    assert agg["status"] == "ok_with_invalid_views"
+    assert agg["valid_view_count"] == 1
+    assert agg["invalid_view_count"] == 1
+    assert agg["scored_invalid_view_count"] == 1
+    assert agg["score_uses_invalid_views"] is True
+    assert agg["max_loss"] >= 0.85
+    assert agg["score"] < 100.0
 
 
 def test_research_metrics_multiview_aggregation():
@@ -504,6 +525,12 @@ def test_analyze_multiview_pairs_emits_research_summary(tmp_path):
     summary = res["multiview_analysis"]["summary"]
     assert 0.0 <= summary["research_loss"] <= 1.0
     assert 0.0 <= summary["research_score"] <= 100.0
+    assert summary["optimization_fit_score_source"] == "aggregate_research_score"
+    assert math.isclose(
+        summary["optimization_fit_score"],
+        res["strategy_analysis"]["research_metrics"]["score"] / 100.0,
+        abs_tol=1e-9,
+    )
     assert summary["research_valid_view_count"] == 2
     assert "research_metrics" in res["strategy_analysis"]
     assert res["strategy_analysis"]["research_metrics"]["status"] == "ok"
