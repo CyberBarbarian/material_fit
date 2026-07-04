@@ -190,6 +190,18 @@ def test_encoder_dim_and_bounds_are_consistent():
     assert (encoder.lower_bounds < encoder.upper_bounds).all()
 
 
+def test_encoder_axis_order_uses_shader_order_not_initial_dict_order():
+    initial = _initial_params()
+    reordered_initial = dict(reversed(list(initial.items())))
+
+    encoder = ParameterEncoder(initial, _shader_params())
+    reordered_encoder = ParameterEncoder(reordered_initial, _shader_params())
+
+    assert reordered_encoder.axis_fingerprint() == encoder.axis_fingerprint()
+    assert np.array_equal(reordered_encoder.lower_bounds, encoder.lower_bounds)
+    assert np.array_equal(reordered_encoder.upper_bounds, encoder.upper_bounds)
+
+
 # --------------------------------------------------------------------
 # CmaesOptimizer
 
@@ -239,6 +251,133 @@ def test_cmaes_optimizer_respects_bounds_for_every_ask():
         assert (vec <= encoder.upper_bounds + 1e-9).all()
         # Tell a constant fitness so the optimizer keeps progressing
         opt.tell(1.0)
+
+
+def test_cmaes_optimizer_ask_many_tell_many_updates_one_population():
+    shader_params = [
+        ShaderParam("u_Gamma_Power", "Range", default=1.0, range_min=0.05, range_max=10.0),
+        ShaderParam("u_Metallic", "Range", default=0.0, range_min=0.0, range_max=1.0),
+        ShaderParam("u_Smoothness", "Range", default=1.0, range_min=0.0, range_max=1.0),
+    ]
+    initial = {"u_Gamma_Power": 2.2, "u_Metallic": 0.0, "u_Smoothness": 0.8}
+    encoder = ParameterEncoder(initial, shader_params)
+    opt = CmaesOptimizer(encoder, config=CmaesConfig(seed=123, population_size=4))
+
+    batch = opt.ask_many(opt.population_size)
+
+    assert len(batch) == 4
+    assert opt.pending_count == 4
+    assert opt.evaluations == 0
+    losses = [float(np.sum(encoder.encode(params) ** 2)) for params in batch]
+
+    opt.tell_many(losses)
+
+    assert opt.pending_count == 0
+    assert opt.evaluations == 4
+    assert len(opt.history()) == 4
+    best_params, best_fitness = opt.best
+    assert best_params is not None
+    assert best_fitness == pytest.approx(min(losses))
+
+
+def test_cmaes_optimizer_tell_many_rejects_count_above_pending_without_partial_update():
+    encoder = ParameterEncoder(_initial_params(), _shader_params())
+    opt = CmaesOptimizer(encoder, config=CmaesConfig(seed=5, population_size=4))
+    opt.ask_many(2)
+
+    with pytest.raises(RuntimeError, match="more fitness values than pending"):
+        opt.tell_many([0.3, 0.2, 0.1])
+
+    assert opt.pending_count == 2
+    assert opt.evaluations == 0
+    assert opt.history() == []
+
+
+def test_cmaes_optimizer_checkpoint_round_trip_continues_search(tmp_path):
+    shader_params = [
+        ShaderParam("u_Gamma_Power", "Range", default=1.0, range_min=0.05, range_max=10.0),
+        ShaderParam("u_Metallic", "Range", default=0.0, range_min=0.0, range_max=1.0),
+        ShaderParam("u_Smoothness", "Range", default=1.0, range_min=0.0, range_max=1.0),
+    ]
+    initial = {"u_Gamma_Power": 2.2, "u_Metallic": 0.0, "u_Smoothness": 0.8}
+    encoder = ParameterEncoder(initial, shader_params)
+    opt = CmaesOptimizer(encoder, config=CmaesConfig(seed=123, population_size=4))
+
+    first_batch = opt.ask_many(opt.population_size)
+    first_losses = [float(np.sum(encoder.encode(params) ** 2)) for params in first_batch]
+    opt.tell_many(first_losses)
+    checkpoint_path = tmp_path / "cma_optimizer.pkl"
+
+    opt.save_checkpoint(checkpoint_path)
+    metadata = CmaesOptimizer.checkpoint_metadata(checkpoint_path)
+    assert metadata["schema_version"] == 1
+    assert metadata["optimizer"] == "cma_es"
+    assert metadata["encoder_dim"] == encoder.dim
+    restored = CmaesOptimizer.load_checkpoint(checkpoint_path)
+
+    assert restored.evaluations == opt.evaluations
+    assert restored.pending_count == 0
+    assert len(restored.history()) == len(opt.history())
+    assert restored.best[1] == pytest.approx(opt.best[1])
+
+    second_batch = restored.ask_many(restored.population_size)
+    assert len(second_batch) == restored.population_size
+    second_losses = [float(np.sum(encoder.encode(params) ** 2)) for params in second_batch]
+    restored.tell_many(second_losses)
+
+    assert restored.evaluations == opt.evaluations + restored.population_size
+    assert restored.pending_count == 0
+
+
+def test_cmaes_optimizer_checkpoint_rejects_incompatible_encoder(tmp_path):
+    shader_params = [
+        ShaderParam("u_Gamma_Power", "Range", default=1.0, range_min=0.05, range_max=10.0),
+        ShaderParam("u_Metallic", "Range", default=0.0, range_min=0.0, range_max=1.0),
+    ]
+    initial = {"u_Gamma_Power": 2.2, "u_Metallic": 0.0}
+    encoder = ParameterEncoder(initial, shader_params)
+    opt = CmaesOptimizer(encoder, config=CmaesConfig(seed=123, population_size=4))
+    batch = opt.ask_many(opt.population_size)
+    opt.tell_many([float(np.sum(encoder.encode(params) ** 2)) for params in batch])
+    checkpoint_path = tmp_path / "cma_optimizer.pkl"
+    opt.save_checkpoint(checkpoint_path)
+
+    incompatible_encoder = ParameterEncoder(
+        {**initial, "u_Smoothness": 0.8},
+        [
+            *shader_params,
+            ShaderParam("u_Smoothness", "Range", default=1.0, range_min=0.0, range_max=1.0),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="incompatible CMA-ES checkpoint"):
+        CmaesOptimizer.load_checkpoint(checkpoint_path, expected_encoder=incompatible_encoder)
+
+
+def test_cmaes_optimizer_restart_preserves_history_and_global_best():
+    shader_params = [
+        ShaderParam("u_Gamma_Power", "Range", default=1.0, range_min=0.05, range_max=10.0),
+        ShaderParam("u_Metallic", "Range", default=0.0, range_min=0.0, range_max=1.0),
+    ]
+    initial = {"u_Gamma_Power": 2.2, "u_Metallic": 0.0}
+    encoder = ParameterEncoder(initial, shader_params)
+    opt = CmaesOptimizer(encoder, config=CmaesConfig(seed=123, population_size=4))
+    batch = opt.ask_many(opt.population_size)
+    losses = [0.30, 0.20, 0.40, 0.50]
+    opt.tell_many(losses)
+    best_params, best_loss = opt.best
+
+    opt.restart(initial_mean=best_params, population_size=6)
+
+    assert opt.evaluations == 4
+    assert opt.population_size == 6
+    assert opt.loss_history() == losses
+    assert opt.best[1] == pytest.approx(best_loss)
+    assert opt.best[0] == best_params
+    assert opt.pending_count == 0
+    next_batch = opt.ask_many(2)
+    assert len(next_batch) == 2
+    assert opt.pending_count == 2
 
 
 # --------------------------------------------------------------------

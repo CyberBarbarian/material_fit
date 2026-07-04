@@ -1232,6 +1232,7 @@ def test_auto_adjust_status_reports_breakthrough_exhausted():
     status = _resolve_auto_adjust_status(
         best_fit_score=0.81,
         target_score=0.90,
+        score_ceiling=None,
         terminal_reason="all_semantic_groups_exhausted",
         completed_iterations=230,
         requested_iterations=300,

@@ -83,7 +83,7 @@ Python 等待 laya_editor_multiview_report.json，读取 8 张候选图评分
   ],
   "reload_scene_after_reimport": true,
   "refresh_after_reimport_delay_ms": 800,
-  "alpha_source": "silhouette_mask",
+  "alpha_source": "render_alpha",
   "render_texture_srgb": true
 }
 ```
@@ -204,7 +204,7 @@ python -m material_fit.laya_capture.capture_server `
   "transparent_background": true,
   "zero_transparent_rgb": true,
   "alpha_from_rgb": true,
-  "alpha_source": "silhouette_mask",
+  "alpha_source": "render_alpha",
   "mask_alpha_mode": "binary",
   "flip_y": false,
   "render_texture_srgb": true,
@@ -225,7 +225,8 @@ python -m material_fit.laya_capture.capture_server `
 - 临时把截图相机 `clearColor` 设为 `alpha = 0`，渲染到 RGBA `RenderTexture`；
 - 默认使用 sRGB `RenderTexture`，更接近运行时屏幕输出；如需排查线性 RT，可用 `--linear-render-texture`；
 - 默认不做 Y 翻转；如遇到目标平台读回方向相反，可用 `--flip-y`；
-- 默认使用 `alpha_source = "silhouette_mask"`：先黑底正常渲染得到预览 RGB，再临时把目标模型材质替换成纯白 `UnlitMaterial` 渲染 mask，最后只用二值 mask 去掉背景；
+- 默认使用 `alpha_source = "render_alpha"`：直接使用主渲染通道读回的 alpha，避免每个视角额外渲染一次纯白 silhouette mask，这是优化循环的速度优先路径；
+- `alpha_source = "silhouette_mask"` 保留为质量诊断/回退模式：先黑底正常渲染得到预览 RGB，再临时把目标模型材质替换成纯白 `UnlitMaterial` 渲染 mask，最后只用二值 mask 去掉背景；
 - 默认 `mask_alpha_mode = "binary"`：mask 命中的模型区域写成 `alpha=255`，未命中的背景写成 `alpha=0`，不会把 mask 灰度作为模型透明度；
 - `alpha_source = "alpha_from_rgb"` 仍保留为诊断/回退模式，用于把 `alpha=0` 但 RGB 非零的像素转成可见透明像素；如需关闭可用 `--no-alpha-from-rgb`；
 - 读回像素并保存 PNG，`alpha = 0` 的像素默认清空 RGB，避免透明边缘脏色；

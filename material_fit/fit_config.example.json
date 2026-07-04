@@ -8,6 +8,8 @@
     "  - When you write a config by hand, the safest practice is to use absolute paths everywhere.",
     "The 'assets/resources/...' paths below are taken from one specific user's Laya project layout",
     "and will NOT exist in your environment. Replace them with paths to YOUR Laya/Unity assets.",
+    "cma_es.restart_center_mode accepts 'best', 'random', or 'alternate'.",
+    "cma_es.restart_population_schedule accepts 'ipop' or 'bipop'.",
     "All keys starting with '_' are ignored by fit_material.py."
   ],
   "case_name": "fish_1580_smoke",
@@ -20,17 +22,56 @@
   "mask_images": [],
   "image_pairs": [],
   "auto_adjust_target_score": 0.5,
+  "score_ceiling": {
+    "enabled": false,
+    "target_self_score": null,
+    "tolerance": 0.001,
+    "source": "disabled",
+    "calibrate_from_oracle_stabilization": false
+  },
+  "browser_score_context_render": {
+    "enabled": false,
+    "note": "Enable for browser_score/persistent-render runs so the optimizer renders and scores the initial current params before proposing candidates."
+  },
   "capture_screen_after_apply": false,
   "rerender_wait_ms": 1200,
   "fit_score_mode": "perceptual",
+  "analysis_performance": {
+    "multiview_workers": "auto",
+    "evaluation_batch_size": 1,
+    "evaluation_workers": 1,
+    "evaluation_parallel_safe": false,
+    "full_rerank_top_k": 0,
+    "best_full_validation": false,
+    "target_full_validation": false,
+    "snapshot_interval": 50,
+    "research_metrics_profile": "tiered",
+    "fast_score_only": true,
+    "keep_last_n_artifacts": 5,
+    "always_keep_best_artifact": true,
+    "always_keep_first_artifact": true
+  },
   "optimizer": "cma_warm",
   "cma_es": {
     "mode": "warm",
     "warm_start_iters": 12,
+    "warm_start_source": "elite_archive_first",
     "population_size": null,
     "sigma": null,
     "seed": null,
-    "hint_bias_mix_ratio": 0.30
+    "hint_bias_mix_ratio": 0.30,
+    "stagnation_patience": 0,
+    "stagnation_min_delta": 0.001,
+    "stagnation_min_evaluations": 0,
+    "stagnation_max_restarts": 0,
+    "stagnation_stop_after_restarts": true,
+    "restart_center_mode": "best",
+    "restart_population_multiplier": 1.0,
+    "restart_population_schedule": "ipop",
+    "restart_max_population_size": null,
+    "initial_design_samples": 0,
+    "initial_design_method": "latin_hypercube",
+    "initial_design_include_current": true
   },
   "screen_capture": {
     "capture_dir": "tools/material_fit/vision/test_image",
@@ -79,6 +120,22 @@
   },
   "laya_capture": {
     "command": ["node", "tools/material_fit/vision/capture_laya.js"],
+    "runtime_bridge": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 8787,
+      "timeout_s": 90,
+      "output_subdir": "laya_multiview"
+    },
+    "target_name": "model",
+    "views": [
+      {
+        "view_id": "v000_yaw0_pitch0",
+        "yaw": 0.0,
+        "pitch": 0.0,
+        "file_name": "laya_v000_yaw0_pitch0.png"
+      }
+    ],
     "url": "http://127.0.0.1:3000/material-fit.html",
     "viewport": { "width": 900, "height": 600 },
     "waitUntil": "networkidle2",

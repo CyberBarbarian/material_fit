@@ -54,9 +54,44 @@ from typing import Iterable
 from urllib.parse import urlparse
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 UI_ROOT = Path(__file__).resolve().parent
 FRONTEND_DIR = UI_ROOT / "frontend"
+
+
+def _find_repo_root() -> Path:
+    """Return the root that should be used as the subprocess cwd.
+
+    Two layouts are supported:
+    - standalone checkout: <root>/material_fit_ui/launch.py
+    - embedded tools dir:  <root>/tools/material_fit_ui/launch.py
+    """
+
+    launch_path = Path(__file__).resolve()
+    candidates = [
+        launch_path.parents[1],
+        launch_path.parents[2],
+    ]
+    for root in candidates:
+        if _backend_entry(root).exists() and _algorithm_entry(root).exists():
+            return root
+    return candidates[0]
+
+
+def _backend_entry(root: Path) -> Path:
+    direct = root / "material_fit_ui" / "backend" / "main.py"
+    if direct.exists():
+        return direct
+    return root / "tools" / "material_fit_ui" / "backend" / "main.py"
+
+
+def _algorithm_entry(root: Path) -> Path:
+    direct = root / "material_fit" / "fit_material.py"
+    if direct.exists():
+        return direct
+    return root / "tools" / "material_fit" / "fit_material.py"
+
+
+REPO_ROOT = _find_repo_root()
 
 BACKEND_HOST = "127.0.0.1"
 BACKEND_PORT = 8000
@@ -371,9 +406,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # Sanity: we need to launch from the repo root so
     # ``tools.material_fit_ui.backend.main`` resolves.
-    if not (REPO_ROOT / "tools" / "material_fit_ui" / "backend" / "main.py").exists():
+    if not (_backend_entry(REPO_ROOT).exists() and _algorithm_entry(REPO_ROOT).exists()):
         _err(
-            f"expected to find tools/material_fit_ui/backend/main.py under "
+            f"expected to find material_fit_ui/backend/main.py or "
+            f"tools/material_fit_ui/backend/main.py under "
             f"{REPO_ROOT} — is this script in its original location?"
         )
         return 1
@@ -387,11 +423,11 @@ def main(argv: list[str] | None = None) -> int:
         if not args.frontend_only:
             _ensure_python_dep(
                 "uvicorn",
-                "pip install -r tools/material_fit_ui/requirements.txt",
+                f"pip install -r {UI_ROOT / 'requirements.txt'}",
             )
             _ensure_python_dep(
                 "fastapi",
-                "pip install -r tools/material_fit_ui/requirements.txt",
+                f"pip install -r {UI_ROOT / 'requirements.txt'}",
             )
             backend_proc = _spawn(
                 _build_backend_cmd(reload=not args.no_reload),

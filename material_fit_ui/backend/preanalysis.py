@@ -1989,6 +1989,8 @@ def _trim_middle(text: str, max_chars: int) -> str:
 def _env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None:
+        raw = _read_env_value(PROJECT_ROOT / ".env", name)
+    if raw is None:
         raw = _read_env_value(PROJECT_ROOT / "tools" / ".env", name)
     try:
         value = int(raw or "")

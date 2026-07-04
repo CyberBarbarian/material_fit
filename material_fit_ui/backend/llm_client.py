@@ -42,8 +42,10 @@ class LlmResponseParseError(RuntimeError):
 def load_llm_runtime_config(project_root: Path | None = None) -> LlmRuntimeConfig:
     """Load OpenAI-compatible settings from environment plus repo-root .env."""
 
-    root = project_root or PROJECT_ROOT / "tools"
+    root = project_root or PROJECT_ROOT
     values = _read_env_file(root / ".env")
+    if not values:
+        values = _read_env_file(root / "tools" / ".env")
 
     def pick(*names: str, default: str = "") -> str:
         for name in names:

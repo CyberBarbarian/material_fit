@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 
 @dataclass
@@ -18,6 +18,7 @@ class CaptureState:
     expected: set[str]
     received: set[str] = field(default_factory=set)
     logs: list[dict[str, Any]] = field(default_factory=list)
+    browser_score: dict[str, Any] | None = None
 
 
 def main() -> int:
@@ -48,7 +49,7 @@ def main() -> int:
     parser.add_argument("--keep-transparent-rgb", action="store_true", help="Do not zero RGB where alpha is 0.")
     parser.add_argument("--no-alpha-from-rgb", action="store_true", help="Do not preserve additive RGB-only glow by deriving alpha from RGB.")
     parser.add_argument("--alpha-from-rgb-threshold", type=float, default=1.0, help="Minimum RGB value used when deriving alpha for RGB-only glow.")
-    parser.add_argument("--alpha-source", choices=["silhouette_mask", "alpha_from_rgb", "render_alpha"], default="silhouette_mask")
+    parser.add_argument("--alpha-source", choices=["silhouette_mask", "alpha_from_rgb", "render_alpha"], default="render_alpha")
     parser.add_argument("--mask-alpha-mode", choices=["binary", "soft"], default="binary")
     parser.add_argument("--mask-alpha-threshold", type=float, default=1.0)
     parser.add_argument("--flip-y", action="store_true", help="Flip readback pixels vertically before encoding PNG.")
@@ -129,7 +130,7 @@ def build_command(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "zero_transparent_rgb": not bool(getattr(args, "keep_transparent_rgb", False)),
         "alpha_from_rgb": not bool(getattr(args, "no_alpha_from_rgb", False)),
         "alpha_from_rgb_threshold": float(getattr(args, "alpha_from_rgb_threshold", 1.0)),
-        "alpha_source": getattr(args, "alpha_source", "silhouette_mask"),
+        "alpha_source": getattr(args, "alpha_source", "render_alpha") or "render_alpha",
         "mask_alpha_mode": getattr(args, "mask_alpha_mode", "binary"),
         "mask_alpha_threshold": float(getattr(args, "mask_alpha_threshold", 1.0)),
         "flip_y": bool(getattr(args, "flip_y", False)),
@@ -151,7 +152,7 @@ def build_command(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         command["target_size"] = target_size
     command.update({k: v for k, v in explicit.items() if k not in {"views"}})
     command["views"] = views
-    return command
+    return with_reference_image_urls(command, str(command["server_base_url"]))
 
 
 def build_material_patch(args: argparse.Namespace, explicit: dict[str, Any]) -> dict[str, Any]:
@@ -206,16 +207,32 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
                 self.write_json(payload)
                 return
             if parsed.path == "/material-fit/status":
-                self.write_json({"expected": sorted(state.expected), "received": sorted(state.received), "logs": state.logs[-20:]})
+                self.write_json(
+                    {
+                        "expected": sorted(state.expected),
+                        "received": sorted(state.received),
+                        "logs": state.logs[-20:],
+                        "browser_score": state.browser_score,
+                    }
+                )
+                return
+            if parsed.path == "/material-fit/reference-image":
+                self.handle_reference_image(parsed)
                 return
             self.send_error(404)
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             try:
+                if parsed.path == "/material-fit/capture-raw-rgba":
+                    self.handle_capture_raw_rgba(parsed)
+                    return
                 payload = self.read_json_body()
                 if parsed.path == "/material-fit/capture-result":
                     self.handle_capture_result(payload)
+                    return
+                if parsed.path == "/material-fit/capture-score":
+                    self.handle_capture_score(payload)
                     return
                 if parsed.path == "/material-fit/capture-log":
                     state.logs.append(payload)
@@ -227,6 +244,8 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
             self.send_error(404)
 
         def handle_capture_result(self, payload: dict[str, Any]) -> None:
+            if not self.validate_nonce(str(payload.get("nonce") or "")):
+                return
             view_id = safe_name(str(payload.get("view_id") or "view"))
             file_name = safe_name(str(payload.get("file_name") or f"{view_id}.png"))
             if not file_name.lower().endswith(".png"):
@@ -244,6 +263,91 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
                 encoding="utf-8",
             )
             self.write_json({"ok": True, "path": str(output_path), "received": sorted(state.received)})
+
+        def handle_capture_score(self, payload: dict[str, Any]) -> None:
+            if not self.validate_nonce(str(payload.get("nonce") or "")):
+                return
+            browser_score = payload.get("browser_score")
+            if not isinstance(browser_score, dict):
+                self.write_json({"ok": False, "error": "missing browser_score"}, status=400)
+                return
+            state.browser_score = dict(browser_score)
+            state.browser_score.setdefault("enabled", True)
+            (state.output_dir / "browser_score.json").write_text(
+                json.dumps(state.browser_score, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            state.received.update(state.expected)
+            self.write_json({"ok": True, "received": sorted(state.received), "browser_score": state.browser_score})
+
+        def handle_capture_raw_rgba(self, parsed: Any) -> None:
+            query = parse_qs(parsed.query)
+            if not self.validate_nonce(str(first_query_value(query, "nonce") or "")):
+                return
+            view_id = safe_name(str(first_query_value(query, "view_id") or "view"))
+            file_name = safe_name(str(first_query_value(query, "file_name") or f"{view_id}.rgba"))
+            if not file_name.lower().endswith(".rgba"):
+                file_name += ".rgba"
+            width = int(first_query_value(query, "width") or "0")
+            height = int(first_query_value(query, "height") or "0")
+            if width <= 0 or height <= 0:
+                self.write_json({"ok": False, "error": "invalid raw RGBA dimensions"}, status=400)
+                return
+            length = int(self.headers.get("Content-Length") or "0")
+            image_bytes = self.rfile.read(length)
+            expected_len = width * height * 4
+            if len(image_bytes) != expected_len:
+                self.write_json(
+                    {"ok": False, "error": f"raw RGBA byte count mismatch: got {len(image_bytes)}, expected {expected_len}"},
+                    status=400,
+                )
+                return
+            output_path = state.output_dir / file_name
+            output_path.write_bytes(image_bytes)
+            state.received.add(view_id)
+            sidecar = {
+                "format": "raw_rgba",
+                "nonce": str(first_query_value(query, "nonce") or ""),
+                "view_id": view_id,
+                "file_name": file_name,
+                "width": width,
+                "height": height,
+                "saved_path": str(output_path),
+            }
+            for key, values in query.items():
+                if key not in sidecar and values:
+                    sidecar[key] = values[0]
+            output_path.with_suffix(output_path.suffix + ".json").write_text(
+                json.dumps(sidecar, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            self.write_json({"ok": True, "path": str(output_path), "received": sorted(state.received)})
+
+        def validate_nonce(self, raw_nonce: str) -> bool:
+            expected_nonce = str(state.command.get("nonce") or "")
+            if expected_nonce and raw_nonce != expected_nonce:
+                self.write_json({"ok": False, "error": "stale capture nonce"}, status=409)
+                return False
+            return True
+
+        def handle_reference_image(self, parsed: Any) -> None:
+            query = parse_qs(parsed.query)
+            path_text = first_query_value(query, "path")
+            if not path_text:
+                self.write_json({"ok": False, "error": "missing reference image path"}, status=400)
+                return
+            path = Path(path_text)
+            if not path.exists() or not path.is_file():
+                self.write_json({"ok": False, "error": f"reference image not found: {path}"}, status=404)
+                return
+            data = path.read_bytes()
+            content_type = "image/png" if path.suffix.lower() == ".png" else "application/octet-stream"
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
 
         def read_json_body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length") or "0")
@@ -290,6 +394,36 @@ def format_angle(value: float) -> str:
 def safe_name(value: str) -> str:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
     return "".join(ch if ch in allowed else "_" for ch in value)[:160] or "capture.png"
+
+
+def with_reference_image_urls(command: dict[str, Any], base_url: str) -> dict[str, Any]:
+    browser_score = command.get("browser_score")
+    if not isinstance(browser_score, dict):
+        return command
+    references = browser_score.get("reference_images")
+    if not isinstance(references, list):
+        return command
+    command = dict(command)
+    score_cfg = dict(browser_score)
+    rewritten: list[Any] = []
+    for raw in references:
+        if not isinstance(raw, dict):
+            rewritten.append(raw)
+            continue
+        entry = dict(raw)
+        if not entry.get("url") and entry.get("path"):
+            entry["url"] = f"{base_url}/material-fit/reference-image?path={quote(str(entry['path']), safe='')}"
+        rewritten.append(entry)
+    score_cfg["reference_images"] = rewritten
+    command["browser_score"] = score_cfg
+    return command
+
+
+def first_query_value(query: dict[str, list[str]], key: str) -> str | None:
+    values = query.get(key)
+    if not values:
+        return None
+    return values[0]
 
 
 if __name__ == "__main__":

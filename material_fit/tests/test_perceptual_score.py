@@ -82,6 +82,7 @@ from tools.material_fit.vision.diff_analysis import (
 )
 from tools.material_fit.auto_adjust.scoring import resolve_fit_score
 from tools.material_fit.vision.research_metrics import aggregate_research_metrics, build_research_metrics
+from tools.material_fit.vision.image_score import load_rgba_pair
 
 
 # ---------------------------------------------------------------------
@@ -110,6 +111,33 @@ def _rgba_foreground(fg_color, size=(64, 48), fg_box=(20, 14, 44, 34)):
         for x in range(fg_box[0], fg_box[2]):
             px[x, y] = tuple(fg_color) + (255,)
     return img
+
+
+def _save_raw_rgba(img, path: Path) -> Path:
+    rgba = img.convert("RGBA")
+    path.write_bytes(rgba.tobytes())
+    (path.with_suffix(path.suffix + ".json")).write_text(
+        f'{{"format":"raw_rgba","width":{rgba.width},"height":{rgba.height}}}',
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_load_rgba_pair_supports_raw_rgba_sidecar(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(16, 12), fg_box=(4, 3, 12, 9))
+    cand = _rgba_foreground((200, 70, 55), size=(16, 12), fg_box=(4, 3, 12, 9))
+    ref_path = _save_raw_rgba(ref, tmp_path / "ref.rgba")
+    cand_path = _save_raw_rgba(cand, tmp_path / "cand.rgba")
+
+    loaded_ref, loaded_cand, mask = load_rgba_pair(ref_path, cand_path)
+
+    assert loaded_ref.mode == "RGBA"
+    assert loaded_cand.mode == "RGBA"
+    assert loaded_ref.size == (16, 12)
+    assert loaded_cand.size == (16, 12)
+    assert loaded_ref.getpixel((6, 5)) == ref.getpixel((6, 5))
+    assert loaded_cand.getpixel((6, 5)) == cand.getpixel((6, 5))
+    assert mask is None
 
 
 # ---------------------------------------------------------------------
@@ -192,6 +220,23 @@ def test_research_metrics_identical_rgba_scores_perfect():
     assert res["scientific"]["perceptual_optional"]["enters_loss"] is False
 
 
+def test_research_metrics_fast_profile_returns_proxy_score_without_full_sections():
+    ref = _rgba_foreground((200, 40, 30))
+    cand = _rgba_foreground((180, 55, 35))
+
+    res = build_research_metrics(ref, cand, metric_profile="fast")
+
+    assert res["status"] == "ok"
+    assert res["profile"] == "fast"
+    assert res["score_is_proxy"] is True
+    assert 0.0 <= res["loss"] <= 1.0
+    assert 0.0 <= res["score"] <= 100.0
+    assert res["scientific"]["luminance_structure"]["ssim_l_status"] == "skipped_fast_profile"
+    assert res["scientific"]["detail_texture"]["status"] == "skipped_fast_profile"
+    assert res["scientific"]["perceptual_optional"]["status"] == "skipped_fast_profile"
+    assert "color_mean" in res["components"]
+
+
 def test_research_metrics_detects_bbox_misalignment():
     ref = _rgba_foreground((200, 40, 30), fg_box=(20, 14, 44, 34))
     cand = _rgba_foreground((200, 40, 30), fg_box=(28, 14, 52, 34))
@@ -202,9 +247,30 @@ def test_research_metrics_detects_bbox_misalignment():
     assert res["validity"]["passed"] is False
     assert res["validity"]["mask_iou"] < 0.99
     assert res["validity"]["bbox_center_error_px"] > 0
-    assert res["loss"] >= 0.85
     assert res["guidance"]["validity_penalty_applied"] is True
+    assert res["guidance"]["validity_penalty"]["mode"] == "soft_alignment_penalty"
+    assert res["guidance"]["validity_penalty"]["loss"] > 0.0
     assert res["guidance"]["raw_loss_before_validity_penalty"] < res["loss"]
+
+
+def test_research_guidance_keeps_continuous_signal_for_invalid_alignment():
+    ref = _rgba_foreground((200, 40, 30), fg_box=(20, 14, 44, 34))
+    small_shift = build_research_metrics(
+        ref,
+        _rgba_foreground((200, 40, 30), fg_box=(24, 14, 48, 34)),
+    )
+    large_shift = build_research_metrics(
+        ref,
+        _rgba_foreground((200, 40, 30), fg_box=(34, 14, 58, 34)),
+    )
+
+    assert small_shift["validity"]["passed"] is False
+    assert large_shift["validity"]["passed"] is False
+    assert small_shift["guidance"]["validity_penalty_applied"] is True
+    assert large_shift["guidance"]["validity_penalty_applied"] is True
+    assert small_shift["loss"] < large_shift["loss"]
+    assert small_shift["guidance"]["validity_penalty"]["loss"] < large_shift["guidance"]["validity_penalty"]["loss"]
+    assert small_shift["guidance"]["validity_penalty"]["mode"] == "soft_alignment_penalty"
 
 
 def test_research_multiview_aggregation_keeps_invalid_views_penalized():
@@ -221,7 +287,8 @@ def test_research_multiview_aggregation_keeps_invalid_views_penalized():
     assert agg["invalid_view_count"] == 1
     assert agg["scored_invalid_view_count"] == 1
     assert agg["score_uses_invalid_views"] is True
-    assert agg["max_loss"] >= 0.85
+    assert math.isclose(agg["max_loss"], invalid["loss"], abs_tol=1e-9)
+    assert agg["max_loss"] > 0.0
     assert agg["score"] < 100.0
 
 
@@ -559,6 +626,159 @@ def test_analyze_multiview_pairs_can_skip_p2_optional_metrics(tmp_path):
     assert perceptual["enters_loss"] is False
     assert perceptual["lpips_status"] == "skipped"
     assert perceptual["dists_status"] == "skipped"
+
+
+def test_analyze_multiview_pairs_can_use_fast_research_profile(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+
+    res = analyze_multiview_pairs(
+        [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}],
+        tmp_path / "mv_fast_research",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+    )
+
+    pair_research = res["pairs"][0]["research_metrics"]
+    summary = res["multiview_analysis"]["summary"]
+    assert pair_research["profile"] == "fast"
+    assert pair_research["score_is_proxy"] is True
+    assert summary["optimization_fit_score_source"] == "aggregate_research_score"
+    assert 0.0 <= summary["optimization_fit_score"] <= 1.0
+
+
+def test_analyze_multiview_fast_score_only_matches_fast_research_score(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+    pairs = [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}]
+
+    full_fast = analyze_multiview_pairs(
+        pairs,
+        tmp_path / "mv_fast_research",
+        fit_score_mode="research",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+    )
+    score_only = analyze_multiview_pairs(
+        pairs,
+        tmp_path / "mv_fast_score_only",
+        fit_score_mode="research",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+        fast_score_only=True,
+    )
+
+    assert score_only["pairs"][0]["fast_score_only"] is True
+    assert score_only["pairs"][0]["research_metrics"]["profile"] == "fast"
+    assert score_only["views"][0]["analysis_path"] == ""
+    assert not (tmp_path / "mv_fast_score_only" / "pair_00" / "diff_analysis.json").exists()
+    assert score_only["multiview_analysis"]["fast_score_only"] is True
+    assert score_only["multiview_analysis"]["summary"]["optimization_fit_score"] == pytest.approx(
+        full_fast["multiview_analysis"]["summary"]["optimization_fit_score"]
+    )
+    assert score_only["multiview_analysis"]["summary"]["research_loss"] == pytest.approx(
+        full_fast["multiview_analysis"]["summary"]["research_loss"]
+    )
+
+
+def test_analyze_multiview_pairs_can_skip_multiview_report_write(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+    out_dir = tmp_path / "mv_no_report"
+
+    res = analyze_multiview_pairs(
+        [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}],
+        out_dir,
+        fit_score_mode="research",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+        fast_score_only=True,
+        write_report=False,
+    )
+
+    assert res["multiview_analysis"]["status"] == "ok"
+    assert res["multiview_analysis"]["fast_score_only"] is True
+    assert not (out_dir / "multi_view_diff_analysis.json").exists()
+
+
+def test_analyze_multiview_fast_score_only_preserves_perceptual_score(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+    pairs = [{"view_id": "v000_yaw0_pitch0", "reference": str(ref_path), "candidate": str(cand_path)}]
+
+    full_fast = analyze_multiview_pairs(
+        pairs,
+        tmp_path / "mv_fast_perceptual",
+        fit_score_mode="perceptual",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+    )
+    score_only = analyze_multiview_pairs(
+        pairs,
+        tmp_path / "mv_fast_perceptual_score_only",
+        fit_score_mode="perceptual",
+        research_metrics_profile="fast",
+        compute_perceptual_optional=False,
+        generate_diff_image=False,
+        fast_score_only=True,
+    )
+
+    assert score_only["pairs"][0]["fast_score_only"] is True
+    assert "research_metrics" not in score_only["pairs"][0]
+    assert score_only["pairs"][0]["material_channels"]
+    assert score_only["views"][0]["analysis_path"] == ""
+    assert not (tmp_path / "mv_fast_perceptual_score_only" / "pair_00" / "diff_analysis.json").exists()
+    assert score_only["multiview_analysis"]["summary"]["optimization_fit_score"] == pytest.approx(
+        full_fast["multiview_analysis"]["summary"]["optimization_fit_score"]
+    )
+
+
+def test_analyze_image_diff_fast_research_profile_skips_top_level_ssim(tmp_path):
+    ref = _rgba_foreground((220, 60, 40), size=(64, 48))
+    cand = _rgba_foreground((200, 70, 55), size=(64, 48))
+    ref_path = tmp_path / "ref.png"
+    cand_path = tmp_path / "cand.png"
+    ref.save(ref_path)
+    cand.save(cand_path)
+
+    res = analyze_image_diff(
+        ImageDiffConfig(
+            reference_path=ref_path,
+            candidate_path=cand_path,
+            output_dir=tmp_path / "fast_single",
+            generate_diff_image=False,
+            compute_perceptual_optional=False,
+            research_metrics_profile="fast",
+        )
+    )
+
+    assert res["status"] == "ok"
+    assert isinstance(res["perceptual_fit_score"], float)
+    assert 0.0 <= res["perceptual_fit_score"] <= 1.0
+    assert res["perceptual"]["ssim"] is None
+    assert res["perceptual"]["ssim_status"] == "skipped_fast_profile"
+    assert res["research_metrics"]["profile"] == "fast"
 
 
 def test_analyze_multiview_pairs_can_skip_diff_visual(tmp_path):

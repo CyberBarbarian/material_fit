@@ -45,8 +45,10 @@ unit-test the optimizer on synthetic objectives (see
 from __future__ import annotations
 
 import math
+import pickle
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import numpy as np
@@ -207,8 +209,18 @@ class ParameterEncoder:
         # outside the optimizer).
         self._alpha: dict[str, float] = {}
         whitelist = set(param_whitelist) if param_whitelist is not None else None
+        seen_names: set[str] = set()
+        ordered_names: list[str] = []
+        for param in shader_params:
+            if param.name in initial_params and param.name not in seen_names:
+                ordered_names.append(param.name)
+                seen_names.add(param.name)
+        for name in sorted((name for name in initial_params if name not in seen_names), key=str):
+            ordered_names.append(name)
+            seen_names.add(name)
 
-        for name, value in initial_params.items():
+        for name in ordered_names:
+            value = initial_params[name]
             if whitelist is not None and name not in whitelist:
                 self._fixed[name] = value
                 continue
@@ -299,6 +311,19 @@ class ParameterEncoder:
     @property
     def axes(self) -> tuple[_AxisSpec, ...]:
         return tuple(self._axes)
+
+    def axis_fingerprint(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "param_name": axis.param_name,
+                "sub_index": int(axis.sub_index),
+                "low": float(axis.low),
+                "high": float(axis.high),
+                "is_color": bool(axis.is_color),
+                "transform": str(axis.transform),
+            }
+            for axis in self._axes
+        ]
 
     @property
     def fixed_params(self) -> ParamDict:
@@ -407,6 +432,16 @@ class ParameterEncoder:
         param: ShaderParam | None,
         semantic: ParamSemantics | None = None,
     ) -> tuple[float, float]:
+        if param is not None:
+            low = float(param.range_min) if param.range_min is not None else -math.inf
+            high = float(param.range_max) if param.range_max is not None else math.inf
+            if (
+                str(param.param_type).strip().lower() == "range"
+                and math.isfinite(low)
+                and math.isfinite(high)
+                and low < high
+            ):
+                return low, high
         if (bounds := effective_bounds_for_param(name)) is not None:
             return bounds
         if semantic is not None:
@@ -512,7 +547,7 @@ class CmaesOptimizer:
         self._lo = encoder.lower_bounds
         self._hi = encoder.upper_bounds
         self._width = self._hi - self._lo
-        norm_bounds = np.stack(
+        self._norm_bounds = np.stack(
             [np.zeros(dim, dtype=np.float64), np.ones(dim, dtype=np.float64)],
             axis=1,
         )
@@ -546,7 +581,7 @@ class CmaesOptimizer:
                 mean=np.asarray(mean, dtype=np.float64),
                 sigma=float(ws_sigma),
                 cov=np.asarray(cov, dtype=np.float64),
-                bounds=norm_bounds,
+                bounds=self._norm_bounds,
                 seed=self._config.seed,
                 population_size=self._config.population_size,
             )
@@ -555,7 +590,7 @@ class CmaesOptimizer:
             self._cma = CMA(
                 mean=self._to_norm(mean_orig),
                 sigma=sigma,
-                bounds=norm_bounds,
+                bounds=self._norm_bounds,
                 seed=self._config.seed,
                 population_size=self._config.population_size,
             )
@@ -598,8 +633,106 @@ class CmaesOptimizer:
     def evaluations(self) -> int:
         return self._evaluated
 
+    @property
+    def pending_count(self) -> int:
+        return len(self._pending)
+
     def should_stop(self) -> bool:
         return bool(self._cma.should_stop())
+
+    def restart(
+        self,
+        *,
+        initial_mean: np.ndarray | ParamDict | None = None,
+        sigma: float | None = None,
+        seed: int | None = None,
+        population_size: int | None = None,
+    ) -> None:
+        """Restart the CMA distribution while preserving run evidence."""
+
+        from cmaes import CMA  # noqa: WPS433 — lazy import
+
+        if initial_mean is None:
+            mean_orig = self._best_vector if self._best_vector is not None else self._encoder.initial_vector
+        elif isinstance(initial_mean, dict):
+            mean_orig = self._encoder.encode(initial_mean)
+        else:
+            mean_orig = np.asarray(initial_mean, dtype=np.float64)
+            if mean_orig.shape != (self.dim,):
+                raise ValueError(f"initial_mean shape {mean_orig.shape} != ({self.dim},)")
+
+        restart_sigma = max(float(sigma if sigma is not None else self._config.sigma), 1e-3)
+        self._cma = CMA(
+            mean=self._to_norm(mean_orig),
+            sigma=restart_sigma,
+            bounds=self._norm_bounds,
+            seed=seed if seed is not None else self._config.seed,
+            population_size=population_size if population_size is not None else self._config.population_size,
+        )
+        self._pending = []
+        self._pending_results = []
+        self._step += 1
+
+    def save_checkpoint(self, path: str | Path) -> None:
+        checkpoint_path = Path(path)
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_path.write_bytes(
+            pickle.dumps(
+                {
+                    "metadata": self.checkpoint_metadata_payload(),
+                    "optimizer": self,
+                }
+            )
+        )
+
+    def checkpoint_metadata_payload(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "optimizer": "cma_es",
+            "encoder_dim": self._encoder.dim,
+            "axis_fingerprint": self._encoder.axis_fingerprint(),
+            "evaluations": self.evaluations,
+            "pending_count": self.pending_count,
+            "population_size": self.population_size,
+            "warm_started": self.warm_started,
+        }
+
+    @classmethod
+    def checkpoint_metadata(cls, path: str | Path) -> dict[str, Any]:
+        checkpoint_path = Path(path)
+        payload = pickle.loads(checkpoint_path.read_bytes())
+        if isinstance(payload, dict) and isinstance(payload.get("metadata"), dict):
+            return dict(payload["metadata"])
+        if isinstance(payload, cls):
+            return payload.checkpoint_metadata_payload()
+        raise TypeError(f"checkpoint does not contain {cls.__name__}: {type(payload)!r}")
+
+    @classmethod
+    def load_checkpoint(
+        cls,
+        path: str | Path,
+        *,
+        expected_encoder: ParameterEncoder | None = None,
+    ) -> "CmaesOptimizer":
+        checkpoint_path = Path(path)
+        payload = pickle.loads(checkpoint_path.read_bytes())
+        metadata: dict[str, Any]
+        if isinstance(payload, dict) and isinstance(payload.get("optimizer"), cls):
+            metadata = dict(payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {})
+            optimizer = payload["optimizer"]
+        elif isinstance(payload, cls):
+            optimizer = payload
+            metadata = optimizer.checkpoint_metadata_payload()
+        else:
+            raise TypeError(f"checkpoint does not contain {cls.__name__}: {type(payload)!r}")
+        if expected_encoder is not None:
+            expected_fingerprint = expected_encoder.axis_fingerprint()
+            actual_fingerprint = metadata.get("axis_fingerprint")
+            if actual_fingerprint != expected_fingerprint:
+                raise ValueError(
+                    "incompatible CMA-ES checkpoint: encoder axis fingerprint differs"
+                )
+        return optimizer
 
     # ------------------------------------------------------------------
     # ask / tell
@@ -632,6 +765,12 @@ class CmaesOptimizer:
         self._pending.append(vec_norm)
         return self._encoder.decode(vec_orig)
 
+    def ask_many(self, count: int, bias_callback: "BiasCallback | None" = None) -> list[ParamDict]:
+        count = int(count)
+        if count < 0:
+            raise ValueError("count must be non-negative")
+        return [self.ask(bias_callback=bias_callback) for _ in range(count)]
+
     def tell(self, fitness: float) -> None:
         """Report the fitness for the *most recently asked* candidate.
 
@@ -655,8 +794,21 @@ class CmaesOptimizer:
             self._pending_results = []
             self._step += 1
 
+    def tell_many(self, fitnesses: Sequence[float]) -> None:
+        values = [float(value) for value in fitnesses]
+        if len(values) > len(self._pending):
+            raise RuntimeError(
+                f"tell_many() received more fitness values than pending asks: "
+                f"{len(values)} > {len(self._pending)}"
+            )
+        for fitness in values:
+            self.tell(fitness)
+
     def history(self) -> list[tuple[ParamDict, float]]:
         return [(self._encoder.decode(v), f) for v, f in self._history]
+
+    def loss_history(self) -> list[float]:
+        return [float(fitness) for _, fitness in self._history]
 
     # ------------------------------------------------------------------
     # warm-start helpers

@@ -219,9 +219,10 @@ def test_write_candidate_lmat_validates_after_save(tmp_path, real_lmat) -> None:
     assert not diffs, f"shape diffs after write_candidate_lmat: {diffs}"
 
 
-def test_write_candidate_lmat_refuses_corrupt_payload(tmp_path) -> None:
+def test_write_candidate_lmat_refuses_corrupt_payload(tmp_path, real_lmat) -> None:
     """When the optimiser somehow produces a bad payload, the candidate
     file must NOT be left on disk in a half-written state."""
+    _ = real_lmat
     out = tmp_path / "candidate.lmat"
     with pytest.raises(LmatWriteError):
         lmat_io.write_candidate_lmat(

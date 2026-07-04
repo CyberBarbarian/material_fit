@@ -1,9 +1,9 @@
 # ============================================================================
 # Material Fit Inspector — .gitignore
 # ============================================================================
-# This file lives at the tool's repo root (`tools/`).
-# When the tool is migrated to a standalone project space, copy this dir over;
-# .gitignore travels with it.
+# This file lives at the standalone Material Fit repository root.
+# Keep generated renderer payloads, local project state, and experiment outputs
+# out of Git; commit source, tests, config templates, and durable docs only.
 
 # ----------------------------------------------------------------------------
 # Python
@@ -55,6 +55,17 @@ material_fit/output/**/preflight/*.png
 
 # Experiment scratch outputs
 material_fit/experiments_out/
+
+# Local renderer/runtime payloads and research artifacts.
+# These are produced or unpacked per machine and should stay outside GitHub.
+/artifacts/
+/LayaAirIDE-*/
+/laya_project_minimal/
+/unity_references/
+
+# Codex/Desktop local state.
+/.codex/
+/.agents/
 
 # Backup files written by lmat_io.write_candidate_lmat
 *.lmat.auto_adjust_*.bak

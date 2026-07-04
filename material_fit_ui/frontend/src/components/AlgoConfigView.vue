@@ -15,6 +15,7 @@ function defaultConfig(): AlgorithmConfig {
   return {
     max_iterations: 300,
     target_score: 0.9,
+    optimizer_preset: 'manual',
     apply_lmat: true,
     capture_screen_after_apply: false,
     use_laya_editor_capture: true,
@@ -32,7 +33,14 @@ function defaultConfig(): AlgorithmConfig {
     optimizer: 'adaptive_response_search',
     analysis_performance: {
       multiview_workers: 'auto',
+      evaluation_batch_size: 1,
+      evaluation_workers: 1,
+      evaluation_parallel_safe: false,
+      full_rerank_top_k: 0,
+      best_full_validation: false,
+      target_full_validation: false,
       snapshot_interval: 50,
+      research_metrics_profile: 'tiered',
       keep_last_n_artifacts: 5,
       always_keep_best_artifact: true,
       always_keep_first_artifact: true,
@@ -40,10 +48,23 @@ function defaultConfig(): AlgorithmConfig {
     cma_es: {
       mode: 'warm',
       warm_start_iters: 12,
+      warm_start_source: 'elite_archive_first',
       population_size: null,
       sigma: null,
       seed: null,
       hint_bias_mix_ratio: 0.30,
+      stagnation_patience: 0,
+      stagnation_min_delta: 0.001,
+      stagnation_min_evaluations: 0,
+      stagnation_max_restarts: 0,
+      stagnation_stop_after_restarts: true,
+      restart_center_mode: 'best',
+      restart_population_multiplier: 1.0,
+      restart_population_schedule: 'ipop',
+      restart_max_population_size: null,
+      initial_design_samples: 0,
+      initial_design_method: 'latin_hypercube',
+      initial_design_include_current: true,
     },
   };
 }
@@ -51,6 +72,37 @@ function defaultConfig(): AlgorithmConfig {
 const form = reactive<AlgorithmConfig>(defaultConfig());
 
 const isCma = computed(() => form.optimizer === 'cma_cold' || form.optimizer === 'cma_warm' || form.optimizer === 'subspace_cma_es');
+
+function applyOptimizerPreset(): void {
+  if (form.optimizer_preset !== 'cma_mature_default') return;
+  form.optimizer = 'cma_warm';
+  Object.assign(form.cma_es, {
+    warm_start_iters: 12,
+    warm_start_source: 'elite_archive_first',
+    hint_bias_mix_ratio: 0.30,
+    stagnation_patience: 64,
+    stagnation_min_delta: 0.001,
+    stagnation_min_evaluations: 64,
+    stagnation_max_restarts: 8,
+    stagnation_stop_after_restarts: false,
+    restart_center_mode: 'alternate',
+    restart_population_multiplier: 2.0,
+    restart_population_schedule: 'bipop',
+    restart_max_population_size: null,
+    initial_design_samples: 16,
+    initial_design_method: 'latin_hypercube',
+    initial_design_include_current: true,
+  });
+  Object.assign(form.analysis_performance, {
+    evaluation_batch_size: 8,
+    evaluation_workers: 4,
+    evaluation_parallel_safe: false,
+    full_rerank_top_k: 1,
+    best_full_validation: true,
+    target_full_validation: true,
+    research_metrics_profile: 'tiered',
+  });
+}
 
 const optimizerHelp: Record<OptimizerKind, string> = {
   heuristic: '旧的固定 stage 反馈控制器。可解释但没有组级回滚，适合作为对照基线。',
@@ -100,11 +152,19 @@ async function save(): Promise<void> {
     const snapshotInterval = Number(form.analysis_performance.snapshot_interval ?? 50);
     const payload: AlgorithmConfig = {
       ...form,
+      optimizer_preset: form.optimizer_preset ?? 'manual',
       capture_screen_after_apply: false,
       use_laya_editor_capture: true,
       analysis_performance: {
         multiview_workers: form.analysis_performance.multiview_workers,
+        evaluation_batch_size: Number(form.analysis_performance.evaluation_batch_size ?? 1),
+        evaluation_workers: Number(form.analysis_performance.evaluation_workers ?? 1),
+        evaluation_parallel_safe: Boolean(form.analysis_performance.evaluation_parallel_safe),
+        full_rerank_top_k: Number(form.analysis_performance.full_rerank_top_k ?? 0),
+        best_full_validation: Boolean(form.analysis_performance.best_full_validation),
+        target_full_validation: Boolean(form.analysis_performance.target_full_validation),
         snapshot_interval: snapshotInterval,
+        research_metrics_profile: form.analysis_performance.research_metrics_profile ?? 'tiered',
         keep_last_n_artifacts: form.analysis_performance.keep_last_n_artifacts,
         always_keep_best_artifact: form.analysis_performance.always_keep_best_artifact,
         always_keep_first_artifact: form.analysis_performance.always_keep_first_artifact,
@@ -157,6 +217,18 @@ async function save(): Promise<void> {
         <tbody>
           <tr>
             <td>
+              <label for="cfg-optimizer-preset">optimizer_preset</label>
+              <p class="muted small">manual = 手动调参；cma_mature_default = 启用稳健长跑 CMA 组合。</p>
+            </td>
+            <td>
+              <select id="cfg-optimizer-preset" v-model="form.optimizer_preset" @change="applyOptimizerPreset">
+                <option value="manual">manual</option>
+                <option value="cma_mature_default">cma_mature_default（稳健 CMA 长跑）</option>
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <td>
               <label for="cfg-optimizer">optimizer</label>
               <p class="muted small">{{ optimizerHelp[form.optimizer] }}</p>
             </td>
@@ -185,6 +257,21 @@ async function save(): Promise<void> {
                     <td>
                       <input id="cma-warm-iters" type="number" min="0" max="200" step="1"
                         v-model.number="form.cma_es.warm_start_iters" :disabled="form.optimizer !== 'cma_warm'" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-warm-source">warm_start_source</label>
+                      <p class="muted small">prior 来源。elite_archive_first 优先复用 top-K 高分候选；iteration_history 只用旧 iter 目录。</p>
+                    </td>
+                    <td>
+                      <select id="cma-warm-source" v-model="form.cma_es.warm_start_source"
+                        :disabled="form.optimizer !== 'cma_warm'">
+                        <option value="elite_archive_first">elite_archive_first</option>
+                        <option value="elite_archive_only">elite_archive_only</option>
+                        <option value="iteration_history">iteration_history</option>
+                        <option value="none">none</option>
+                      </select>
                     </td>
                   </tr>
                   <tr>
@@ -231,6 +318,126 @@ async function save(): Promise<void> {
                       <input id="cma-hint-bias" type="number" min="0" max="1" step="0.05" placeholder="0.30"
                         v-model.number="form.cma_es.hint_bias_mix_ratio" />
                     </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-stagnation-patience">stagnation_patience</label>
+                      <p class="muted small">CMA-ES 专属平台期停止窗口。0 = 关闭；建议长跑时设为 2~4 个 population。</p>
+                    </td>
+                    <td>
+                      <input id="cma-stagnation-patience" type="number" min="0" max="10000" step="1" placeholder="0"
+                        v-model.number="form.cma_es.stagnation_patience" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-stagnation-delta">stagnation_min_delta</label>
+                      <p class="muted small">最近窗口内 best fit_score 至少提升多少才算继续有效探索。0.001 适合 0~1 分数。</p>
+                    </td>
+                    <td>
+                      <input id="cma-stagnation-delta" type="number" min="0" max="1" step="0.001" placeholder="0.001"
+                        v-model.number="form.cma_es.stagnation_min_delta" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-stagnation-min-evals">stagnation_min_evaluations</label>
+                      <p class="muted small">达到多少次真实评估后才允许平台期停止。0 = 不设冷启动保护。</p>
+                    </td>
+                    <td>
+                      <input id="cma-stagnation-min-evals" type="number" min="0" max="100000" step="1" placeholder="0"
+                        v-model.number="form.cma_es.stagnation_min_evaluations" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-stagnation-restarts">stagnation_max_restarts</label>
+                      <p class="muted small">平台期后最多重启几次 CMA-ES 分布。0 = 不重启，直接按 cmaes_stagnation 停止。</p>
+                    </td>
+                    <td>
+                      <input id="cma-stagnation-restarts" type="number" min="0" max="100" step="1" placeholder="0"
+                        v-model.number="form.cma_es.stagnation_max_restarts" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.cma_es.stagnation_stop_after_restarts" /> stagnation_stop_after_restarts</label>
+                      <p class="muted small">打开时重启预算耗尽后早停；关闭时继续跑到目标分数或最大轮数，适合 1w 轮长跑。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.cma_es.stagnation_stop_after_restarts ? 'true' : 'false' }}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-restart-center">restart_center_mode</label>
+                      <p class="muted small">best = 从当前最优点继续精修；random = 平台期后做多启动重启；alternate = best/random 交替。</p>
+                    </td>
+                    <td>
+                      <select id="cma-restart-center" v-model="form.cma_es.restart_center_mode">
+                        <option value="best">best</option>
+                        <option value="random">random</option>
+                        <option value="alternate">alternate</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-restart-pop-mult">restart_population_multiplier</label>
+                      <p class="muted small">population 增长倍率。1.0 = 不变；2.0 = 大重启按倍数扩张。</p>
+                    </td>
+                    <td>
+                      <input id="cma-restart-pop-mult" type="number" min="1" max="8" step="0.25" placeholder="1.0"
+                        v-model.number="form.cma_es.restart_population_multiplier" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-restart-pop-schedule">restart_population_schedule</label>
+                      <p class="muted small">ipop = 单调增大 population；bipop = 大/小 population 重启交替。</p>
+                    </td>
+                    <td>
+                      <select id="cma-restart-pop-schedule" v-model="form.cma_es.restart_population_schedule">
+                        <option value="ipop">ipop</option>
+                        <option value="bipop">bipop</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-restart-pop-max">restart_max_population_size</label>
+                      <p class="muted small">重启后 population size 上限。空 = 不限制。</p>
+                    </td>
+                    <td>
+                      <input id="cma-restart-pop-max" type="number" min="1" max="1024" step="1" placeholder="auto"
+                        v-model.number="form.cma_es.restart_max_population_size" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-initial-design-samples">initial_design_samples</label>
+                      <p class="muted small">CMA-ES 前先评估多少个覆盖采样候选，再用这些结果 warm-start。0 = 关闭。</p>
+                    </td>
+                    <td>
+                      <input id="cma-initial-design-samples" type="number" min="0" max="512" step="1" placeholder="0"
+                        v-model.number="form.cma_es.initial_design_samples" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="cma-initial-design-method">initial_design_method</label>
+                      <p class="muted small">当前支持 latin_hypercube，用分层覆盖采样减少冷启动只在局部搜索的问题。</p>
+                    </td>
+                    <td>
+                      <select id="cma-initial-design-method" v-model="form.cma_es.initial_design_method">
+                        <option value="latin_hypercube">latin_hypercube</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.cma_es.initial_design_include_current" /> initial_design_include_current</label>
+                      <p class="muted small">把当前 .lmat 参数作为第一个初始设计样本，用来保留基线对照。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.cma_es.initial_design_include_current ? 'true' : 'false' }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -307,11 +514,72 @@ async function save(): Promise<void> {
                   </tr>
                   <tr>
                     <td>
+                      <label for="perf-batch">evaluation_batch_size</label>
+                      <p class="muted small">CMA 候选评估批量宽度。1 = 当前单候选闭环；大于 1 供后续批量渲染/评分入口使用。</p>
+                    </td>
+                    <td>
+                      <input id="perf-batch" type="number" min="1" max="64" step="1" v-model.number="form.analysis_performance.evaluation_batch_size" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-eval-workers">evaluation_workers</label>
+                      <p class="muted small">安全路径下同批候选的并发评估 worker 数；共享 .lmat / Editor 截图路径会自动退回 1。</p>
+                    </td>
+                    <td>
+                      <input id="perf-eval-workers" type="number" min="1" max="64" step="1" v-model.number="form.analysis_performance.evaluation_workers" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.analysis_performance.evaluation_parallel_safe" /> evaluation_parallel_safe</label>
+                      <p class="muted small">仅当外部 renderer 实例彼此隔离时启用；单 Laya 实例或共享命令文件不要打开。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.analysis_performance.evaluation_parallel_safe ? 'true' : 'false' }}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-full-rerank">full_rerank_top_k</label>
+                      <p class="muted small">batch 候选先 fast 粗筛，再对 top-k 候选用 full profile 重评估。0 = 关闭。</p>
+                    </td>
+                    <td>
+                      <input id="perf-full-rerank" type="number" min="0" max="64" step="1" v-model.number="form.analysis_performance.full_rerank_top_k" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.analysis_performance.best_full_validation" /> best_full_validation</label>
+                      <p class="muted small">fast/proxy 候选会刷新 best 时，先用 full profile 复评，避免 best 被代理指标噪声锁定。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.analysis_performance.best_full_validation ? 'true' : 'false' }}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label><input type="checkbox" v-model="form.analysis_performance.target_full_validation" /> target_full_validation</label>
+                      <p class="muted small">fast/proxy 分数达到 target 时，先用 full profile 复评，复评仍达标才停止。</p>
+                    </td>
+                    <td class="muted small mono">{{ form.analysis_performance.target_full_validation ? 'true' : 'false' }}</td>
+                  </tr>
+                  <tr>
+                    <td>
                       <label for="perf-snapshot">snapshot_interval</label>
                       <p class="muted small">统一快照间隔：P2 指标、diff 图和完整迭代详情都按这个轮数保留；0 = 只保留第 0 轮、best、final 和最近 N 轮。</p>
                     </td>
                     <td>
                       <input id="perf-snapshot" type="number" min="0" max="10000" step="1" v-model.number="form.analysis_performance.snapshot_interval" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="perf-research-profile">research_metrics_profile</label>
+                      <p class="muted small">tiered = 普通轮 fast proxy，snapshot/best/final 使用 full research metrics。</p>
+                    </td>
+                    <td>
+                      <select id="perf-research-profile" v-model="form.analysis_performance.research_metrics_profile">
+                        <option value="tiered">tiered</option>
+                        <option value="full">full</option>
+                        <option value="fast">fast</option>
+                      </select>
                     </td>
                   </tr>
                   <tr>

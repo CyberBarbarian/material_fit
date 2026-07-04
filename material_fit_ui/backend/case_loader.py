@@ -32,9 +32,38 @@ from pathlib import Path
 from typing import Any
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "tools" / "material_fit" / "output"
-ALLOWED_IMAGE_ROOT = (PROJECT_ROOT / "tools" / "material_fit").resolve()
+def _find_project_root() -> Path:
+    """Support both direct checkout and parent/tools checkout layouts."""
+
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parents[2],
+        here.parents[3],
+    ]
+    for root in candidates:
+        if _material_fit_root(root).exists() and _ui_root(root).exists():
+            return root
+    return candidates[0]
+
+
+def _material_fit_root(project_root: Path) -> Path:
+    direct = project_root / "material_fit"
+    if direct.exists():
+        return direct
+    return project_root / "tools" / "material_fit"
+
+
+def _ui_root(project_root: Path) -> Path:
+    direct = project_root / "material_fit_ui"
+    if direct.exists():
+        return direct
+    return project_root / "tools" / "material_fit_ui"
+
+
+PROJECT_ROOT = _find_project_root()
+MATERIAL_FIT_ROOT = _material_fit_root(PROJECT_ROOT)
+DEFAULT_OUTPUT_DIR = MATERIAL_FIT_ROOT / "output"
+ALLOWED_IMAGE_ROOT = MATERIAL_FIT_ROOT.resolve()
 _ITER_RE = re.compile(r"^iter_(\d+)$", re.IGNORECASE)
 _PROBE_PREFIX = "probe_"
 _AUTO_PREFIX = "iter_"

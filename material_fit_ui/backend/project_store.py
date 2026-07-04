@@ -55,6 +55,41 @@ _IMPORT_FILE_SLOTS: dict[str, str] = {
     "unity_material_params_path": "unity_material_params",
 }
 _UNITY_REFERENCE_DIR = "unity_references"
+_OPTIMIZER_PRESETS = {"manual", "cma_mature_default"}
+_CMA_MATURE_DEFAULT_PRESET: dict[str, Any] = {
+    "optimizer": "cma_warm",
+    "cma_es": {
+        "warm_start_iters": 12,
+        "warm_start_source": "elite_archive_first",
+        "hint_bias_mix_ratio": 0.30,
+        "stagnation_patience": 64,
+        "stagnation_min_delta": 0.001,
+        "stagnation_min_evaluations": 64,
+        "stagnation_max_restarts": 8,
+        "stagnation_stop_after_restarts": False,
+        "restart_center_mode": "alternate",
+        "restart_population_multiplier": 2.0,
+        "restart_population_schedule": "bipop",
+        "restart_max_population_size": None,
+        "initial_design_samples": 16,
+        "initial_design_method": "latin_hypercube",
+        "initial_design_include_current": True,
+    },
+    "analysis_performance": {
+        "evaluation_batch_size": 8,
+        "evaluation_workers": 4,
+        "evaluation_parallel_safe": False,
+        "full_rerank_top_k": 1,
+        "best_full_validation": True,
+        "target_full_validation": True,
+        "stability_validation_repeats": 2,
+        "stability_validation_restart_renderer": True,
+        "stability_score_drift_threshold": 0.005,
+        "stability_foreground_abs_threshold": 128.0,
+        "stability_foreground_ratio_threshold": 0.005,
+        "research_metrics_profile": "tiered",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -184,9 +219,17 @@ def create_project(
         "algorithm_config": {
             "max_iterations": 300,
             "target_score": 0.9,
+            "optimizer_preset": "manual",
             "analysis_performance": {
                 "multiview_workers": "auto",
+                "evaluation_batch_size": 1,
+                "evaluation_workers": 1,
+                "evaluation_parallel_safe": False,
+                "full_rerank_top_k": 0,
+                "best_full_validation": False,
+                "target_full_validation": False,
                 "snapshot_interval": 50,
+                "research_metrics_profile": "tiered",
                 "keep_last_n_artifacts": 5,
                 "always_keep_best_artifact": True,
                 "always_keep_first_artifact": True,
@@ -249,6 +292,7 @@ def create_project(
             "cma_es": {
                 "mode": "warm",
                 "warm_start_iters": 12,
+                "warm_start_source": "elite_archive_first",
                 "population_size": None,
                 "sigma": None,
                 "seed": None,
@@ -256,6 +300,18 @@ def create_project(
                 # CMA-ES proposal. 0 disables, 0.30 is the recommended
                 # default, > 0.5 is heavy expert-driven exploration.
                 "hint_bias_mix_ratio": 0.30,
+                "stagnation_patience": 0,
+                "stagnation_min_delta": 0.001,
+                "stagnation_min_evaluations": 0,
+                "stagnation_max_restarts": 0,
+                "stagnation_stop_after_restarts": True,
+                "restart_center_mode": "best",
+                "restart_population_multiplier": 1.0,
+                "restart_population_schedule": "ipop",
+                "restart_max_population_size": None,
+                "initial_design_samples": 0,
+                "initial_design_method": "latin_hypercube",
+                "initial_design_include_current": True,
             },
             # Human-in-the-loop search-space control. Keys are Laya
             # semantic group names from preanalysis.laya_control_groups;
@@ -318,6 +374,16 @@ def patch_project(project_id: str, patch: dict[str, Any], config: LoaderConfig |
     current.pop("_summary", None)
     merged = _deep_merge(current, patch)
     return save_project(merged, config=config)
+
+
+def effective_algorithm_config(algo: Any) -> dict[str, Any]:
+    raw = dict(algo) if isinstance(algo, dict) else {}
+    preset = _normalize_optimizer_preset(raw.get("optimizer_preset"))
+    effective = dict(raw)
+    if preset == "cma_mature_default":
+        effective = _deep_merge(effective, _CMA_MATURE_DEFAULT_PRESET)
+    effective["optimizer_preset"] = preset
+    return effective
 
 
 def import_project_input_file(
@@ -433,7 +499,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
     config = config or LoaderConfig()
     project = get_project(project_id, config)
     inputs = project.get("inputs", {})
-    algo = project.get("algorithm_config", {})
+    algo = effective_algorithm_config(project.get("algorithm_config", {}))
 
     def _abs(value: Any) -> str:
         return str(value) if isinstance(value, str) and value else ""
@@ -481,15 +547,71 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         mix_ratio_value = 0.0
     if mix_ratio_value > 1.0:
         mix_ratio_value = 1.0
+    stagnation_min_delta = _coerce_optional_float(raw_cma_es.get("stagnation_min_delta"))
+    if stagnation_min_delta is None or stagnation_min_delta != stagnation_min_delta:
+        stagnation_min_delta = 0.001
+    restart_multiplier = _coerce_optional_float(raw_cma_es.get("restart_population_multiplier"))
+    if restart_multiplier is None or restart_multiplier != restart_multiplier:
+        restart_multiplier = 1.0
+    stop_after_restarts = _coerce_optional_bool(raw_cma_es.get("stagnation_stop_after_restarts"))
+    restart_center_mode = str(raw_cma_es.get("restart_center_mode") or "best").strip().lower()
+    if restart_center_mode not in {"best", "random", "alternate"}:
+        restart_center_mode = "best"
+    restart_population_schedule = str(raw_cma_es.get("restart_population_schedule") or "ipop").strip().lower()
+    if restart_population_schedule not in {"ipop", "bipop"}:
+        restart_population_schedule = "ipop"
+    warm_start_source = str(raw_cma_es.get("warm_start_source") or "elite_archive_first").strip().lower()
+    warm_start_source_aliases = {
+        "archive": "elite_archive_first",
+        "archive_first": "elite_archive_first",
+        "elite_archive": "elite_archive_first",
+        "combined": "elite_archive_first",
+        "archive_only": "elite_archive_only",
+        "elite_only": "elite_archive_only",
+        "history": "iteration_history",
+        "iter_history": "iteration_history",
+        "iteration": "iteration_history",
+        "off": "none",
+        "disabled": "none",
+        "false": "none",
+    }
+    warm_start_source = warm_start_source_aliases.get(warm_start_source, warm_start_source)
+    if warm_start_source not in {"elite_archive_first", "elite_archive_only", "iteration_history", "none"}:
+        warm_start_source = "elite_archive_first"
+    initial_design_method = str(raw_cma_es.get("initial_design_method") or "latin_hypercube").strip().lower()
+    if initial_design_method not in {"latin_hypercube"}:
+        initial_design_method = "latin_hypercube"
+    initial_design_include_current = _coerce_optional_bool(raw_cma_es.get("initial_design_include_current"))
     cma_es_payload: dict[str, Any] = {
         "mode": str(raw_cma_es.get("mode", "warm")).strip().lower() or "warm",
         "warm_start_iters": int(raw_cma_es.get("warm_start_iters", 12) or 0),
+        "warm_start_source": warm_start_source,
         "population_size": _coerce_optional_int(raw_cma_es.get("population_size")),
         "sigma": _coerce_optional_float(raw_cma_es.get("sigma")),
         "seed": _coerce_optional_int(raw_cma_es.get("seed")),
         # E-010: persisted to fit_config.json so the subprocess
         # picks up the mix ratio even if no CLI override is set.
         "hint_bias_mix_ratio": mix_ratio_value,
+        "stagnation_patience": max(_coerce_optional_int(raw_cma_es.get("stagnation_patience")) or 0, 0),
+        "stagnation_min_delta": max(stagnation_min_delta, 0.0),
+        "stagnation_min_evaluations": max(
+            _coerce_optional_int(raw_cma_es.get("stagnation_min_evaluations")) or 0,
+            0,
+        ),
+        "stagnation_max_restarts": max(
+            _coerce_optional_int(raw_cma_es.get("stagnation_max_restarts")) or 0,
+            0,
+        ),
+        "stagnation_stop_after_restarts": True if stop_after_restarts is None else stop_after_restarts,
+        "restart_center_mode": restart_center_mode,
+        "restart_population_multiplier": max(restart_multiplier, 1.0),
+        "restart_population_schedule": restart_population_schedule,
+        "restart_max_population_size": _coerce_optional_int(raw_cma_es.get("restart_max_population_size")),
+        "initial_design_samples": max(_coerce_optional_int(raw_cma_es.get("initial_design_samples")) or 0, 0),
+        "initial_design_method": initial_design_method,
+        "initial_design_include_current": (
+            True if initial_design_include_current is None else initial_design_include_current
+        ),
     }
     preanalysis_path = paths.preanalysis_json if paths.preanalysis_json.exists() else paths.project_dir / PREANALYSIS_FILE
     preanalysis = _read_json(preanalysis_path) if preanalysis_path.exists() else None
@@ -502,6 +624,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "unity_shader_path": _abs(inputs.get("unity_shader_path")),
         "unity_material_params_path": _abs(inputs.get("unity_material_params_path")),
         "image_pairs": image_pairs,
+        "optimizer_preset": str(algo.get("optimizer_preset", "manual") or "manual"),
         "auto_adjust_target_score": float(algo.get("target_score", 0.9)),
         "capture_screen_after_apply": False if use_laya_editor_capture else bool(algo.get("capture_screen_after_apply", False)),
         "rerender_wait_ms": int(algo.get("rerender_wait_ms", 900)),
@@ -716,6 +839,27 @@ def _coerce_optional_float(value: Any) -> float | None:
         return None
 
 
+def _coerce_optional_bool(value: Any) -> bool | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return None
+
+
+def _normalize_optimizer_preset(value: Any) -> str:
+    preset = str(value or "manual").strip().lower()
+    return preset if preset in _OPTIMIZER_PRESETS else "manual"
+
+
 def _derive_laya_asset_path(lmat_path: str, laya_project_path: Any) -> str:
     path = Path(lmat_path)
     if not path.is_absolute():
@@ -847,8 +991,12 @@ def _collect_laya_scene_nodes(
 
 
 def _discover_unity_reference_dir(project_root: Path) -> str:
-    unity_root = project_root / "tools" / "material_fit" / "unity"
-    if not unity_root.exists():
+    unity_roots = [
+        project_root / "material_fit" / "unity",
+        project_root / "tools" / "material_fit" / "unity",
+    ]
+    unity_root = next((path for path in unity_roots if path.exists()), None)
+    if unity_root is None:
         return ""
     candidates: list[tuple[float, int, Path]] = []
     for directory in unity_root.rglob("*"):
@@ -930,9 +1078,50 @@ def _normalize_analysis_performance(algo: dict[str, Any]) -> dict[str, Any]:
         workers_int = _coerce_optional_int(workers_raw)
         workers = workers_int if workers_int is not None and workers_int > 0 else "auto"
     interval = max(0, int(snapshot if snapshot is not None else 50))
+    batch_raw = _coerce_optional_int(value.get("evaluation_batch_size"))
+    evaluation_batch_size = max(1, int(batch_raw if batch_raw is not None else 1))
+    workers_raw = _coerce_optional_int(value.get("evaluation_workers"))
+    evaluation_workers = max(1, int(workers_raw if workers_raw is not None else 1))
+    evaluation_parallel_safe = bool(value.get("evaluation_parallel_safe", False))
+    full_rerank_raw = _coerce_optional_int(value.get("full_rerank_top_k"))
+    full_rerank_top_k = max(0, int(full_rerank_raw if full_rerank_raw is not None else 0))
+    stability_repeats_raw = _coerce_optional_int(value.get("stability_validation_repeats"))
+    stability_score_drift = _coerce_optional_float(value.get("stability_score_drift_threshold"))
+    stability_foreground_abs = _coerce_optional_float(value.get("stability_foreground_abs_threshold"))
+    stability_foreground_ratio = _coerce_optional_float(value.get("stability_foreground_ratio_threshold"))
+    profile = str(value.get("research_metrics_profile") or "tiered").strip().lower()
+    if profile not in {"tiered", "full", "fast"}:
+        profile = "tiered"
     return {
         "multiview_workers": workers,
+        "evaluation_batch_size": evaluation_batch_size,
+        "evaluation_workers": evaluation_workers,
+        "evaluation_parallel_safe": evaluation_parallel_safe,
+        "full_rerank_top_k": full_rerank_top_k,
+        "best_full_validation": bool(value.get("best_full_validation", False)),
+        "target_full_validation": bool(value.get("target_full_validation", False)),
+        "stability_validation_repeats": max(
+            1,
+            int(stability_repeats_raw if stability_repeats_raw is not None else 1),
+        ),
+        "stability_validation_restart_renderer": bool(value.get("stability_validation_restart_renderer", False)),
+        "stability_score_drift_threshold": (
+            float(stability_score_drift)
+            if stability_score_drift is not None and stability_score_drift > 0
+            else 0.005
+        ),
+        "stability_foreground_abs_threshold": (
+            float(stability_foreground_abs)
+            if stability_foreground_abs is not None and stability_foreground_abs > 0
+            else 128.0
+        ),
+        "stability_foreground_ratio_threshold": (
+            float(stability_foreground_ratio)
+            if stability_foreground_ratio is not None and stability_foreground_ratio > 0
+            else 0.005
+        ),
         "snapshot_interval": interval,
+        "research_metrics_profile": profile,
         "keep_last_n_artifacts": max(0, int(keep_last if keep_last is not None else 5)),
         "always_keep_best_artifact": bool(value.get("always_keep_best_artifact", True)),
         "always_keep_first_artifact": bool(value.get("always_keep_first_artifact", True)),

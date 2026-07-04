@@ -18,6 +18,7 @@ human-scale iteration cadence and avoids long-lived connections.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import secrets
 import signal
@@ -33,6 +34,7 @@ from . import case_loader
 from .case_loader import LoaderConfig
 from .project_store import (
     derive_fit_config,
+    effective_algorithm_config,
     get_project,
     patch_project,
     project_paths,
@@ -94,8 +96,9 @@ def start_job(
         if existing and existing.get("status") == "running":
             raise RuntimeError(f"project {project_id} already has running job {existing['job_id']}")
 
+    raw_algo = project.get("algorithm_config", {}) if isinstance(project.get("algorithm_config"), dict) else {}
     fit_config = derive_fit_config(project_id, config)
-    algo = project.get("algorithm_config", {})
+    algo = effective_algorithm_config(raw_algo)
     editor_capture_enabled = bool(
         isinstance(fit_config.get("laya_editor_capture"), dict)
         and fit_config["laya_editor_capture"].get("enabled")
@@ -128,6 +131,7 @@ def start_job(
         json.dumps(fit_config, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    fit_config_sha256 = hashlib.sha256(fit_config_path.read_bytes()).hexdigest()
     job_dir.joinpath("job_config.json").write_text(
         json.dumps(
             {
@@ -135,7 +139,10 @@ def start_job(
                 "project_id": project_id,
                 "run_dir": str(run_dir),
                 "fit_config_path": str(fit_config_path),
-                "algorithm_config": algo,
+                "fit_config_sha256": fit_config_sha256,
+                "fit_config": fit_config,
+                "algorithm_config": raw_algo,
+                "effective_algorithm_config": algo,
             },
             ensure_ascii=False,
             indent=2,
@@ -199,6 +206,8 @@ def start_job(
     cma_es = algo.get("cma_es") if isinstance(algo.get("cma_es"), dict) else {}
     if cma_es.get("warm_start_iters") is not None:
         args.extend(["--cma-warm-start-iters", str(int(cma_es["warm_start_iters"]))])
+    if cma_es.get("warm_start_source") not in (None, ""):
+        args.extend(["--cma-warm-start-source", str(cma_es["warm_start_source"])])
     if cma_es.get("population_size") not in (None, ""):
         args.extend(["--cma-population-size", str(int(cma_es["population_size"]))])
     if cma_es.get("sigma") not in (None, ""):
@@ -210,6 +219,30 @@ def start_job(
     # remain consistent with `CmaesStrategyConfig.hint_bias_mix_ratio`.
     if cma_es.get("hint_bias_mix_ratio") not in (None, ""):
         args.extend(["--cma-hint-bias-mix-ratio", str(float(cma_es["hint_bias_mix_ratio"]))])
+    if cma_es.get("stagnation_patience") not in (None, ""):
+        args.extend(["--cma-stagnation-patience", str(int(cma_es["stagnation_patience"]))])
+    if cma_es.get("stagnation_min_delta") not in (None, ""):
+        args.extend(["--cma-stagnation-min-delta", str(float(cma_es["stagnation_min_delta"]))])
+    if cma_es.get("stagnation_min_evaluations") not in (None, ""):
+        args.extend(["--cma-stagnation-min-evaluations", str(int(cma_es["stagnation_min_evaluations"]))])
+    if cma_es.get("stagnation_max_restarts") not in (None, ""):
+        args.extend(["--cma-stagnation-max-restarts", str(int(cma_es["stagnation_max_restarts"]))])
+    if cma_es.get("stagnation_stop_after_restarts") is False:
+        args.append("--cma-continue-after-stagnation-restarts")
+    if cma_es.get("restart_center_mode") not in (None, ""):
+        args.extend(["--cma-restart-center-mode", str(cma_es["restart_center_mode"])])
+    if cma_es.get("restart_population_multiplier") not in (None, ""):
+        args.extend(["--cma-restart-population-multiplier", str(float(cma_es["restart_population_multiplier"]))])
+    if cma_es.get("restart_population_schedule") not in (None, ""):
+        args.extend(["--cma-restart-population-schedule", str(cma_es["restart_population_schedule"])])
+    if cma_es.get("restart_max_population_size") not in (None, ""):
+        args.extend(["--cma-restart-max-population-size", str(int(cma_es["restart_max_population_size"]))])
+    if cma_es.get("initial_design_samples") not in (None, ""):
+        args.extend(["--cma-initial-design-samples", str(int(cma_es["initial_design_samples"]))])
+    if cma_es.get("initial_design_method") not in (None, ""):
+        args.extend(["--cma-initial-design-method", str(cma_es["initial_design_method"])])
+    if cma_es.get("initial_design_include_current") is False:
+        args.append("--cma-initial-design-no-current")
 
     # The Laya refresh probe belongs to the project preflight flow, not the
     # formal auto-adjust loop. Running it here writes a temporary probe value

@@ -69,6 +69,10 @@ class ImageDiffConfig:
     bg_normalize_corner_size: int = 12
     compute_perceptual_optional: bool = True
     reference_cache_key: str | None = None
+    research_metrics_profile: str = "full"
+    compute_research_metrics: bool = True
+    compute_human_accept: bool = True
+    write_report: bool = True
 
 
 def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
@@ -82,7 +86,12 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
     """
 
     try:
-        reference, candidate, mask = load_rgba_pair(config.reference_path, config.candidate_path, config.mask_path)
+        reference, candidate, mask = load_rgba_pair(
+            config.reference_path,
+            config.candidate_path,
+            config.mask_path,
+            reference_cache_key=config.reference_cache_key,
+        )
         research_reference = reference.copy()
         research_candidate = candidate.copy()
         from PIL import Image
@@ -122,7 +131,7 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
             auto_mask_array = auto_mask_payload.mask
 
     human_alignment_payload: dict[str, Any] | None = None
-    if auto_mask_payload is not None:
+    if config.compute_human_accept and auto_mask_payload is not None:
         human_alignment_payload = build_foreground_alignment(
             reference,
             candidate,
@@ -265,24 +274,35 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
     # and ``perceptual.weighted_mae``.
     weight_cfg = ChannelWeightConfig(weights=dict(config.channel_weights)) if config.channel_weights else ChannelWeightConfig()
     weighted = channel_weighted_mae(channels, weight_cfg)
-    ssim_payload = ssim_score(
-        reference,
-        candidate,
-        mask=auto_mask_array,
-    )
+    if str(config.research_metrics_profile).strip().lower() == "fast":
+        ssim_payload = {
+            "status": "skipped_fast_profile",
+            "ssim": None,
+            "notes": ["top-level SSIM is deferred to full profile snapshots"],
+        }
+    else:
+        ssim_payload = ssim_score(
+            reference,
+            candidate,
+            mask=auto_mask_array,
+        )
     ssim_value = ssim_payload.get("ssim") if ssim_payload.get("status") == "ok" else None
     fit_value, fit_components = combine_fit_score(
         weighted_mae=float(weighted["weighted_mae"]),
         ssim=ssim_value,
         weights=config.fit_branch_weights,
     )
-    human_accept = build_human_accept_score(
-        global_metrics=global_metrics,
-        channels=channels,
-        weighted_mae=float(weighted["weighted_mae"]),
-        strict_fit_score=float(fit_value),
-        ssim=ssim_value,
-        alignment=human_alignment_payload,
+    human_accept = (
+        build_human_accept_score(
+            global_metrics=global_metrics,
+            channels=channels,
+            weighted_mae=float(weighted["weighted_mae"]),
+            strict_fit_score=float(fit_value),
+            ssim=ssim_value,
+            alignment=human_alignment_payload,
+        )
+        if config.compute_human_accept
+        else None
     )
     # P0 diagnostics (phase summary 2026-05-08): the fish_1580 post
     # mortem couldn't tell at a glance whether a flat fit_score came
@@ -335,13 +355,18 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
         "branch_weights": list(config.fit_branch_weights),
         "diagnostics": diagnostics,
     }
-    research_metrics = build_research_metrics(
-        research_reference,
-        research_candidate,
-        explicit_mask=mask,
-        fallback_mask=auto_mask_array,
-        compute_perceptual_optional=config.compute_perceptual_optional,
-        reference_cache_key=config.reference_cache_key,
+    research_metrics = (
+        build_research_metrics(
+            research_reference,
+            research_candidate,
+            explicit_mask=mask,
+            fallback_mask=auto_mask_array,
+            compute_perceptual_optional=config.compute_perceptual_optional,
+            reference_cache_key=config.reference_cache_key,
+            metric_profile=config.research_metrics_profile,
+        )
+        if config.compute_research_metrics
+        else None
     )
 
     result: dict[str, Any] = {
@@ -361,14 +386,17 @@ def analyze_image_diff(config: ImageDiffConfig) -> dict[str, Any]:
         "material_channels": channels,
         "adjustment_hints": suggestions,
         "perceptual": perceptual_block,
-        "research_metrics": research_metrics,
-        "human_accept_score": human_accept["score"],
-        "human_accept": human_accept,
     }
+    if research_metrics is not None:
+        result["research_metrics"] = research_metrics
+    if human_accept is not None:
+        result["human_accept_score"] = human_accept["score"]
+        result["human_accept"] = human_accept
 
-    report_path = output_dir / "diff_analysis.json"
-    report_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    result["report_path"] = str(report_path)
+    if config.write_report:
+        report_path = output_dir / "diff_analysis.json"
+        report_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        result["report_path"] = str(report_path)
     return result
 
 
@@ -411,7 +439,10 @@ def analyze_multiview_pairs(
     aggregation_config: dict[str, Any] | None = None,
     compute_perceptual_optional: bool = True,
     generate_diff_image: bool = True,
+    research_metrics_profile: str = "full",
     workers: int | str | None = None,
+    fast_score_only: bool = False,
+    write_report: bool = True,
 ) -> dict[str, Any]:
     """Analyze multi-view render pairs and build a strategy-compatible aggregate.
 
@@ -429,24 +460,56 @@ def analyze_multiview_pairs(
     worker_count = _resolve_multiview_workers(workers, len(pair_items))
     if compute_perceptual_optional:
         worker_count = 1
+    score_only_enabled = (
+        bool(fast_score_only)
+        and str(research_metrics_profile).strip().lower() == "fast"
+        and fit_score_mode in {"research", "perceptual"}
+        and not compute_perceptual_optional
+        and not generate_diff_image
+    )
 
     def analyze_one(index_and_pair: tuple[int, dict[str, Any]]) -> tuple[int, dict[str, Any], dict[str, Any]]:
         index, pair = index_and_pair
         pair_dir = output_root / f"pair_{index:02d}"
-        result = analyze_image_diff(
-            ImageDiffConfig(
-                reference_path=pair["reference"],
-                candidate_path=pair["candidate"],
-                mask_path=pair.get("mask"),
-                output_dir=pair_dir,
-                compute_perceptual_optional=compute_perceptual_optional,
-                generate_diff_image=generate_diff_image,
-                reference_cache_key=str(pair.get("reference", "")),
+        if score_only_enabled and fit_score_mode == "research":
+            result = _analyze_fast_research_score_only(
+                pair,
+                fit_score_mode=fit_score_mode,
             )
-        )
+        elif score_only_enabled:
+            result = analyze_image_diff(
+                ImageDiffConfig(
+                    reference_path=pair["reference"],
+                    candidate_path=pair["candidate"],
+                    mask_path=pair.get("mask"),
+                    output_dir=pair_dir,
+                    compute_perceptual_optional=False,
+                    generate_diff_image=False,
+                    reference_cache_key=str(pair.get("reference", "")),
+                    research_metrics_profile="fast",
+                    compute_research_metrics=False,
+                    compute_human_accept=False,
+                    write_report=False,
+                )
+            )
+            result["fast_score_only"] = True
+        else:
+            result = analyze_image_diff(
+                ImageDiffConfig(
+                    reference_path=pair["reference"],
+                    candidate_path=pair["candidate"],
+                    mask_path=pair.get("mask"),
+                    output_dir=pair_dir,
+                    compute_perceptual_optional=compute_perceptual_optional,
+                    generate_diff_image=generate_diff_image,
+                    reference_cache_key=str(pair.get("reference", "")),
+                    research_metrics_profile=research_metrics_profile,
+                )
+            )
         diff_score = _finite_float(result.get("score"), math.inf)
         fit_score = _resolve_view_fit_score(result, diff_score, fit_score_mode)
         view_id = str(pair.get("view_id") or pair.get("id") or f"view_{index:03d}")
+        analysis_path = result.get("report_path")
         view_payload = {
             "pair_index": index,
             "view_id": view_id,
@@ -454,7 +517,7 @@ def analyze_multiview_pairs(
             "candidate": str(pair.get("candidate", "")),
             "mask": str(pair.get("mask", "")) if pair.get("mask") else "",
             "analysis_dir": str(pair_dir),
-            "analysis_path": str(result.get("report_path") or pair_dir / "diff_analysis.json"),
+            "analysis_path": str(analysis_path) if analysis_path else "",
             "diff_image_path": str(result.get("diff_image_path") or ""),
             "diff_score": diff_score,
             "fit_score": fit_score,
@@ -469,7 +532,13 @@ def analyze_multiview_pairs(
                 else None
             ),
             "research_metrics": result.get("research_metrics") if isinstance(result.get("research_metrics"), dict) else None,
+            "research_metrics_profile": (
+                result.get("research_metrics", {}).get("profile")
+                if isinstance(result.get("research_metrics"), dict)
+                else research_metrics_profile
+            ),
             "status": str(result.get("status") or ""),
+            "fast_score_only": bool(result.get("fast_score_only", False)),
         }
         return index, result, view_payload
 
@@ -572,6 +641,8 @@ def analyze_multiview_pairs(
             "diff": str(aggregation.get("diff_aggregation") or "mean"),
             "channels": str(aggregation.get("channel_aggregation") or "mean_with_worst_severity"),
         },
+        "research_metrics_profile": research_metrics_profile,
+        "fast_score_only": score_only_enabled,
         "analysis_workers": worker_count,
         "pair_count": len(pair_items),
         "ok_count": len(ok_analyses),
@@ -589,11 +660,63 @@ def analyze_multiview_pairs(
         "multiview_analysis": multiview,
         "strategy_analysis": strategy_analysis,
     }
-    (output_root / "multi_view_diff_analysis.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    if write_report:
+        (output_root / "multi_view_diff_analysis.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     return report
+
+
+def _analyze_fast_research_score_only(
+    pair: dict[str, Any],
+    *,
+    fit_score_mode: str,
+) -> dict[str, Any]:
+    try:
+        reference, candidate, mask = load_rgba_pair(
+            pair["reference"],
+            pair["candidate"],
+            pair.get("mask"),
+            reference_cache_key=str(pair.get("reference", "")),
+        )
+    except ImportError:
+        return {
+            "status": "pending",
+            "metric": "material_oriented_fast_score_only_v1",
+            "score": math.inf,
+            "reason": "Pillow is not installed",
+            "fast_score_only": True,
+        }
+
+    research_metrics = build_research_metrics(
+        reference,
+        candidate,
+        explicit_mask=mask,
+        fallback_mask=None,
+        compute_perceptual_optional=False,
+        reference_cache_key=str(pair.get("reference", "")),
+        metric_profile="fast",
+    )
+    research_loss = _optional_float(research_metrics.get("loss"))
+    diff_score = research_loss if research_loss is not None else math.inf
+    fit_score = _resolve_view_fit_score(
+        {"research_metrics": research_metrics},
+        diff_score,
+        fit_score_mode,
+    )
+    return {
+        "status": "ok" if research_metrics.get("status") == "ok" else str(research_metrics.get("status") or "pending"),
+        "metric": "material_oriented_fast_score_only_v1",
+        "score": diff_score,
+        "perceptual_fit_score": fit_score,
+        "reference_path": str(pair.get("reference", "")),
+        "candidate_path": str(pair.get("candidate", "")),
+        "mask_path": str(pair.get("mask", "")) if pair.get("mask") else "",
+        "diff_image_path": "",
+        "research_metrics": research_metrics,
+        "fast_score_only": True,
+    }
 
 
 def _resolve_multiview_workers(value: int | str | None, view_count: int) -> int:
@@ -1071,7 +1194,16 @@ def _worst_fit_view(views: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _mean(values: Iterable[float]) -> float:
-    finite = [float(value) for value in values if math.isfinite(float(value))]
+    finite: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(numeric):
+            finite.append(numeric)
     return sum(finite) / len(finite) if finite else math.inf
 
 

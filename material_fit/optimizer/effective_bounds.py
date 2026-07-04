@@ -9,7 +9,7 @@ wandering into obviously extreme values.
 """
 
 FISH_STANDARD_EFFECTIVE_BOUNDS: dict[str, tuple[float, float]] = {
-    "u_gamma_power": (0.35, 3.0),
+    "u_gamma_power": (0.05, 10.0),
     "u_giintensity": (0.0, 4.0),
     "u_occlusionstrength": (0.0, 2.0),
     "u_diffusethreshold": (0.0, 2.0),
@@ -54,7 +54,15 @@ FISH_STANDARD_EFFECTIVE_BOUNDS: dict[str, tuple[float, float]] = {
 
 
 def effective_bounds_for_param(name: str) -> tuple[float, float] | None:
-    return FISH_STANDARD_EFFECTIVE_BOUNDS.get(name.lower())
+    lower = name.lower()
+    direct = FISH_STANDARD_EFFECTIVE_BOUNDS.get(lower)
+    if direct is not None:
+        return direct
+    compact = lower.replace("_", "")
+    for key, bounds in FISH_STANDARD_EFFECTIVE_BOUNDS.items():
+        if key.replace("_", "") == compact:
+            return bounds
+    return None
 
 
 def effective_bounds_schema() -> dict[str, dict[str, float]]:

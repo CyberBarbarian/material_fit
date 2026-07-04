@@ -440,12 +440,17 @@ export type OptimizerKind =
   | 'semantic_group_legacy_081'
   | 'subspace_cma_es';
 
+export type OptimizerPreset =
+  | 'manual'
+  | 'cma_mature_default';
+
 export interface CmaEsConfig {
   // mode is informational; the active mode is encoded by OptimizerKind
   // ("cma_cold" / "cma_warm"). Kept here so the UI can show a single
   // panel of CMA-ES tunables regardless of which CMA mode is active.
   mode: 'warm' | 'cold';
   warm_start_iters: number;
+  warm_start_source: 'elite_archive_first' | 'elite_archive_only' | 'iteration_history' | 'none' | string;
   population_size: number | null;
   sigma: number | null;
   seed: number | null;
@@ -454,8 +459,26 @@ export interface CmaEsConfig {
    * CMA-ES proposal. 0 disables (legacy), 0.30 is the recommended
    * default, > 0.5 is heavy expert-driven exploration. See
    * `tools/material_fit/docs/ExperimentLog.md` E-010.
-   */
+  */
   hint_bias_mix_ratio: number;
+  /**
+   * Optional long-run stopping guard. 0 disables the check. When enabled,
+   * CMA-ES stops if the best fit score does not improve by at least
+   * stagnation_min_delta within the last stagnation_patience evaluations,
+   * after stagnation_min_evaluations have been consumed.
+  */
+  stagnation_patience: number;
+  stagnation_min_delta: number;
+  stagnation_min_evaluations: number;
+  stagnation_max_restarts: number;
+  stagnation_stop_after_restarts: boolean;
+  restart_center_mode: 'best' | 'random' | 'alternate' | string;
+  restart_population_multiplier: number;
+  restart_population_schedule: 'ipop' | 'bipop' | string;
+  restart_max_population_size: number | null;
+  initial_design_samples: number;
+  initial_design_method: 'latin_hypercube' | string;
+  initial_design_include_current: boolean;
 }
 
 export interface LayaControlGroupOverride {
@@ -480,7 +503,14 @@ export interface MultiviewScoringConfig {
 
 export interface AnalysisPerformanceConfig {
   multiview_workers: 'auto' | number | string;
+  evaluation_batch_size: number;
+  evaluation_workers: number;
+  evaluation_parallel_safe: boolean;
+  full_rerank_top_k: number;
+  best_full_validation: boolean;
+  target_full_validation: boolean;
   snapshot_interval: number;
+  research_metrics_profile: 'tiered' | 'full' | 'fast' | string;
   keep_last_n_artifacts: number;
   always_keep_best_artifact: boolean;
   always_keep_first_artifact: boolean;
@@ -489,6 +519,7 @@ export interface AnalysisPerformanceConfig {
 export interface AlgorithmConfig {
   max_iterations: number;
   target_score: number;
+  optimizer_preset: OptimizerPreset | string;
   apply_lmat: boolean;
   capture_screen_after_apply: boolean;
   use_laya_editor_capture: boolean;

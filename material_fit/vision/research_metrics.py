@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover
 
 _PERCEPTUAL_CACHE: dict[str, Any] = {}
 _REFERENCE_FEATURE_CACHE: dict[str, dict[str, Any]] = {}
-_VALIDITY_FAILED_LOSS_FLOOR = 0.85
+_FAST_REFERENCE_FEATURE_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def build_research_metrics(
@@ -24,6 +24,7 @@ def build_research_metrics(
     fallback_mask: Any = None,
     compute_perceptual_optional: bool = True,
     reference_cache_key: str | None = None,
+    metric_profile: str = "full",
 ) -> dict[str, Any]:
     """Compute P0 research metrics for one reference/candidate render pair.
 
@@ -32,9 +33,21 @@ def build_research_metrics(
     captures, then report validity separately from visual error metrics.
     """
 
+    profile = _normalize_metric_profile(metric_profile)
+    if profile == "fast":
+        return _build_fast_research_metrics(
+            reference,
+            candidate,
+            explicit_mask=explicit_mask,
+            fallback_mask=fallback_mask,
+            reference_cache_key=reference_cache_key,
+        )
+
     if np is None:
         return {
             "version": "research_metrics_p0_v1",
+            "profile": "full",
+            "score_is_proxy": False,
             "status": "unavailable",
             "reason": "numpy not installed",
         }
@@ -45,12 +58,16 @@ def build_research_metrics(
     if ref is None or cand is None:
         return {
             "version": "research_metrics_p0_v1",
+            "profile": "full",
+            "score_is_proxy": False,
             "status": "unavailable",
             "reason": "could not convert images to RGBA arrays",
         }
     if ref.shape != cand.shape:
         return {
             "version": "research_metrics_p0_v1",
+            "profile": "full",
+            "score_is_proxy": False,
             "status": "unavailable",
             "reason": f"shape mismatch: ref={ref.shape}, candidate={cand.shape}",
         }
@@ -62,6 +79,8 @@ def build_research_metrics(
     if int(core_mask.sum()) <= 0:
         return {
             "version": "research_metrics_p0_v1",
+            "profile": "full",
+            "score_is_proxy": False,
             "status": "low_signal",
             "mask_source": masks["source"],
             "validity": validity,
@@ -89,6 +108,8 @@ def build_research_metrics(
 
     return {
         "version": "research_metrics_p0_v1",
+        "profile": "full",
+        "score_is_proxy": False,
         "status": "ok",
         "mask_source": masks["source"],
         "validity": validity,
@@ -106,6 +127,137 @@ def build_research_metrics(
                 **luminance,
                 **structure,
             },
+            "highlight_reflection": highlight,
+            "detail_texture": detail,
+            "perceptual_optional": perceptual,
+        },
+        "loss": loss_payload["loss"],
+        "score": loss_payload["score"],
+        "components": loss_payload["components"],
+        "weights": loss_payload["weights"],
+        "guidance": loss_payload["guidance"],
+        "acceptance_thresholds": loss_payload["acceptance_thresholds"],
+        "notes": loss_payload["notes"],
+    }
+
+
+def _build_fast_research_metrics(
+    reference: Any,
+    candidate: Any,
+    *,
+    explicit_mask: Any = None,
+    fallback_mask: Any = None,
+    reference_cache_key: str | None = None,
+) -> dict[str, Any]:
+    if np is None:
+        return {
+            "version": "research_metrics_fast_v1",
+            "profile": "fast",
+            "score_is_proxy": True,
+            "status": "unavailable",
+            "reason": "numpy not installed",
+        }
+
+    ref_features = _fast_reference_features(reference, reference_cache_key)
+    ref = ref_features.get("rgba") if ref_features else None
+    cand = _to_rgba_float(candidate)
+    if ref is None or cand is None:
+        return {
+            "version": "research_metrics_fast_v1",
+            "profile": "fast",
+            "score_is_proxy": True,
+            "status": "unavailable",
+            "reason": "could not convert images to RGBA arrays",
+        }
+    if ref.shape != cand.shape:
+        return {
+            "version": "research_metrics_fast_v1",
+            "profile": "fast",
+            "score_is_proxy": True,
+            "status": "unavailable",
+            "reason": f"shape mismatch: ref={ref.shape}, candidate={cand.shape}",
+        }
+
+    masks = _build_masks(ref[..., 3], cand[..., 3], explicit_mask=explicit_mask, fallback_mask=fallback_mask)
+    core_mask = masks["core_mask"]
+    full_mask = masks["full_mask"]
+    validity = _build_validity(masks)
+    if int(core_mask.sum()) <= 0:
+        return {
+            "version": "research_metrics_fast_v1",
+            "profile": "fast",
+            "score_is_proxy": True,
+            "status": "low_signal",
+            "mask_source": masks["source"],
+            "validity": validity,
+            "score": None,
+            "loss": None,
+            "notes": ["core_mask has no pixels; fast visual proxy skipped"],
+        }
+
+    ref_rgb = ref_features["rgb"]
+    cand_rgb = cand[..., :3]
+    ref_y = ref_features["luminance"]
+    cand_y = _linear_luminance(cand_rgb)
+    rgb_abs = np.abs(cand_rgb - ref_rgb)
+    rgb_error = rgb_abs.mean(axis=2)
+    rgb_values = rgb_error[core_mask]
+    rgb_bias = (cand_rgb[core_mask] - ref_rgb[core_mask]).mean(axis=0)
+    luminance_diff = cand_y[core_mask] - ref_y[core_mask]
+    color = {
+        "metric": "rgb_luma_fast_proxy_v1",
+        "mean_rgb_mae": float(rgb_values.mean()),
+        "p95_rgb_mae": float(np.percentile(rgb_values, 95)),
+        "median_rgb_mae": float(np.percentile(rgb_values, 50)),
+        "max_rgb_mae": float(rgb_values.max(initial=0.0)),
+        "rgb_bias_candidate_minus_reference": [float(v) for v in rgb_bias],
+        "notes": [
+            "fast profile uses RGB/Luma proxy metrics and skips CIEDE2000",
+            "use full profile snapshots for acceptance and final validation",
+        ],
+    }
+    luminance = {
+        "luminance_mae": float(np.abs(luminance_diff).mean()),
+        "luminance_bias": float(luminance_diff.mean()),
+        "p95_luminance_abs_error": float(np.percentile(np.abs(luminance_diff), 95)),
+        "ssim_l": None,
+        "ssim_l_status": "skipped_fast_profile",
+        "ssim_l_notes": ["SSIM-L is skipped in fast profile"],
+    }
+    highlight = {
+        "enabled": False,
+        "status": "skipped_fast_profile",
+        "reason": "conditional highlight analysis is deferred to full profile",
+    }
+    detail = {
+        "enabled": False,
+        "status": "skipped_fast_profile",
+        "gradient_loss": None,
+        "laplacian_loss": None,
+        "reason": "gradient/laplacian detail analysis is deferred to full profile",
+    }
+    perceptual = _perceptual_fast_skipped()
+    loss_payload = _fast_guidance_loss(color, luminance, validity)
+
+    return {
+        "version": "research_metrics_fast_v1",
+        "profile": "fast",
+        "score_is_proxy": True,
+        "full_validation_required": True,
+        "status": "ok",
+        "mask_source": masks["source"],
+        "validity": validity,
+        "masks": {
+            "core_pixels": int(core_mask.sum()),
+            "full_pixels": int(full_mask.sum()),
+            "edge_pixels": int(masks["edge_mask"].sum()),
+            "image_pixels": int(core_mask.shape[0] * core_mask.shape[1]),
+            "core_ratio": _safe_ratio(float(core_mask.sum()), float(core_mask.size)),
+            "full_ratio": _safe_ratio(float(full_mask.sum()), float(full_mask.size)),
+        },
+        "scientific": {
+            "color_accuracy": color,
+            "luminance_structure": luminance,
             "highlight_reflection": highlight,
             "detail_texture": detail,
             "perceptual_optional": perceptual,
@@ -140,9 +292,17 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
     scored_items = all_ok_items
     losses = [_finite_float(item.get("loss")) for item in scored_items]
     losses = [value for value in losses if value is not None]
+    profiles = sorted({
+        str(item.get("profile") or "full")
+        for item in scored_items
+    })
+    aggregate_profile = profiles[0] if len(profiles) == 1 else ("mixed" if profiles else "full")
+    score_is_proxy = any(bool(item.get("score_is_proxy")) for item in scored_items)
     if not losses:
         return {
             "version": "research_metrics_p0_v1",
+            "profile": aggregate_profile,
+            "score_is_proxy": score_is_proxy,
             "status": "pending",
             "valid_view_count": 0,
             "view_count": len(view_metrics),
@@ -165,6 +325,10 @@ def aggregate_research_metrics(view_metrics: list[dict[str, Any]]) -> dict[str, 
     validity = _aggregate_validity(all_ok_items, passed_count=len(passed_items), view_count=len(view_metrics))
     return {
         "version": "research_metrics_p0_v1",
+        "profile": aggregate_profile,
+        "profiles": profiles,
+        "score_is_proxy": score_is_proxy,
+        "full_validation_required": score_is_proxy,
         "status": "ok" if invalid_count == 0 else "ok_with_invalid_views",
         "view_count": len(view_metrics),
         "valid_view_count": len(passed_items),
@@ -230,6 +394,28 @@ def _reference_features(image: Any, cache_key: str | None) -> dict[str, Any] | N
         if len(_REFERENCE_FEATURE_CACHE) > 64:
             oldest_key = next(iter(_REFERENCE_FEATURE_CACHE))
             _REFERENCE_FEATURE_CACHE.pop(oldest_key, None)
+    return features
+
+
+def _fast_reference_features(image: Any, cache_key: str | None) -> dict[str, Any] | None:
+    if cache_key:
+        cached = _FAST_REFERENCE_FEATURE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+    rgba = _to_rgba_float(image)
+    if rgba is None:
+        return None
+    rgb = rgba[..., :3]
+    features = {
+        "rgba": rgba,
+        "rgb": rgb,
+        "luminance": _linear_luminance(rgb),
+    }
+    if cache_key:
+        _FAST_REFERENCE_FEATURE_CACHE[cache_key] = features
+        if len(_FAST_REFERENCE_FEATURE_CACHE) > 64:
+            oldest_key = next(iter(_FAST_REFERENCE_FEATURE_CACHE))
+            _FAST_REFERENCE_FEATURE_CACHE.pop(oldest_key, None)
     return features
 
 
@@ -527,6 +713,22 @@ def _perceptual_optional_skipped() -> dict[str, Any]:
     }
 
 
+def _perceptual_fast_skipped() -> dict[str, Any]:
+    return {
+        "status": "skipped_fast_profile",
+        "enters_loss": False,
+        "reason": "fast profile defers P2 perceptual metrics to full validation snapshots",
+        "flip_like_error": None,
+        "flip_like_p95": None,
+        "lpips": None,
+        "lpips_status": "skipped_fast_profile",
+        "lpips_notes": ["fast profile skips P2 perceptual metrics"],
+        "dists": None,
+        "dists_status": "skipped_fast_profile",
+        "dists_notes": ["fast profile skips P2 perceptual metrics"],
+    }
+
+
 def _lpips_metric(ref_rgb: Any, cand_rgb: Any, mask: Any) -> tuple[float | None, str, list[str]]:
     try:
         torch, _lpips, _ = _load_perceptual_dependencies()
@@ -691,38 +893,147 @@ def _guidance_loss(
     raw_loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
     loss = raw_loss
     validity_penalty_applied = False
+    validity_penalty: dict[str, Any] | None = None
     if not validity.get("passed"):
         validity_penalty_applied = True
-        loss = max(loss, _VALIDITY_FAILED_LOSS_FLOOR)
+        validity_penalty = _validity_soft_alignment_penalty(validity)
+        loss = max(loss, float(validity_penalty["loss"]))
         notes.append(
-            "validity failed; optimizer guidance loss was raised to the validity penalty floor"
+            "validity failed; optimizer guidance uses a continuous soft alignment penalty"
         )
     normalized_weights = {key: weights[key] / max(total_weight, 1e-8) for key in components}
     clamped_loss = _clamp01(loss)
+    guidance = {
+        "version": "optimizer_guidance_v1",
+        "normalization": "soft_saturating_half_scale",
+        "formula": "g(x; s) = x / (x + s)",
+        "loss": clamped_loss,
+        "score": 100.0 * (1.0 - clamped_loss),
+        "raw_loss_before_validity_penalty": _clamp01(raw_loss),
+        "validity_penalty_applied": validity_penalty_applied,
+        "components": components,
+        "weights": normalized_weights,
+        "scales": scales,
+        "notes": [
+            "soft guidance replaces hard-clamped research_loss as the optimization target",
+            "raw scientific metrics remain the report/acceptance evidence",
+        ],
+    }
+    if validity_penalty is not None:
+        guidance["validity_penalty"] = validity_penalty
     return {
         "loss": clamped_loss,
         "score": 100.0 * (1.0 - clamped_loss),
         "components": components,
         "weights": normalized_weights,
-        "guidance": {
-            "version": "optimizer_guidance_v1",
-            "normalization": "soft_saturating_half_scale",
-            "formula": "g(x; s) = x / (x + s)",
-            "loss": clamped_loss,
-            "score": 100.0 * (1.0 - clamped_loss),
-            "raw_loss_before_validity_penalty": _clamp01(raw_loss),
-            "validity_penalty_applied": validity_penalty_applied,
-            "validity_failed_loss_floor": _VALIDITY_FAILED_LOSS_FLOOR,
-            "components": components,
-            "weights": normalized_weights,
-            "scales": scales,
-            "notes": [
-                "soft guidance replaces hard-clamped research_loss as the optimization target",
-                "raw scientific metrics remain the report/acceptance evidence",
-            ],
-        },
+        "guidance": guidance,
         "acceptance_thresholds": _acceptance_thresholds(color, luminance, structure, highlight, detail),
         "notes": notes,
+    }
+
+
+def _fast_guidance_loss(
+    color: dict[str, Any],
+    luminance: dict[str, Any],
+    validity: dict[str, Any],
+) -> dict[str, Any]:
+    components = {
+        "color_mean": _soft_saturating_loss(float(color["mean_rgb_mae"]), 0.12),
+        "color_p95": _soft_saturating_loss(float(color["p95_rgb_mae"]), 0.25),
+        "luminance_mae": _soft_saturating_loss(float(luminance["luminance_mae"]), 0.20),
+        "luminance_bias": _soft_saturating_loss(abs(float(luminance["luminance_bias"])), 0.15),
+    }
+    weights = {
+        "color_mean": 0.40,
+        "color_p95": 0.20,
+        "luminance_mae": 0.25,
+        "luminance_bias": 0.15,
+    }
+    scales = {
+        "color_mean": {"raw": "mean_rgb_mae", "scale": 0.12, "reason": "fast RGB proxy for average whole-object color mismatch"},
+        "color_p95": {"raw": "p95_rgb_mae", "scale": 0.25, "reason": "fast RGB proxy for localized color/highlight tails"},
+        "luminance_mae": {"raw": "luminance_mae", "scale": 0.20, "reason": "foreground luminance half-saturation"},
+        "luminance_bias": {"raw": "abs(luminance_bias)", "scale": 0.15, "reason": "signed luminance bias"},
+    }
+    total_weight = sum(weights[key] for key in components)
+    raw_loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
+    loss = raw_loss
+    notes = [
+        "fast profile is a proxy optimizer score; run full profile snapshots for acceptance evidence",
+        "CIEDE2000, SSIM-L, highlight, gradient/laplacian, LPIPS, and DISTS are skipped",
+    ]
+    validity_penalty_applied = False
+    validity_penalty: dict[str, Any] | None = None
+    if not validity.get("passed"):
+        validity_penalty_applied = True
+        validity_penalty = _validity_soft_alignment_penalty(validity)
+        loss = max(loss, float(validity_penalty["loss"]))
+        notes.append("validity failed; fast proxy uses a continuous soft alignment penalty")
+    normalized_weights = {key: weights[key] / max(total_weight, 1e-8) for key in components}
+    clamped_loss = _clamp01(loss)
+    guidance = {
+        "version": "optimizer_guidance_fast_proxy_v1",
+        "normalization": "soft_saturating_half_scale",
+        "formula": "fast_proxy: weighted RGB/Luma losses only",
+        "loss": clamped_loss,
+        "score": 100.0 * (1.0 - clamped_loss),
+        "raw_loss_before_validity_penalty": _clamp01(raw_loss),
+        "validity_penalty_applied": validity_penalty_applied,
+        "components": components,
+        "weights": normalized_weights,
+        "scales": scales,
+        "score_is_proxy": True,
+        "full_validation_required": True,
+        "notes": notes,
+    }
+    if validity_penalty is not None:
+        guidance["validity_penalty"] = validity_penalty
+    return {
+        "loss": clamped_loss,
+        "score": 100.0 * (1.0 - clamped_loss),
+        "components": components,
+        "weights": normalized_weights,
+        "guidance": guidance,
+        "acceptance_thresholds": _fast_acceptance_thresholds(color, luminance),
+        "notes": notes,
+    }
+
+
+def _validity_soft_alignment_penalty(validity: dict[str, Any]) -> dict[str, Any]:
+    thresholds = validity.get("thresholds") if isinstance(validity.get("thresholds"), dict) else {}
+    mask_iou_min = _finite_float(thresholds.get("mask_iou_min")) or 0.990
+    center_error_max = _finite_float(thresholds.get("bbox_center_error_norm_max")) or 0.020
+    scale_error_max = _finite_float(thresholds.get("bbox_scale_error_max")) or 0.050
+
+    mask_iou = _finite_float(validity.get("mask_iou"))
+    center_error = _finite_float(validity.get("bbox_center_error_norm"))
+    scale_error = _finite_float(validity.get("bbox_scale_error"))
+    reasons = [str(item) for item in validity.get("reasons", []) if isinstance(item, str)]
+
+    mask_iou_deficit = max(0.0, mask_iou_min - (mask_iou if mask_iou is not None else 0.0))
+    center_error_excess = max(0.0, (center_error or 0.0) - center_error_max)
+    scale_error_excess = max(0.0, (scale_error or 0.0) - scale_error_max)
+
+    components = {
+        "mask_iou_deficit": _soft_saturating_loss(mask_iou_deficit, 0.150),
+        "bbox_center_error_excess": _soft_saturating_loss(center_error_excess, center_error_max),
+        "bbox_scale_error_excess": _soft_saturating_loss(scale_error_excess, scale_error_max),
+    }
+    weights = {
+        "mask_iou_deficit": 0.60,
+        "bbox_center_error_excess": 0.25,
+        "bbox_scale_error_excess": 0.15,
+    }
+    if "empty foreground" in reasons:
+        components["empty_foreground"] = 1.0
+        weights["empty_foreground"] = 1.0
+
+    total_weight = sum(weights[key] for key in components)
+    loss = sum(components[key] * weights[key] for key in components) / max(total_weight, 1e-8)
+    return {
+        "mode": "soft_alignment_penalty",
+        "loss": _clamp01(loss),
+        "components": components,
     }
 
 
@@ -739,6 +1050,10 @@ def _aggregate_scientific(items: list[dict[str, Any]]) -> dict[str, Any]:
         return values
 
     fields = {
+        "mean_rgb_mae": ("scientific", "color_accuracy", "mean_rgb_mae"),
+        "p95_rgb_mae": ("scientific", "color_accuracy", "p95_rgb_mae"),
+        "median_rgb_mae": ("scientific", "color_accuracy", "median_rgb_mae"),
+        "max_rgb_mae": ("scientific", "color_accuracy", "max_rgb_mae"),
         "mean_deltaE00": ("scientific", "color_accuracy", "mean_deltaE00"),
         "p95_deltaE00": ("scientific", "color_accuracy", "p95_deltaE00"),
         "median_deltaE00": ("scientific", "color_accuracy", "median_deltaE00"),
@@ -858,6 +1173,15 @@ def _acceptance_thresholds(
     if grad is not None:
         thresholds["gradient_loss"] = _threshold(grad, "<=", 0.25, "detail gradient loss")
     return thresholds
+
+
+def _fast_acceptance_thresholds(color: dict[str, Any], luminance: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mean_rgb_mae": _threshold(float(color["mean_rgb_mae"]), "<=", 0.12, "fast average RGB proxy"),
+        "p95_rgb_mae": _threshold(float(color["p95_rgb_mae"]), "<=", 0.25, "fast tail RGB proxy"),
+        "luminance_mae": _threshold(float(luminance["luminance_mae"]), "<=", 0.20, "foreground luminance MAE"),
+        "luminance_bias_abs": _threshold(abs(float(luminance["luminance_bias"])), "<=", 0.15, "absolute luminance bias"),
+    }
 
 
 def _threshold(value: float, operator: str, threshold: float, label: str) -> dict[str, Any]:
@@ -1088,6 +1412,13 @@ def _bbox_features(bbox: tuple[int, int, int, int]) -> tuple[float, float, float
     width = max(float(x1 - x0 + 1), 1.0)
     height = max(float(y1 - y0 + 1), 1.0)
     return x0 + width * 0.5, y0 + height * 0.5, width, height
+
+
+def _normalize_metric_profile(value: str | None) -> str:
+    text = str(value or "full").strip().lower()
+    if text in {"fast", "proxy", "fast_proxy"}:
+        return "fast"
+    return "full"
 
 
 def _mean(values: list[float]) -> float:

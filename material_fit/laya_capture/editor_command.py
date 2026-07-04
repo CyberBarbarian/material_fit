@@ -33,6 +33,8 @@ def main() -> int:
     parser.add_argument("--pitch-offset", type=float, default=0.0)
     parser.add_argument("--target-yaw-sign", type=float, default=-1.0)
     parser.add_argument("--target-pitch-sign", type=float, default=-1.0)
+    parser.add_argument("--alpha-source", choices=["silhouette_mask", "alpha_from_rgb", "render_alpha"], default="render_alpha")
+    parser.add_argument("--keep-transparent-rgb", action="store_true", help="Do not zero RGB where alpha is 0.")
     parser.add_argument("--refresh-delay-ms", type=int, default=80)
     parser.add_argument("--align-target-bounds", action="store_true", help="Auto-center target bounds when target is under the capture camera.")
     parser.add_argument("--target-local-z", type=float, default=None, help="Optional target local Z used by rotate_target mode.")
@@ -68,12 +70,14 @@ def main() -> int:
         pitch_offset=args.pitch_offset,
         target_yaw_sign=args.target_yaw_sign,
         target_pitch_sign=args.target_pitch_sign,
+        alpha_source=args.alpha_source,
+        keep_transparent_rgb=args.keep_transparent_rgb,
     )
     command = build_command(command_args, Path(args.output_dir).resolve())
     command["refresh_delay_ms"] = args.refresh_delay_ms
     command["align_target_bounds"] = bool(args.align_target_bounds)
-    command["zero_transparent_rgb"] = True
-    command["alpha_source"] = "silhouette_mask"
+    command["zero_transparent_rgb"] = not bool(args.keep_transparent_rgb)
+    command["alpha_source"] = args.alpha_source
     command["alpha_from_rgb_threshold"] = 1.0
     command["mask_alpha_mode"] = "binary"
     command["mask_alpha_threshold"] = 1.0

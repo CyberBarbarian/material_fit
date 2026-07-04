@@ -8,6 +8,33 @@ type CaptureView = {
     file_name?: string;
 };
 
+type BrowserScoreReference = {
+    id?: string;
+    view_id?: string;
+    file_name?: string;
+    url?: string;
+    path?: string;
+};
+
+type BrowserScoreConfig = {
+    enabled?: boolean;
+    metric?: string;
+    emit_artifacts?: "never" | "always";
+    reference_images?: BrowserScoreReference[];
+    rgb_weight?: number;
+    alpha_weight?: number;
+};
+
+type BrowserScoreView = {
+    view_id: string;
+    diff_score: number;
+    fit_score: number;
+    rgb_mae: number;
+    alpha_mae: number;
+    mask_iou: number;
+    foreground_weight_sum: number;
+};
+
 type CaptureCommand = {
     enabled?: boolean;
     nonce: string;
@@ -34,10 +61,18 @@ type CaptureCommand = {
     alpha_from_rgb?: boolean;
     alpha_from_rgb_threshold?: number;
     alpha_source?: "silhouette_mask" | "alpha_from_rgb" | "render_alpha";
+    image_format?: "png" | "raw_rgba";
+    settle_frames?: number;
+    freeze_animators?: boolean;
+    fixed_animation_state?: string;
+    fixed_animation_layer?: number;
+    fixed_animation_time?: number;
+    restore_animators_after_capture?: boolean;
     mask_alpha_mode?: "binary" | "soft";
     mask_alpha_threshold?: number;
     flip_y?: boolean;
     render_texture_srgb?: boolean;
+    browser_score?: BrowserScoreConfig;
     material_patch?: MaterialPatch;
     views?: CaptureView[];
 };
@@ -51,6 +86,7 @@ type MaterialPatchResult = {
     applied: boolean;
     materialCount: number;
     valueCount: number;
+    fallback?: string;
     error?: string;
 };
 
@@ -58,6 +94,13 @@ type RendererState = {
     source: any;
     enabled: boolean | null;
     materials: Laya.Material[] | null;
+};
+
+type AnimatorState = {
+    source: any;
+    speed: number | null;
+    enabled: boolean | null;
+    sleep: boolean | null;
 };
 
 @regClass()
@@ -81,6 +124,7 @@ export class MaterialFitCapture extends Laya.Script3D {
     private _lastNonce: string = "";
     private _nextPollAt: number = 0;
     private _pollFailureCount: number = 0;
+    private _referenceCache: Map<string, Uint8ClampedArray> = new Map();
 
     public onEnable(): void {
         (Laya.Browser.window as any).__materialFitCapture = (command: CaptureCommand) => this.capture(command);
@@ -151,7 +195,12 @@ export class MaterialFitCapture extends Laya.Script3D {
             const center = this.resolveCenter(command, target);
             const radius = this.resolveRadius(command, target);
             const captureMode = this.resolveCaptureMode(command, camera, target);
-            const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : null;
+            const preFreezeTargetEuler = target ? target.transform.localRotationEuler.clone() : null;
+            const frozenAnimators = this.freezeAnimators(command, target || this.sceneRoot());
+            if (frozenAnimators.length > 0) {
+                await this.waitFrames(1);
+            }
+            const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : preFreezeTargetEuler;
             const previousTarget = camera.renderTarget;
             const previousFov = camera.fieldOfView;
             const previousClearColor = camera.clearColor ? camera.clearColor.clone() : null;
@@ -174,15 +223,27 @@ export class MaterialFitCapture extends Laya.Script3D {
             }
 
             const patchResult = this.applyMaterialPatch(command, target);
-            await this.postLog(
+            void this.postLog(
+                command,
                 "material_patch",
-                `applied=${patchResult.applied} materials=${patchResult.materialCount} values=${patchResult.valueCount}${patchResult.error ? ` error=${patchResult.error}` : ""}`,
+                `applied=${patchResult.applied} materials=${patchResult.materialCount} values=${patchResult.valueCount}${patchResult.fallback ? ` fallback=${patchResult.fallback}` : ""}${patchResult.error ? ` error=${patchResult.error}` : ""}`,
             );
+            if (frozenAnimators.length > 0) {
+                void this.postLog(
+                    command,
+                    "animation_freeze",
+                    `animators=${frozenAnimators.length}${command.fixed_animation_state ? ` state=${command.fixed_animation_state}` : ""}`,
+                );
+            }
 
             const views = command.views && command.views.length > 0
                 ? command.views
                 : [{ yaw: 0, pitch: 0, file_name: "laya_capture.png" }];
-
+            const settleFrames = this.resolveSettleFrames(command);
+            const browserScoreEnabled = this.shouldUseBrowserScore(command);
+            const emitArtifacts = !browserScoreEnabled || this.shouldEmitArtifacts(command);
+            const postTasks: Promise<void>[] = [];
+            const browserScoreViews: BrowserScoreView[] = [];
             try {
                 for (let index = 0; index < views.length; index++) {
                     const view = views[index];
@@ -194,7 +255,11 @@ export class MaterialFitCapture extends Laya.Script3D {
                     } else {
                         this.placeCamera(camera, center, radius, view, command);
                     }
-                    await this.waitFrames(2);
+                    await this.waitFrames(settleFrames);
+                    if (captureMode === "rotate_target" && target && originalTargetEuler) {
+                        this.rotateTargetForView(target, originalTargetEuler, view, command);
+                        await this.waitFrames(1);
+                    }
                     const pixels = await this.readPixels(renderTexture, width, height);
                     const alphaSource = this.resolveAlphaSource(command);
                     if (command.transparent_background !== false && alphaSource === "silhouette_mask" && target) {
@@ -206,12 +271,31 @@ export class MaterialFitCapture extends Laya.Script3D {
                     if (command.zero_transparent_rgb !== false) {
                         this.zeroTransparentRgb(pixels);
                     }
-                    const dataUrl = this.pixelsToPngDataUrl(pixels, width, height, command.flip_y === true);
-                    await this.postImage(command, view, index, dataUrl, width, height, patchResult);
+                    const outputPixels = this.copyPixelsForOutput(pixels, width, height, command.flip_y === true);
+                    if (browserScoreEnabled) {
+                        browserScoreViews.push(await this.scoreBrowserView(command, view, index, outputPixels, width, height));
+                    }
+                    if (!emitArtifacts) {
+                        continue;
+                    }
+                    if (this.resolveImageFormat(command) === "raw_rgba") {
+                        postTasks.push(this.postRawImage(command, view, index, outputPixels, width, height, patchResult));
+                    } else {
+                        const dataUrl = this.pixelsToPngDataUrl(
+                            outputPixels,
+                            width,
+                            height,
+                            false,
+                        );
+                        postTasks.push(this.postImage(command, view, index, dataUrl, width, height, patchResult));
+                    }
                 }
             } finally {
-                if (target && originalTargetEuler) {
-                    target.transform.localRotationEuler = originalTargetEuler;
+                if (target && preFreezeTargetEuler) {
+                    target.transform.localRotationEuler = preFreezeTargetEuler;
+                }
+                if (command.restore_animators_after_capture !== false) {
+                    this.restoreAnimators(frozenAnimators);
                 }
                 camera.renderTarget = previousTarget;
                 camera.fieldOfView = previousFov;
@@ -220,10 +304,14 @@ export class MaterialFitCapture extends Laya.Script3D {
                 }
                 renderTexture.destroy();
             }
+            await Promise.all(postTasks);
+            if (browserScoreEnabled) {
+                await this.postBrowserScore(command, this.aggregateBrowserScore(command, browserScoreViews, width, height, patchResult));
+            }
 
-            await this.postLog("completed", `Captured ${views.length} views in ${Date.now() - startedAt}ms`);
+            void this.postLog(command, "completed", `Captured ${views.length} views in ${Date.now() - startedAt}ms`);
         } catch (error) {
-            await this.postLog("capture_error", String(error));
+            await this.postLog(command, "capture_error", String(error));
         } finally {
             this._busy = false;
         }
@@ -401,6 +489,103 @@ export class MaterialFitCapture extends Laya.Script3D {
         }
     }
 
+    private freezeAnimators(command: CaptureCommand, root: any): AnimatorState[] {
+        if (command.freeze_animators === false) {
+            return [];
+        }
+        const layaAny = Laya as any;
+        if (!root || !layaAny.Animator) {
+            return [];
+        }
+        const animators = this.collectComponents(root, layaAny.Animator);
+        const stateName = typeof command.fixed_animation_state === "string" && command.fixed_animation_state.length > 0
+            ? command.fixed_animation_state
+            : "";
+        const layerIndex = Number.isFinite(command.fixed_animation_layer as number)
+            ? Math.max(0, Math.floor(command.fixed_animation_layer as number))
+            : 0;
+        const normalizedTime = Number.isFinite(command.fixed_animation_time as number)
+            ? Math.max(0, Math.min(1, command.fixed_animation_time as number))
+            : 0;
+        const states: AnimatorState[] = [];
+        for (const animator of animators) {
+            const state: AnimatorState = {
+                source: animator,
+                speed: typeof animator.speed === "number" ? animator.speed : null,
+                enabled: typeof animator.enabled === "boolean" ? animator.enabled : null,
+                sleep: typeof animator.sleep === "boolean" ? animator.sleep : null,
+            };
+            states.push(state);
+            try {
+                if (state.enabled !== null) {
+                    animator.enabled = true;
+                }
+                if (state.sleep !== null) {
+                    animator.sleep = false;
+                }
+                if (stateName && typeof animator.play === "function") {
+                    animator.speed = 1;
+                    animator.play(stateName, layerIndex, normalizedTime);
+                }
+                if (typeof animator.speed === "number") {
+                    animator.speed = 0;
+                }
+            } catch (error) {
+                console.warn(`[MaterialFitCapture] animator freeze failed: ${error}`);
+            }
+        }
+        return states;
+    }
+
+    private restoreAnimators(states: AnimatorState[]): void {
+        for (const state of states) {
+            const animator = state.source;
+            try {
+                if (state.speed !== null) {
+                    animator.speed = state.speed;
+                }
+                if (state.sleep !== null) {
+                    animator.sleep = state.sleep;
+                }
+                if (state.enabled !== null) {
+                    animator.enabled = state.enabled;
+                }
+            } catch (error) {
+                console.warn(`[MaterialFitCapture] animator restore failed: ${error}`);
+            }
+        }
+    }
+
+    private collectComponents(root: any, componentType: any): any[] {
+        const components: any[] = [];
+        this.walk(root, (node: any) => {
+            if (!node || !componentType) {
+                return;
+            }
+            try {
+                if (typeof node.getComponents === "function") {
+                    const found = node.getComponents(componentType);
+                    if (found && typeof found.length === "number") {
+                        for (let i = 0; i < found.length; i++) {
+                            this.addUniqueComponent(found[i], components);
+                        }
+                    }
+                } else if (typeof node.getComponent === "function") {
+                    this.addUniqueComponent(node.getComponent(componentType), components);
+                }
+            } catch {
+                // Some Laya runtimes throw for non-component classes.
+            }
+        });
+        return components;
+    }
+
+    private addUniqueComponent(component: any, components: any[]): void {
+        if (component && components.indexOf(component) < 0) {
+            components.push(component);
+        }
+    }
+
     private async readPixels(renderTexture: Laya.RenderTexture, width: number, height: number): Promise<Uint8Array> {
         const pixels = new Uint8Array(width * height * 4);
         const maybePromise = renderTexture.getDataAsync(0, 0, width, height, pixels) as any;
@@ -418,7 +603,18 @@ export class MaterialFitCapture extends Laya.Script3D {
         if (command.transparent_background === false) {
             return "render_alpha";
         }
-        return "silhouette_mask";
+        return "render_alpha";
+    }
+
+    private resolveSettleFrames(command: CaptureCommand): number {
+        if (typeof command.settle_frames === "number" && Number.isFinite(command.settle_frames)) {
+            return Math.max(0, Math.floor(command.settle_frames));
+        }
+        return 2;
+    }
+
+    private resolveImageFormat(command: CaptureCommand): "png" | "raw_rgba" {
+        return command.image_format === "raw_rgba" ? "raw_rgba" : "png";
     }
 
     private applyMaterialPatch(command: CaptureCommand, fallbackTarget: Laya.Sprite3D | null): MaterialPatchResult {
@@ -437,11 +633,17 @@ export class MaterialFitCapture extends Laya.Script3D {
                 };
             }
             const materials: Laya.Material[] = [];
-            this.walk(target, (node: any) => {
-                const renderer = node.meshRenderer || node.skinnedMeshRenderer || node.renderer;
-                this.collectMaterials(renderer, materials);
-                this.collectMaterials(node._renderNode, materials);
-            });
+            this.collectPatchMaterials(target, materials);
+            let fallback: string | undefined;
+            if (materials.length === 0) {
+                const root = this.sceneRoot();
+                if (root && root !== target) {
+                    this.collectPatchMaterials(root, materials);
+                    if (materials.length > 0) {
+                        fallback = "scene_root_no_target_materials";
+                    }
+                }
+            }
             let valueCount = 0;
             for (const material of materials) {
                 for (const key of Object.keys(patch.values)) {
@@ -449,10 +651,20 @@ export class MaterialFitCapture extends Laya.Script3D {
                     valueCount++;
                 }
             }
-            return { applied: materials.length > 0, materialCount: materials.length, valueCount };
+            return { applied: materials.length > 0, materialCount: materials.length, valueCount, ...(fallback ? { fallback } : {}) };
         } catch (error) {
             return { applied: false, materialCount: 0, valueCount: 0, error: String(error) };
         }
+    }
+
+    private collectPatchMaterials(target: any, materials: Laya.Material[]): void {
+        this.walk(target, (node: any) => {
+            const sources: any[] = [];
+            this.collectNodeRenderSources(node, sources);
+            for (const source of sources) {
+                this.collectMaterials(source, materials);
+            }
+        });
     }
 
     private setMaterialValue(material: Laya.Material, name: string, value: number | number[] | boolean): void {
@@ -484,7 +696,7 @@ export class MaterialFitCapture extends Laya.Script3D {
         if (!source) {
             return;
         }
-        const sharedMaterials = source.sharedMaterials || source._materials || null;
+        const sharedMaterials = source.sharedMaterials || source.materials || source._materials || null;
         if (sharedMaterials) {
             for (const material of sharedMaterials as Laya.Material[]) {
                 if (material && materials.indexOf(material) < 0) {
@@ -560,11 +772,35 @@ export class MaterialFitCapture extends Laya.Script3D {
     private collectRenderSources(root: any): any[] {
         const sources: any[] = [];
         this.walk(root, (node: any) => {
-            const renderer = node.meshRenderer || node.skinnedMeshRenderer || node.renderer;
-            this.addRenderSource(renderer, sources);
-            this.addRenderSource(node._renderNode, sources);
+            this.collectNodeRenderSources(node, sources);
         });
         return sources;
+    }
+
+    private collectNodeRenderSources(node: any, sources: any[]): void {
+        const directSources = [node?.meshRenderer, node?.skinnedMeshRenderer, node?.renderer, node?._renderNode];
+        for (const source of directSources) {
+            this.addRenderSource(source, sources);
+        }
+        if (node && typeof node.getComponent === "function") {
+            const layaAny = Laya as any;
+            for (const componentType of [layaAny.MeshRenderer, layaAny.SkinnedMeshRenderer, layaAny.Renderer]) {
+                if (!componentType) {
+                    continue;
+                }
+                try {
+                    this.addRenderSource(node.getComponent(componentType), sources);
+                } catch {
+                    // Some Laya runtimes throw for non-component classes.
+                }
+            }
+        }
+        const components = node?._components || node?._scripts || null;
+        if (components && typeof components.length === "number") {
+            for (let i = 0; i < components.length; i++) {
+                this.addRenderSource(components[i], sources);
+            }
+        }
     }
 
     private addRenderSource(source: any, sources: any[]): void {
@@ -580,7 +816,7 @@ export class MaterialFitCapture extends Laya.Script3D {
         if (!source) {
             return null;
         }
-        return (source.sharedMaterials || source._materials || (source.sharedMaterial ? [source.sharedMaterial] : null)) as Laya.Material[] | null;
+        return (source.sharedMaterials || source.materials || source._materials || (source.sharedMaterial ? [source.sharedMaterial] : null)) as Laya.Material[] | null;
     }
 
     private setSourceMaterials(source: any, materials: Laya.Material[]): void {
@@ -589,6 +825,8 @@ export class MaterialFitCapture extends Laya.Script3D {
         }
         if (source.sharedMaterials !== undefined) {
             source.sharedMaterials = materials;
+        } else if (source.materials !== undefined) {
+            source.materials = materials;
         } else if (source._materials !== undefined) {
             source._materials = materials;
         } else if (source.sharedMaterial !== undefined) {
@@ -654,6 +892,222 @@ export class MaterialFitCapture extends Laya.Script3D {
         return canvas.toDataURL("image/png");
     }
 
+    private copyPixelsForOutput(pixels: Uint8Array, width: number, height: number, flipY: boolean): Uint8Array {
+        if (!flipY) {
+            return pixels;
+        }
+        const output = new Uint8Array(pixels.length);
+        for (let y = 0; y < height; y++) {
+            const sourceY = height - 1 - y;
+            const sourceOffset = sourceY * width * 4;
+            const targetOffset = y * width * 4;
+            output.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
+        }
+        return output;
+    }
+
+    private shouldUseBrowserScore(command: CaptureCommand): boolean {
+        const config = command.browser_score;
+        return !!(config && config.enabled && Array.isArray(config.reference_images) && config.reference_images.length > 0);
+    }
+
+    private shouldEmitArtifacts(command: CaptureCommand): boolean {
+        const config = command.browser_score;
+        return !!(config && config.emit_artifacts === "always");
+    }
+
+    private async scoreBrowserView(command: CaptureCommand, view: CaptureView, index: number, pixels: Uint8Array, width: number, height: number): Promise<BrowserScoreView> {
+        const viewId = this.viewId(view, index);
+        const reference = this.findReference(command, view, index);
+        if (!reference || !reference.url) {
+            throw new Error(`browser_score reference image missing for ${viewId}`);
+        }
+        const referencePixels = await this.loadReferencePixels(reference.url, width, height);
+        return this.scorePixels(viewId, pixels, referencePixels, command);
+    }
+
+    private findReference(command: CaptureCommand, view: CaptureView, index: number): BrowserScoreReference | null {
+        const references = command.browser_score && Array.isArray(command.browser_score.reference_images)
+            ? command.browser_score.reference_images
+            : [];
+        const viewId = this.viewId(view, index);
+        const fileName = view.file_name || "";
+        for (const reference of references) {
+            if (!reference) {
+                continue;
+            }
+            if (reference.view_id === viewId || reference.id === viewId) {
+                return reference;
+            }
+            if (fileName && reference.file_name === fileName) {
+                return reference;
+            }
+        }
+        return references[index] || null;
+    }
+
+    private async loadReferencePixels(url: string, width: number, height: number): Promise<Uint8ClampedArray> {
+        const cacheKey = `${url}|${width}x${height}`;
+        const cached = this._referenceCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`reference image fetch failed: ${response.status} ${url}`);
+        }
+        const blob = await response.blob();
+        const image = await this.decodeImage(blob);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+            throw new Error("2D canvas context is unavailable");
+        }
+        context.clearRect(0, 0, width, height);
+        context.drawImage(image as CanvasImageSource, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height).data;
+        if ((image as ImageBitmap).close) {
+            (image as ImageBitmap).close();
+        }
+        this._referenceCache.set(cacheKey, pixels);
+        return pixels;
+    }
+
+    private async decodeImage(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
+        const createBitmap = (Laya.Browser.window as any).createImageBitmap;
+        if (typeof createBitmap === "function") {
+            return await createBitmap(blob);
+        }
+        return await new Promise<HTMLImageElement>((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const image = new Image();
+            image.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(image);
+            };
+            image.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error("reference image decode failed"));
+            };
+            image.src = url;
+        });
+    }
+
+    private scorePixels(viewId: string, candidate: Uint8Array, reference: Uint8ClampedArray, command: CaptureCommand): BrowserScoreView {
+        const rgbWeight = this.numberOrDefault(command.browser_score && command.browser_score.rgb_weight, 0.85);
+        const alphaWeight = this.numberOrDefault(command.browser_score && command.browser_score.alpha_weight, 0.15);
+        const length = Math.min(candidate.length, reference.length);
+        let weightedDiff = 0;
+        let weightSum = 0;
+        let rgbMaeSum = 0;
+        let alphaMaeSum = 0;
+        let foregroundCount = 0;
+        let unionCount = 0;
+        let intersectionCount = 0;
+        for (let i = 0; i < length; i += 4) {
+            const candidateAlpha = candidate[i + 3];
+            const referenceAlpha = reference[i + 3];
+            const foregroundWeight = Math.max(candidateAlpha, referenceAlpha) / 255.0;
+            if (foregroundWeight <= 0) {
+                continue;
+            }
+            const rgbDiff = (
+                Math.abs(candidate[i] - reference[i])
+                + Math.abs(candidate[i + 1] - reference[i + 1])
+                + Math.abs(candidate[i + 2] - reference[i + 2])
+            ) / (3.0 * 255.0);
+            const alphaDiff = Math.abs(candidateAlpha - referenceAlpha) / 255.0;
+            weightedDiff += (rgbWeight * rgbDiff + alphaWeight * alphaDiff) * foregroundWeight;
+            weightSum += foregroundWeight;
+            rgbMaeSum += rgbDiff;
+            alphaMaeSum += alphaDiff;
+            foregroundCount++;
+            if (candidateAlpha > 0 || referenceAlpha > 0) {
+                unionCount++;
+                if (candidateAlpha > 0 && referenceAlpha > 0) {
+                    intersectionCount++;
+                }
+            }
+        }
+        const diffScore = weightSum > 0 ? weightedDiff / weightSum : 1.0;
+        const fitScore = this.clamp01(1.0 - diffScore);
+        return {
+            view_id: viewId,
+            diff_score: diffScore,
+            fit_score: fitScore,
+            rgb_mae: foregroundCount > 0 ? rgbMaeSum / foregroundCount : 1.0,
+            alpha_mae: foregroundCount > 0 ? alphaMaeSum / foregroundCount : 1.0,
+            mask_iou: unionCount > 0 ? intersectionCount / unionCount : 1.0,
+            foreground_weight_sum: weightSum,
+        };
+    }
+
+    private aggregateBrowserScore(command: CaptureCommand, views: BrowserScoreView[], width: number, height: number, patchResult: MaterialPatchResult): any {
+        const viewCount = Math.max(1, views.length);
+        let diffSum = 0;
+        let fitSum = 0;
+        let worstDiff = 0;
+        for (const view of views) {
+            diffSum += view.diff_score;
+            fitSum += view.fit_score;
+            worstDiff = Math.max(worstDiff, view.diff_score);
+        }
+        const diffScore = diffSum / viewCount;
+        const fitScore = fitSum / viewCount;
+        const metric = command.browser_score && command.browser_score.metric
+            ? command.browser_score.metric
+            : "browser_fast_rgba_mae_v1";
+        return {
+            enabled: true,
+            metric,
+            width,
+            height,
+            view_count: views.length,
+            fit_score: fitScore,
+            diff_score: diffScore,
+            score: fitScore,
+            worst_diff_score: worstDiff,
+            views,
+            material_patch: patchResult,
+            summary: {
+                mean_diff_score: diffScore,
+                mean_fit_score: fitScore,
+                optimization_fit_score: fitScore,
+                optimization_fit_score_source: "browser_score",
+                metric,
+            },
+        };
+    }
+
+    private async postBrowserScore(command: CaptureCommand, score: any): Promise<void> {
+        const baseUrl = command.server_base_url || this.serverBaseUrl;
+        const response = await fetch(`${baseUrl}/material-fit/capture-score`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                nonce: command.nonce,
+                browser_score: score,
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`browser_score post failed: ${response.status}`);
+        }
+    }
+
+    private viewId(view: CaptureView, index: number): string {
+        return view.view_id || view.id || `view_${this.pad(index, 3)}`;
+    }
+
+    private numberOrDefault(value: any, fallback: number): number {
+        return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    }
+
+    private clamp01(value: number): number {
+        return Math.max(0, Math.min(1, value));
+    }
+
     private async postImage(command: CaptureCommand, view: CaptureView, index: number, dataUrl: string, width: number, height: number, patchResult: MaterialPatchResult): Promise<void> {
         const url = command.post_url || `${command.server_base_url || this.serverBaseUrl}/material-fit/capture-result`;
         const viewId = view.view_id || view.id || `view_${this.pad(index, 3)}`;
@@ -676,9 +1130,45 @@ export class MaterialFitCapture extends Laya.Script3D {
         });
     }
 
-    private async postLog(kind: string, message: string): Promise<void> {
+    private async postRawImage(command: CaptureCommand, view: CaptureView, index: number, pixels: Uint8Array, width: number, height: number, patchResult: MaterialPatchResult): Promise<void> {
+        const viewId = view.view_id || view.id || `view_${this.pad(index, 3)}`;
+        const fileName = this.rawFileName(view.file_name || `${viewId}.png`);
+        const params = new URLSearchParams({
+            nonce: command.nonce || "",
+            view_id: viewId,
+            file_name: fileName,
+            width: String(width),
+            height: String(height),
+            yaw: String(view.yaw),
+            pitch: String(view.pitch || 0),
+            transparent_background: String(command.transparent_background !== false),
+            alpha_source: this.resolveAlphaSource(command),
+            material_patch_applied: String(patchResult.applied),
+            material_count: String(patchResult.materialCount),
+            value_count: String(patchResult.valueCount),
+        });
+        const baseUrl = command.server_base_url || this.serverBaseUrl;
+        await fetch(`${baseUrl}/material-fit/capture-raw-rgba?${params.toString()}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: pixels,
+        });
+    }
+
+    private rawFileName(fileName: string): string {
+        if (/\.rgba$/i.test(fileName)) {
+            return fileName;
+        }
+        if (/\.png$/i.test(fileName)) {
+            return fileName.replace(/\.png$/i, ".rgba");
+        }
+        return `${fileName}.rgba`;
+    }
+
+    private async postLog(command: CaptureCommand, kind: string, message: string): Promise<void> {
         try {
-            await fetch(`${this.serverBaseUrl}/material-fit/capture-log`, {
+            const baseUrl = command.server_base_url || this.serverBaseUrl;
+            await fetch(`${baseUrl}/material-fit/capture-log`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ kind, message, nonce: this._lastNonce, at: Date.now() }),
