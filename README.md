@@ -167,3 +167,20 @@ python -m pytest material_fit/tests -q
 - UI 项目状态在 `material_fit_ui/backend/project_store.py`。
 
 项目目标是优化“最终渲染表现”的相似度，不是恢复唯一正确的材质参数。当前主线仍是黑盒优化系统，没有训练一个端到端模型；学习型优化器设计目前作为研究方案和后续路线保留在文档中。
+
+## 来源与参考
+
+本公开仓库由本地 `material_fit` 工作区整理而来，保留了原仓库历史来源：
+
+- 上游仓库：`https://github.com/mcy233/material_fit.git`
+- 本分支整理内容：仓库入口文档、运行产物清理规则、standalone `tools.*` 兼容 shim、Laya capture/runtime bridge、稳定性评分、优化器拆分与相关测试。
+
+实现和研究设计主要参考：
+
+- Unity Manual / ShaderLab 文档，用于理解 Unity shader 和材质参数导出。
+- LayaAir / Laya Shader3D 与材质系统文档，用于 `.lmat`、Shader uniform 和截图链路适配。
+- CMA-ES / warm-start CMA-ES 相关黑盒优化方法，用于 `cma_cold`、`cma_warm` 和重启策略设计。
+- SSIM、感知相似度、foreground mask、multi-view aggregation 等图像相似度方法，用于跨引擎渲染结果评分。
+- `material_fit/docs/RelatedWork_Survey.md` 与 `material_fit/docs/learned_incremental_optimizer_design.html` 中整理的 learned optimizer / RL / inverse material design 方向资料。
+
+当前仓库未包含明确 `LICENSE` 文件。除非仓库 owner 后续补充许可证，否则请把它视为带来源说明的 source-available 研究代码，而不是已经声明开放授权的开源发布。
