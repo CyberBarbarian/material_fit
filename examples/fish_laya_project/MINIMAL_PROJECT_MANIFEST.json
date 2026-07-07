@@ -1,0 +1,52 @@
+{
+  "source": "D:\\project_data\\laya\\laya_research\\laya_project",
+  "target": "D:\\project_data\\laya\\laya_research\\laya_project_minimal",
+  "purpose": "Minimal executable Laya project for the current material_fit fish_1504_test scene.",
+  "copied_count": 30,
+  "missing": [],
+  "kept_core": [
+    "assets/resources/game.ls",
+    "assets/resources/play/fish/1504/mesh/1504-fish_jxs.lm",
+    "assets/resources/play/fish/1504/mat/fish_jxs_test.lmat",
+    "assets/resources/play/fish/1504/tex/* current material textures",
+    "assets/Editor/CameraCapture*.ts",
+    "src/MaterialFitCapture.ts",
+    "bin/js/bundles"
+  ],
+  "intentionally_not_copied": [
+    ".svn",
+    ".tmp",
+    ".chat",
+    ".claude",
+    ".cursor",
+    ".trae",
+    "local",
+    "Screenshots",
+    "material_fit",
+    "tools",
+    "library/cache",
+    "full library asset cache",
+    "assets/resources/art",
+    "assets/resources/equipment",
+    "other fish ids",
+    "1504 prefab/anim/ui/cube/backup materials"
+  ],
+  "notes": [
+    "Original laya_project was not modified.",
+    "library/packages and bin/js/bundles are kept to reduce risk when opening in Laya editor.",
+    "Full library/cache is intentionally omitted; Laya may regenerate cache on open.",
+    "If material_fit UI should use this copy, update project laya_project_path/lmat path/command path to laya_project_minimal."
+  ],
+  "target_size_mb": 36.42,
+  "added_after_initial_copy": [
+    {
+      "reason": "Fix shader not found: Custom/FishStandar_Low",
+      "files": [
+        "assets/resources/shader/Custom_low.shader",
+        "assets/resources/shader/Custom_low.shader.meta",
+        "library/fe/fed6ad23-e2b6-484e-b2f9-fcdc9a6f2c3a.json",
+        "library/fe/fed6ad23-e2b6-484e-b2f9-fcdc9a6f2c3a@0.shader"
+      ]
+    }
+  ]
+}

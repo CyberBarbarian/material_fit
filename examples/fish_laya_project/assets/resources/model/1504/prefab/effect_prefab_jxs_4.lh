@@ -1,0 +1,1489 @@
+{
+  "_$ver": 1,
+  "_$id": "ml09i2v0",
+  "_$type": "Sprite3D",
+  "name": "effect_prefab_jxs_4",
+  "layer": 6,
+  "_$comp": [
+    {
+      "_$type": "bdd19034-f104-4c6f-ad7f-e5091f806b77",
+      "scriptPath": "../src/Play/Fish/View/FishNode.ts",
+      "thickness": 4,
+      "animators": [],
+      "spriteRenderer": null,
+      "colliders": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "_$type": "0b957e94-e948-4ffd-89e8-6d6d6226c3bb",
+      "scriptPath": "../src/Play/Effect/View/EffectScreenAdapter.ts",
+      "isPortraitDesign": false
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "0c610ycy",
+      "_$type": "Sprite3D",
+      "name": "model1",
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3",
+          "x": -0.30365319110865396,
+          "y": 0.033117586063159954,
+          "z": -0.75437331199646
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 0
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "bpz5u0ws",
+          "_$type": "Sprite3D",
+          "name": "effect_prefab_jxs_ani_modle",
+          "layer": 6,
+          "transform": {
+            "localPosition": {
+              "_$type": "Vector3",
+              "x": -5.373373508453369,
+              "y": 0.07553363591432571,
+              "z": 0.75437331199646
+            }
+          },
+          "_$comp": [
+            {
+              "_$type": "Animator",
+              "controller": {
+                "_$uuid": "58ce066a-b08e-4875-b60d-a09f85bac9a4",
+                "_$type": "AnimationController"
+              },
+              "cullingMode": 0,
+              "controllerLayers": [
+                {
+                  "_$type": "AnimatorControllerLayer",
+                  "name": "Base Layer",
+                  "states": [
+                    {
+                      "_$type": "AnimatorState",
+                      "name": "NewAnimation",
+                      "clipStart": 0,
+                      "clip": {
+                        "_$uuid": "5ea084c3-6a04-42bb-9a74-2585075487b8",
+                        "_$type": "AnimationClip"
+                      },
+                      "soloTransitions": []
+                    }
+                  ],
+                  "defaultStateName": "NewAnimation"
+                }
+              ]
+            }
+          ],
+          "_$child": [
+            {
+              "_$id": "tc6ge53m",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "layer": 6,
+              "transform": {
+                "localPosition": {
+                  "_$type": "Vector3",
+                  "x": -5.650941792108923,
+                  "y": -4.335657230210536,
+                  "z": -0.8094844222068751
+                },
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": -0.3420201433256687,
+                  "y": 0.9396926207859084,
+                  "z": -2.094269368838496e-17,
+                  "w": 5.753957801139251e-17
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6000000238418579,
+                  "y": 0.6000000238418579,
+                  "z": 0.6000000238418579
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "761a4c2a-0303-437e-9415-adc66795d57e",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "die",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "1740e849-9199-41b6-b1f3-0d1dd305f6b5",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "die"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "zanxm8j2",
+                  "_$type": "Sprite3D",
+                  "name": "Bone001",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.577344,
+                      "y": 2.073727,
+                      "z": -0.103
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.0002739312864473957,
+                      "y": 0.04361843784200105,
+                      "z": -0.00626992668979872,
+                      "w": -0.9990285505735952
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "i1vasc95",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.04024261,
+                          "y": 0.0143692,
+                          "z": -9.536743e-09
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.04357049904631233,
+                          "y": 0.0020594979549209244,
+                          "z": 0.9979342781568347,
+                          "w": -0.047165098967632366
+                        }
+                      }
+                    },
+                    {
+                      "_$id": "va6l93zu",
+                      "_$type": "Sprite3D",
+                      "name": "Bone023",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.1166324,
+                          "y": -0.9719875,
+                          "z": -0.005524649
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.045390656880414555,
+                          "y": 0.004602689683668739,
+                          "z": 0.9976676314328182,
+                          "w": -0.0507720465105652
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "5wlmixre",
+                  "_$type": "Sprite3D",
+                  "name": "jixiesha",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "z": 9.353099e-08
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "a3b64b8a-aca5-4dac-a524-5b8eadc0cd29",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "e69bdd51-15a3-4e60-9a49-a972a8d51f61",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "i1vasc95"
+                        },
+                        {
+                          "_$ref": "va6l93zu"
+                        },
+                        {
+                          "_$ref": "zanxm8j2"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "zanxm8j2"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.36705,
+                          "y": -2.03836,
+                          "z": -1.096355
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 0.5283995,
+                          "y": 1.023577,
+                          "z": 1.367086
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "g1w1ujzy",
+      "_$type": "Sprite3D",
+      "name": "model2",
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3",
+          "x": 2.6299299837846393,
+          "y": 1.418420666276098,
+          "z": -0.75437331199646
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "z": -0.3050967863036056,
+          "w": 0.9523213485936416
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 0.5
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "m7ep51w9",
+          "_$type": "Sprite3D",
+          "name": "effect_prefab_jxs_ani_modle",
+          "layer": 6,
+          "transform": {
+            "localPosition": {
+              "_$type": "Vector3",
+              "x": -5.373373508453369,
+              "y": 0.07553363591432571,
+              "z": 0.75437331199646
+            }
+          },
+          "_$comp": [
+            {
+              "_$type": "Animator",
+              "controller": {
+                "_$uuid": "58ce066a-b08e-4875-b60d-a09f85bac9a4",
+                "_$type": "AnimationController"
+              },
+              "cullingMode": 0,
+              "controllerLayers": [
+                {
+                  "_$type": "AnimatorControllerLayer",
+                  "name": "Base Layer",
+                  "states": [
+                    {
+                      "_$type": "AnimatorState",
+                      "name": "NewAnimation",
+                      "clipStart": 0,
+                      "clip": {
+                        "_$uuid": "5ea084c3-6a04-42bb-9a74-2585075487b8",
+                        "_$type": "AnimationClip"
+                      },
+                      "soloTransitions": []
+                    }
+                  ],
+                  "defaultStateName": "NewAnimation"
+                }
+              ]
+            }
+          ],
+          "_$child": [
+            {
+              "_$id": "xbi7p7pl",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "layer": 6,
+              "transform": {
+                "localPosition": {
+                  "_$type": "Vector3",
+                  "x": -8.566454925358055,
+                  "y": -3.945379720057945,
+                  "z": -0.8094844222068787
+                },
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": -9.0292093331718e-42,
+                  "y": -1,
+                  "z": 3.0814879110195774e-33,
+                  "w": 6.123233995736766e-17
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6000000238418579,
+                  "y": 0.6000000238418579,
+                  "z": 0.6000000238418579
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "761a4c2a-0303-437e-9415-adc66795d57e",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "die",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "1740e849-9199-41b6-b1f3-0d1dd305f6b5",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "die"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "5zutvpbg",
+                  "_$type": "Sprite3D",
+                  "name": "Bone001",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.577344,
+                      "y": 2.073727,
+                      "z": -0.103
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.0002739312864473957,
+                      "y": 0.04361843784200105,
+                      "z": -0.00626992668979872,
+                      "w": -0.9990285505735952
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "agymo88h",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.04024261,
+                          "y": 0.0143692,
+                          "z": -9.536743e-09
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.04357049904631233,
+                          "y": 0.0020594979549209244,
+                          "z": 0.9979342781568347,
+                          "w": -0.047165098967632366
+                        }
+                      }
+                    },
+                    {
+                      "_$id": "orilfqbz",
+                      "_$type": "Sprite3D",
+                      "name": "Bone023",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.1166324,
+                          "y": -0.9719875,
+                          "z": -0.005524649
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.045390656880414555,
+                          "y": 0.004602689683668739,
+                          "z": 0.9976676314328182,
+                          "w": -0.0507720465105652
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "zn1g5hux",
+                  "_$type": "Sprite3D",
+                  "name": "jixiesha",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "z": 9.353099e-08
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "a3b64b8a-aca5-4dac-a524-5b8eadc0cd29",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "e69bdd51-15a3-4e60-9a49-a972a8d51f61",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "agymo88h"
+                        },
+                        {
+                          "_$ref": "orilfqbz"
+                        },
+                        {
+                          "_$ref": "5zutvpbg"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "5zutvpbg"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.36705,
+                          "y": -2.03836,
+                          "z": -1.096355
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 0.5283995,
+                          "y": 1.023577,
+                          "z": 1.367086
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "poakfa09",
+      "_$type": "Sprite3D",
+      "name": "model3",
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3",
+          "x": 10.154027571242443,
+          "y": 0.5220480849618433,
+          "z": -0.75437331199646
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "z": -0.9905871026136535,
+          "w": 0.13688386367825564
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 1
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "vbq5bww1",
+          "_$type": "Sprite3D",
+          "name": "effect_prefab_jxs_ani_modle",
+          "layer": 6,
+          "transform": {
+            "localPosition": {
+              "_$type": "Vector3",
+              "x": -5.373373508453369,
+              "y": 0.07553363591432571,
+              "z": 0.75437331199646
+            }
+          },
+          "_$comp": [
+            {
+              "_$type": "Animator",
+              "controller": {
+                "_$uuid": "58ce066a-b08e-4875-b60d-a09f85bac9a4",
+                "_$type": "AnimationController"
+              },
+              "cullingMode": 0,
+              "controllerLayers": [
+                {
+                  "_$type": "AnimatorControllerLayer",
+                  "name": "Base Layer",
+                  "states": [
+                    {
+                      "_$type": "AnimatorState",
+                      "name": "NewAnimation",
+                      "clipStart": 0,
+                      "clip": {
+                        "_$uuid": "5ea084c3-6a04-42bb-9a74-2585075487b8",
+                        "_$type": "AnimationClip"
+                      },
+                      "soloTransitions": []
+                    }
+                  ],
+                  "defaultStateName": "NewAnimation"
+                }
+              ]
+            }
+          ],
+          "_$child": [
+            {
+              "_$id": "lmsu8l7q",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "layer": 6,
+              "transform": {
+                "localPosition": {
+                  "_$type": "Vector3",
+                  "x": 2.629766294201003,
+                  "y": -2.768305279580475,
+                  "z": -0.8094844222068787
+                },
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": 0.14176514457636524,
+                  "y": -6.061391292579072e-17,
+                  "z": -0.9899003201248309,
+                  "w": -8.680611526805373e-18
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6000000238418579,
+                  "y": 0.6000000238418579,
+                  "z": 0.6000000238418579
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "761a4c2a-0303-437e-9415-adc66795d57e",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "die",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "1740e849-9199-41b6-b1f3-0d1dd305f6b5",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "die"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "ulbyufsi",
+                  "_$type": "Sprite3D",
+                  "name": "Bone001",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.577344,
+                      "y": 2.073727,
+                      "z": -0.103
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.0002739312864473957,
+                      "y": 0.04361843784200105,
+                      "z": -0.00626992668979872,
+                      "w": -0.9990285505735952
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "7j7ueje9",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.04024261,
+                          "y": 0.0143692,
+                          "z": -9.536743e-09
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.04357049904631233,
+                          "y": 0.0020594979549209244,
+                          "z": 0.9979342781568347,
+                          "w": -0.047165098967632366
+                        }
+                      }
+                    },
+                    {
+                      "_$id": "v4i3hta6",
+                      "_$type": "Sprite3D",
+                      "name": "Bone023",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.1166324,
+                          "y": -0.9719875,
+                          "z": -0.005524649
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.045390656880414555,
+                          "y": 0.004602689683668739,
+                          "z": 0.9976676314328182,
+                          "w": -0.0507720465105652
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "iwppkr31",
+                  "_$type": "Sprite3D",
+                  "name": "jixiesha",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "z": 9.353099e-08
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "a3b64b8a-aca5-4dac-a524-5b8eadc0cd29",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "e69bdd51-15a3-4e60-9a49-a972a8d51f61",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "7j7ueje9"
+                        },
+                        {
+                          "_$ref": "v4i3hta6"
+                        },
+                        {
+                          "_$ref": "ulbyufsi"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "ulbyufsi"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.36705,
+                          "y": -2.03836,
+                          "z": -1.096355
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 0.5283995,
+                          "y": 1.023577,
+                          "z": 1.367086
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "m76l329s",
+      "_$type": "Sprite3D",
+      "name": "model4",
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3",
+          "x": -0.30365319110865485,
+          "y": -1.0805574392060664,
+          "z": -0.75437331199646
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "x": -0.0009359208403140961,
+          "y": -0.023939982602971505,
+          "z": 0.9306259343766277,
+          "w": 0.36518676256236227
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 1.5
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "23k72qrq",
+          "_$type": "Sprite3D",
+          "name": "effect_prefab_jxs_ani_modle",
+          "layer": 6,
+          "transform": {
+            "localPosition": {
+              "_$type": "Vector3",
+              "x": -0.2690540552139282,
+              "y": -0.024459440261125565
+            }
+          },
+          "_$comp": [
+            {
+              "_$type": "Animator",
+              "controller": {
+                "_$uuid": "58ce066a-b08e-4875-b60d-a09f85bac9a4",
+                "_$type": "AnimationController"
+              },
+              "cullingMode": 0,
+              "controllerLayers": [
+                {
+                  "_$type": "AnimatorControllerLayer",
+                  "name": "Base Layer",
+                  "states": [
+                    {
+                      "_$type": "AnimatorState",
+                      "name": "NewAnimation",
+                      "clipStart": 0,
+                      "clip": {
+                        "_$uuid": "5ea084c3-6a04-42bb-9a74-2585075487b8",
+                        "_$type": "AnimationClip"
+                      },
+                      "soloTransitions": []
+                    }
+                  ],
+                  "defaultStateName": "NewAnimation"
+                }
+              ]
+            }
+          ],
+          "_$child": [
+            {
+              "_$id": "5jw9g8yb",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "layer": 6,
+              "transform": {
+                "localPosition": {
+                  "_$type": "Vector3",
+                  "x": -6.628674565299233,
+                  "y": -1.7676315854084004,
+                  "z": -0.6143997881897485
+                },
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": -0.020949017306577552,
+                  "y": -0.047642668633913476,
+                  "z": 0.997590369585979,
+                  "w": 0.04587776486096104
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6000000238418579,
+                  "y": 0.6000000238418579,
+                  "z": 0.6000000238418579
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "761a4c2a-0303-437e-9415-adc66795d57e",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "die",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "1740e849-9199-41b6-b1f3-0d1dd305f6b5",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "die"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "i5l2cr2t",
+                  "_$type": "Sprite3D",
+                  "name": "Bone001",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.577344,
+                      "y": 2.073727,
+                      "z": -0.103
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.0002739312864473957,
+                      "y": 0.04361843784200105,
+                      "z": -0.00626992668979872,
+                      "w": -0.9990285505735952
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "4nzpjbcr",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.04024261,
+                          "y": 0.0143692,
+                          "z": -9.536743e-09
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.04357049904631233,
+                          "y": 0.0020594979549209244,
+                          "z": 0.9979342781568347,
+                          "w": -0.047165098967632366
+                        }
+                      }
+                    },
+                    {
+                      "_$id": "q2kl15l0",
+                      "_$type": "Sprite3D",
+                      "name": "Bone023",
+                      "layer": 6,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.1166324,
+                          "y": -0.9719875,
+                          "z": -0.005524649
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.045390656880414555,
+                          "y": 0.004602689683668739,
+                          "z": 0.9976676314328182,
+                          "w": -0.0507720465105652
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "sunj8kqk",
+                  "_$type": "Sprite3D",
+                  "name": "jixiesha",
+                  "layer": 6,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "z": 9.353099e-08
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "a3b64b8a-aca5-4dac-a524-5b8eadc0cd29",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "e69bdd51-15a3-4e60-9a49-a972a8d51f61",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "4nzpjbcr"
+                        },
+                        {
+                          "_$ref": "q2kl15l0"
+                        },
+                        {
+                          "_$ref": "i5l2cr2t"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "i5l2cr2t"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.36705,
+                          "y": -2.03836,
+                          "z": -1.096355
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 0.5283995,
+                          "y": 1.023577,
+                          "z": 1.367086
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "d7h1ltec",
+      "_$prefab": "a8a688ed-963e-4ebb-8e62-02b30eb141b2",
+      "name": "机械鲨",
+      "active": true,
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3"
+        },
+        "localRotation": {
+          "_$type": "Quaternion"
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 1
+        }
+      ],
+      "_$child": [
+        {
+          "_$override": "i8469jqj",
+          "layer": 6
+        },
+        {
+          "_$override": "pi9rkeyc",
+          "layer": 6
+        },
+        {
+          "_$override": "a732mjp6",
+          "layer": 6
+        },
+        {
+          "_$override": "fdcj2wyn",
+          "layer": 6
+        },
+        {
+          "_$override": "daf1h77d",
+          "layer": 6
+        },
+        {
+          "_$override": "ek7gfmn2",
+          "layer": 6
+        },
+        {
+          "_$override": "8ugwg5l8",
+          "layer": 6
+        },
+        {
+          "_$override": "pmjgvf93",
+          "layer": 6
+        },
+        {
+          "_$override": "xcz42w3n",
+          "layer": 6
+        },
+        {
+          "_$override": "3c0v4aat",
+          "layer": 6
+        },
+        {
+          "_$override": "e0stlk4g",
+          "layer": 6
+        },
+        {
+          "_$override": "ag8ku5qj",
+          "layer": 6
+        },
+        {
+          "_$override": "y0tl7ukr",
+          "layer": 6
+        },
+        {
+          "_$override": "djuci5i7",
+          "layer": 6
+        },
+        {
+          "_$override": "xb75dkhq",
+          "layer": 6
+        },
+        {
+          "_$override": "95tg0rbc",
+          "layer": 6
+        },
+        {
+          "_$override": "vghzhmqc",
+          "layer": 6
+        },
+        {
+          "_$override": "6xgyfwzs",
+          "layer": 6
+        },
+        {
+          "_$override": "w10082rs",
+          "layer": 6
+        },
+        {
+          "_$override": "o22okzf4",
+          "layer": 6
+        }
+      ],
+      "drawCallOptimize": false
+    },
+    {
+      "_$id": "sydg59mx",
+      "_$prefab": "a8a688ed-963e-4ebb-8e62-02b30eb141b2",
+      "name": "机械鲨_1",
+      "active": true,
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3"
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "z": -0.45399049973954675,
+          "w": 0.8910065241883679
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 1.5
+        }
+      ],
+      "_$child": [
+        {
+          "_$override": "i8469jqj",
+          "layer": 6
+        },
+        {
+          "_$override": "pi9rkeyc",
+          "layer": 6
+        },
+        {
+          "_$override": "a732mjp6",
+          "layer": 6
+        },
+        {
+          "_$override": "fdcj2wyn",
+          "layer": 6
+        },
+        {
+          "_$override": "daf1h77d",
+          "layer": 6
+        },
+        {
+          "_$override": "ek7gfmn2",
+          "layer": 6
+        },
+        {
+          "_$override": "8ugwg5l8",
+          "layer": 6
+        },
+        {
+          "_$override": "pmjgvf93",
+          "layer": 6
+        },
+        {
+          "_$override": "xcz42w3n",
+          "layer": 6
+        },
+        {
+          "_$override": "3c0v4aat",
+          "layer": 6
+        },
+        {
+          "_$override": "e0stlk4g",
+          "layer": 6
+        },
+        {
+          "_$override": "ag8ku5qj",
+          "layer": 6
+        },
+        {
+          "_$override": "y0tl7ukr",
+          "layer": 6
+        },
+        {
+          "_$override": "djuci5i7",
+          "layer": 6
+        },
+        {
+          "_$override": "xb75dkhq",
+          "layer": 6
+        },
+        {
+          "_$override": "95tg0rbc",
+          "layer": 6
+        },
+        {
+          "_$override": "vghzhmqc",
+          "layer": 6
+        },
+        {
+          "_$override": "6xgyfwzs",
+          "layer": 6
+        },
+        {
+          "_$override": "w10082rs",
+          "layer": 6
+        },
+        {
+          "_$override": "o22okzf4",
+          "layer": 6
+        }
+      ],
+      "drawCallOptimize": false
+    },
+    {
+      "_$id": "wgwv9r0h",
+      "_$prefab": "a8a688ed-963e-4ebb-8e62-02b30eb141b2",
+      "name": "机械鲨_2",
+      "active": true,
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3"
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "z": 1,
+          "w": 6.123233995736766e-17
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 2
+        }
+      ],
+      "_$child": [
+        {
+          "_$override": "i8469jqj",
+          "layer": 6
+        },
+        {
+          "_$override": "pi9rkeyc",
+          "layer": 6
+        },
+        {
+          "_$override": "a732mjp6",
+          "layer": 6
+        },
+        {
+          "_$override": "fdcj2wyn",
+          "layer": 6
+        },
+        {
+          "_$override": "daf1h77d",
+          "layer": 6
+        },
+        {
+          "_$override": "ek7gfmn2",
+          "layer": 6
+        },
+        {
+          "_$override": "8ugwg5l8",
+          "layer": 6
+        },
+        {
+          "_$override": "pmjgvf93",
+          "layer": 6
+        },
+        {
+          "_$override": "xcz42w3n",
+          "layer": 6
+        },
+        {
+          "_$override": "3c0v4aat",
+          "layer": 6
+        },
+        {
+          "_$override": "e0stlk4g",
+          "layer": 6
+        },
+        {
+          "_$override": "ag8ku5qj",
+          "layer": 6
+        },
+        {
+          "_$override": "y0tl7ukr",
+          "layer": 6
+        },
+        {
+          "_$override": "djuci5i7",
+          "layer": 6
+        },
+        {
+          "_$override": "xb75dkhq",
+          "layer": 6
+        },
+        {
+          "_$override": "95tg0rbc",
+          "layer": 6
+        },
+        {
+          "_$override": "vghzhmqc",
+          "layer": 6
+        },
+        {
+          "_$override": "6xgyfwzs",
+          "layer": 6
+        },
+        {
+          "_$override": "w10082rs",
+          "layer": 6
+        },
+        {
+          "_$override": "o22okzf4",
+          "layer": 6
+        }
+      ],
+      "drawCallOptimize": false
+    },
+    {
+      "_$id": "fhj2pugp",
+      "_$prefab": "a8a688ed-963e-4ebb-8e62-02b30eb141b2",
+      "name": "机械鲨_3",
+      "active": true,
+      "layer": 6,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3"
+        },
+        "localRotation": {
+          "_$type": "Quaternion",
+          "z": -0.8940072783602966,
+          "w": -0.4480524369298923
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 2.5
+        }
+      ],
+      "_$child": [
+        {
+          "_$override": "i8469jqj",
+          "layer": 6
+        },
+        {
+          "_$override": "pi9rkeyc",
+          "layer": 6
+        },
+        {
+          "_$override": "a732mjp6",
+          "layer": 6
+        },
+        {
+          "_$override": "fdcj2wyn",
+          "layer": 6
+        },
+        {
+          "_$override": "daf1h77d",
+          "layer": 6
+        },
+        {
+          "_$override": "ek7gfmn2",
+          "layer": 6
+        },
+        {
+          "_$override": "8ugwg5l8",
+          "layer": 6
+        },
+        {
+          "_$override": "pmjgvf93",
+          "layer": 6
+        },
+        {
+          "_$override": "xcz42w3n",
+          "layer": 6
+        },
+        {
+          "_$override": "3c0v4aat",
+          "layer": 6
+        },
+        {
+          "_$override": "e0stlk4g",
+          "layer": 6
+        },
+        {
+          "_$override": "ag8ku5qj",
+          "layer": 6
+        },
+        {
+          "_$override": "y0tl7ukr",
+          "layer": 6
+        },
+        {
+          "_$override": "djuci5i7",
+          "layer": 6
+        },
+        {
+          "_$override": "xb75dkhq",
+          "layer": 6
+        },
+        {
+          "_$override": "95tg0rbc",
+          "layer": 6
+        },
+        {
+          "_$override": "vghzhmqc",
+          "layer": 6
+        },
+        {
+          "_$override": "6xgyfwzs",
+          "layer": 6
+        },
+        {
+          "_$override": "w10082rs",
+          "layer": 6
+        },
+        {
+          "_$override": "o22okzf4",
+          "layer": 6
+        }
+      ],
+      "drawCallOptimize": false
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "_$ver": 1,
+  "_$id": "pm76k0iz",
+  "_$type": "GWidget",
+  "name": "panel",
+  "width": 1136,
+  "height": 640,
+  "_$comp": [
+    {
+      "_$type": "c35ca088-0557-4d92-9c1f-2d9be6622030",
+      "scriptPath": "../src/Base/Node/FillParent.ts",
+      "fillParent": false,
+      "keepAspectRatio": false
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "eyrejemt",
+      "_$type": "GImage",
+      "name": "circle",
+      "x": 531,
+      "y": 212,
+      "width": 74,
+      "height": 74,
+      "relations": [
+        {
+          "_$type": "Relation",
+          "target": {
+            "_$ref": "pm76k0iz"
+          },
+          "data": [
+            6,
+            0,
+            13,
+            0
+          ]
+        }
+      ],
+      "src": "res://0cc09324-0803-4612-a9cb-9d2da6dff11f",
+      "autoSize": false,
+      "_$child": [
+        {
+          "_$id": "zxku4c96",
+          "_$type": "Sprite",
+          "name": "counter",
+          "x": 38,
+          "y": 38,
+          "width": 41,
+          "height": 94,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "scaleX": 0.36,
+          "scaleY": 0.36,
+          "_$comp": [
+            {
+              "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b",
+              "scriptPath": "../src/Base/UI/SpriteFont.ts",
+              "fontConfig": "resources/fnt/fnt002_yellow.json",
+              "text": "1",
+              "letterSpacing": 0,
+              "charAlignX": "left",
+              "charAlignY": "bottom"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "f1mgea92",
+      "_$type": "GImage",
+      "name": "logo",
+      "x": 444,
+      "y": 410,
+      "width": 249,
+      "height": 152,
+      "relations": [
+        {
+          "_$type": "Relation",
+          "target": {
+            "_$ref": "pm76k0iz"
+          },
+          "data": [
+            6,
+            0,
+            16,
+            0
+          ]
+        }
+      ],
+      "src": "res://e872f703-d281-4acf-9d08-d37c9c851bcc",
+      "_$child": [
+        {
+          "_$id": "cbwztkfe",
+          "_$type": "GWidget",
+          "name": "gold",
+          "x": 125,
+          "y": 116,
+          "width": 0,
+          "height": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "scaleX": 0.8,
+          "scaleY": 0.8,
+          "relations": [
+            {
+              "_$type": "Relation",
+              "target": {
+                "_$ref": "f1mgea92"
+              },
+              "data": [
+                6,
+                0
+              ]
+            }
+          ],
+          "_$comp": [
+            {
+              "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b",
+              "scriptPath": "../src/Base/UI/SpriteFont.ts",
+              "fontConfig": "resources/fnt/fnt_turntable.json",
+              "text": "",
+              "letterSpacing": -11,
+              "charAlignX": "left",
+              "charAlignY": "bottom"
+            },
+            {
+              "_$type": "2e59bbd1-1176-4833-af36-8468957e7823",
+              "scriptPath": "../src/Base/UI/NumberRoll.ts",
+              "textFont": {
+                "_$ref": "cbwztkfe",
+                "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b"
+              },
+              "autoPlay": false,
+              "autoPlayValue": 0,
+              "autoPlayFrom": 0,
+              "autoPlayUseFrom": true,
+              "duration": 1.5,
+              "delayTime": 0,
+              "endScale": 2,
+              "endScaleTime": 0.5,
+              "prefix": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "drawCallOptimize": true
+}

@@ -1,0 +1,231 @@
+{
+  "version": "LAYAMATERIAL:04",
+  "props": {
+    "textures": [
+      {
+        "path": "res://85007b7a-3cd1-485b-817c-6ac0032a10a8",
+        "constructParams": [
+          1024,
+          1024,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 1,
+          "wrapModeV": 1,
+          "anisoLevel": 4
+        },
+        "name": "u_MainTex"
+      },
+      {
+        "path": "res://bb30f894-b414-44fd-82e8-4168ee66259f",
+        "constructParams": [
+          2048,
+          2048,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 1,
+          "wrapModeV": 1,
+          "anisoLevel": 4
+        },
+        "name": "u_SpeTex"
+      },
+      {
+        "path": "res://cf029c36-39ee-4ffb-a060-ecc8f1b90303",
+        "constructParams": [
+          1024,
+          1024,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 1,
+          "wrapModeV": 1,
+          "anisoLevel": 4
+        },
+        "name": "u_LMap"
+      },
+      {
+        "path": "res://419a67d7-8ab6-4fea-b6e0-b2808d22e58e",
+        "constructParams": [
+          1024,
+          1024,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 1
+        },
+        "name": "u_NormalTex"
+      },
+      {
+        "path": "res://3dc4041a-3c47-4390-ad00-2992472b80c3",
+        "constructParams": [
+          512,
+          512,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 1,
+          "wrapModeV": 1,
+          "anisoLevel": 4
+        },
+        "name": "u_EmissionTex"
+      },
+      {
+        "path": "res://95316f30-1dc7-4814-90df-46b65dfe23b6",
+        "constructParams": [
+          512,
+          512,
+          0,
+          true,
+          false,
+          true
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_CustomReflectTex"
+      }
+    ],
+    "type": "Custom/FishStandar_Low",
+    "renderQueue": 2000,
+    "materialRenderMode": 0,
+    "u_AlphaTestValue": 0.5,
+    "s_Cull": 2,
+    "s_Blend": 0,
+    "s_BlendSrc": 0,
+    "s_BlendDst": 0,
+    "s_BlendSrcRGB": 0,
+    "s_BlendDstRGB": 0,
+    "s_BlendSrcAlpha": 0,
+    "s_BlendDstAlpha": 0,
+    "s_BlendEquation": 0,
+    "s_BlendEquationRGB": 0,
+    "s_BlendEquationAlpha": 0,
+    "s_DepthTest": 1,
+    "s_DepthWrite": true,
+    "u_NormalScale": 1,
+    "u_Color": [
+      0.84,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_MainTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_TexPower": 1.681721091050223,
+    "u_GammaPower": 1.5526126135267457,
+    "u_SpeTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_NormalTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_AoPower": 0.3063156326807512,
+    "u_EmissionTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_EmissionPow": 0.23493061214833408,
+    "u_ReflectColor": [
+      0.0,
+      0.0,
+      0.16799999999999998,
+      1.0
+    ],
+    "u_IndirectStrength": 1.4266287377385343,
+    "u_SkyRotateX": 0.0,
+    "u_SkyRotateY": 31.68,
+    "u_SkyRotateZ": 0.0,
+    "u_ShadowSmoothness": 0.188,
+    "u_ShadowColor1": [
+      0.7,
+      0.82,
+      0.82,
+      1.0
+    ],
+    "u_ShadowThreshold1": 0.212,
+    "u_ShadowColor2": [
+      0.5,
+      0.5,
+      0.5,
+      1
+    ],
+    "u_ShadowThreshold2": 0.4,
+    "u_SpecularColor": [
+      0.74,
+      0.708,
+      0.9,
+      1.0
+    ],
+    "u_SpecularIntensity": 0.32678043684354696,
+    "u_SpecularPower": 8.000000000000002,
+    "u_SpecularThreshold": 0.8640000000000001,
+    "u_SpecularSmoothness": 0.184,
+    "u_SpeOffet": [
+      1.28,
+      0.5760000000000001,
+      -0.5760000000000001,
+      0.0
+    ],
+    "u_RimColor": [
+      0.6799999999999999,
+      1.0,
+      0.8720000000000001,
+      1.0
+    ],
+    "u_RimIntensity": 1.212632347855806,
+    "u_RimWidth": 0,
+    "u_RimOffet": [
+      0.0,
+      0.0,
+      0.0,
+      0.96
+    ],
+    "u_LightRotateX": 31.68,
+    "u_LightRotateY": 57.6,
+    "u_LightRotateZ": 0,
+    "u_HueShift": 0,
+    "u_Saturation": 0.856,
+    "u_Contrast": 1,
+    "defines": [
+      "NORMALMAP_Y_INVERT"
+    ]
+  }
+}

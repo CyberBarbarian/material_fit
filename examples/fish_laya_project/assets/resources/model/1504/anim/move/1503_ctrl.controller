@@ -1,0 +1,90 @@
+{
+  "_$type": "Animator",
+  "enabled": true,
+  "controller": "null",
+  "cullingMode": 0,
+  "controllerLayers": [
+    {
+      "_$type": "AnimatorControllerLayer",
+      "playOnWake": true,
+      "name": "Base Layer",
+      "defaultWeight": 1,
+      "blendingMode": 0,
+      "states": [
+        {
+          "_$type": "AnimatorState",
+          "name": "idle1",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 190,
+          "y": 80,
+          "clip": {
+            "_$uuid": "392d198d-d1e9-4758-9ea4-a8cc5e229147"
+          },
+          "id": "0",
+          "soloTransitions": [
+            {
+              "id": "1",
+              "exitByTime": true,
+              "exitTime": 0.875,
+              "transduration": 0.25,
+              "transstartoffset": 0
+            }
+          ],
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "_$type": "AnimatorState",
+          "name": "idle2",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 190,
+          "y": 150,
+          "clip": {
+            "_$uuid": "9ec77d08-2b64-4bf8-8dc6-234b935790e0"
+          },
+          "id": "1",
+          "soloTransitions": [
+            {
+              "id": "0",
+              "exitByTime": true,
+              "exitTime": 0.9375,
+              "transduration": 0.25,
+              "transstartoffset": 0
+            }
+          ],
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": -30,
+          "y": 90,
+          "soloTransitions": [
+            {
+              "id": "0"
+            }
+          ]
+        },
+        {
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": -30,
+          "y": 30
+        }
+      ],
+      "stageX": 436,
+      "stageY": 179,
+      "stageScale": 1
+    }
+  ],
+  "layerW": 150
+}

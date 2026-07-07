@@ -1,0 +1,58 @@
+{
+  "_$type": "Animator",
+  "enabled": true,
+  "controller": "null",
+  "cullingMode": 0,
+  "controllerLayers": [
+    {
+      "_$type": "AnimatorControllerLayer",
+      "playOnWake": true,
+      "name": "Base Layer",
+      "defaultWeight": 1,
+      "blendingMode": 0,
+      "states": [
+        {
+          "_$type": "AnimatorState",
+          "name": "die",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 270,
+          "y": 110,
+          "clip": {
+            "_$type": "AnimationClip",
+            "_$uuid": "559a9ab3-649f-4704-84ad-eb5a8aebb54a"
+          },
+          "id": "0",
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 120,
+          "soloTransitions": [
+            {
+              "id": "0"
+            }
+          ]
+        },
+        {
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 60
+        }
+      ],
+      "stageX": 98,
+      "stageY": 173.5,
+      "stageScale": 1
+    }
+  ],
+  "layerW": 150
+}

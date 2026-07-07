@@ -1,0 +1,46 @@
+{
+  "_$ver": 1,
+  "_$id": "vwh4r58v",
+  "_$type": "Sprite3D",
+  "name": "1504_cube",
+  "layer": 6,
+  "transform": {
+    "localRotation": {
+      "_$type": "Quaternion",
+      "w": -1
+    }
+  },
+  "_$comp": [
+    {
+      "_$type": "MeshFilter",
+      "sharedMesh": {
+        "_$uuid": "6e013e32-fec7-4397-80d1-f918a07607be",
+        "_$type": "Mesh"
+      }
+    },
+    {
+      "_$type": "MeshRenderer",
+      "receiveShadow": true,
+      "castShadow": true,
+      "lightmapScaleOffset": {
+        "_$type": "Vector4"
+      },
+      "sharedMaterials": [
+        {
+          "_$uuid": "2bd91c37-ae6e-406b-84a3-ced512cf80f1",
+          "_$type": "Material"
+        }
+      ]
+    },
+    {
+      "_$type": "29af30f1-4b94-4c1e-ae08-9407213ed1b4",
+      "scriptPath": "../src/Play/Effect/View/EffectRotate.ts",
+      "rotate": {
+        "_$type": "Vector3",
+        "x": 0.95,
+        "y": 1.56,
+        "z": 0.73
+      }
+    }
+  ]
+}

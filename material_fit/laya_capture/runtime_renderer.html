@@ -1,0 +1,446 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Material Fit Runtime Renderer</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  </style>
+</head>
+<body>
+<script>
+(async function bootstrap() {
+  const params = new URLSearchParams(location.search);
+  const engineRoot = params.get("engineRoot") || "";
+  const projectRoot = params.get("projectRoot") || "";
+  const sceneUrl = params.get("scene") || "";
+  const assetManifestUrl = params.get("assetManifest") || "";
+  const serverBaseUrl = params.get("server") || "http://127.0.0.1:8787";
+  const width = Number(params.get("width") || "320");
+  const height = Number(params.get("height") || "240");
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("script load failed: " + src));
+      document.head.appendChild(script);
+    });
+  }
+
+  function joinUrl(root, path) {
+    if (!root) return path;
+    return root.replace(/\/$/, "") + "/" + path.replace(/^\//, "");
+  }
+
+  await loadScript(joinUrl(engineRoot, "laya.core.js"));
+  await loadScript(joinUrl(engineRoot, "laya.webgl_2D.js"));
+  await loadScript(joinUrl(engineRoot, "laya.d3.js"));
+  await loadScript(joinUrl(engineRoot, "laya.webgl_3D.js"));
+
+  const initResult = Laya.init(width, height);
+  if (initResult && typeof initResult.then === "function") {
+    await initResult;
+  }
+  Laya.stage.bgColor = "#000000";
+  if (Laya.stage.scaleMode !== undefined) {
+    Laya.stage.scaleMode = "noscale";
+  }
+
+  let lastNonce = "";
+  let busy = false;
+  let lastColor = [0.2, 0.6, 1.0, 1.0];
+
+  await loadProjectBundles();
+  await installAssetManifest();
+  const runtime = await createRuntimeScene();
+
+  async function loadProjectBundles() {
+    if (!projectRoot) return;
+    for (const bundle of ["bin/js/bundles/bundle.js"]) {
+      try {
+        await loadScript(joinUrl(projectRoot, bundle));
+        console.log("[material-fit] loaded project bundle: " + bundle);
+      } catch (error) {
+        console.warn("[material-fit] optional project bundle not loaded: " + bundle + " " + error);
+      }
+    }
+  }
+
+  async function installAssetManifest() {
+    if (!assetManifestUrl || !Laya.AssetDb || !Laya.AssetDb.inst) return;
+    const response = await fetch(assetManifestUrl);
+    if (!response.ok) {
+      console.warn("[material-fit] asset manifest not loaded: " + response.status);
+      return;
+    }
+    const manifest = await response.json();
+    const uuidMap = manifest && manifest.uuidMap || {};
+    const shaderNameMap = manifest && manifest.shaderNameMap || {};
+    const originalResolve = Laya.AssetDb.inst.resolveURL.bind(Laya.AssetDb.inst);
+    if (Laya.LayaEnv) {
+      Laya.LayaEnv.isPreview = true;
+    }
+    Laya.AssetDb.inst.uuidMap = Object.assign({}, Laya.AssetDb.inst.uuidMap || {}, uuidMap);
+    Laya.AssetDb.inst.shaderNameMap = Object.assign({}, Laya.AssetDb.inst.shaderNameMap || {}, shaderNameMap);
+    Laya.AssetDb.inst.UUID_to_URL = (uuid) => uuidMap[uuid] || null;
+    Laya.AssetDb.inst.UUID_to_URL_async = (uuid) => Promise.resolve(uuidMap[uuid] || null);
+    Laya.AssetDb.inst.shaderName_to_URL = (shaderName) => shaderNameMap[shaderName] || null;
+    Laya.AssetDb.inst.shaderName_to_URL_async = (shaderName) => Promise.resolve(shaderNameMap[shaderName] || null);
+    Laya.AssetDb.inst.resolveURL = (url, onResolve) => {
+      if (url && url.startsWith("res://")) {
+        const resolved = uuidMap[url.substring(6)] || null;
+        if (onResolve) onResolve(resolved);
+        return Promise.resolve(resolved);
+      }
+      return originalResolve(url, onResolve);
+    };
+    console.log("[material-fit] installed asset manifest entries=" + Object.keys(uuidMap).length + " shaders=" + Object.keys(shaderNameMap).length);
+  }
+
+  async function createRuntimeScene() {
+    if (sceneUrl) {
+      try {
+        const scene = await Laya.Scene.open(sceneUrl, false);
+        await waitFrames(4);
+        const sceneRoot = scene.scene3D || scene;
+        const camera = findFirstCamera(sceneRoot) || findNodeByName(sceneRoot, "Capture Camera");
+        const target = findNodeByName(sceneRoot, "model");
+        if (!camera || !target) {
+          throw new Error(`scene loaded but camera/target missing camera=${!!camera} target=${!!target}`);
+        }
+        console.log("[material-fit] loaded scene: " + sceneUrl);
+        return { mode: "scene", scene: sceneRoot, camera, target, fallbackMaterial: null };
+      } catch (error) {
+        console.error("[material-fit] scene load failed, falling back to cube: " + (error && error.stack || error));
+      }
+    }
+
+    const scene = new Laya.Scene3D();
+    Laya.stage.addChild(scene);
+    const camera = new Laya.Camera(0, 0.1, 100);
+    scene.addChild(camera);
+    camera.transform.position = new Laya.Vector3(0, 0, 4);
+    camera.transform.lookAt(new Laya.Vector3(0, 0, 0), new Laya.Vector3(0, 1, 0));
+    const target = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(1.4, 1.4, 1.4));
+    target.name = "model";
+    scene.addChild(target);
+    const fallbackMaterial = new Laya.UnlitMaterial();
+    fallbackMaterial.albedoColor = new Laya.Color(lastColor[0], lastColor[1], lastColor[2], lastColor[3]);
+    target.meshRenderer.material = fallbackMaterial;
+    console.log("[material-fit] using fallback cube renderer");
+    return { mode: "fallback_cube", scene, camera, target, fallbackMaterial };
+  }
+
+  function findNodeByName(root, name) {
+    if (!root || !name) return null;
+    if (root.name === name) return root;
+    const children = childNodes(root);
+    for (const child of children) {
+      const found = findNodeByName(child, name);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function findFirstCamera(root) {
+    if (!root) return null;
+    if (root instanceof Laya.Camera) return root;
+    const children = childNodes(root);
+    for (const child of children) {
+      const found = findFirstCamera(child);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function walk(root, visitor) {
+    if (!root) return;
+    visitor(root);
+    for (const child of childNodes(root)) {
+      walk(child, visitor);
+    }
+  }
+
+  function childNodes(root) {
+    if (!root) return [];
+    if (Array.isArray(root._children)) return root._children;
+    const count = typeof root.numChildren === "number" ? root.numChildren : 0;
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+      out.push(root.getChildAt(i));
+    }
+    return out;
+  }
+
+  function waitFrames(count) {
+    return new Promise((resolve) => {
+      function step(remaining) {
+        if (remaining <= 0) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(() => step(remaining - 1));
+      }
+      step(Math.max(1, count || 1));
+    });
+  }
+
+  function numberOr(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function collectMaterials(root) {
+    const out = [];
+    walk(root, (node) => {
+      const sources = [node && node.meshRenderer, node && node.skinnedMeshRenderer, node && node.renderer, node && node._renderNode];
+      for (const source of sources) {
+        const materials = source && (source.sharedMaterials || source.materials || source._materials || (source.sharedMaterial ? [source.sharedMaterial] : null));
+        if (!materials) continue;
+        for (const material of materials) {
+          if (material && out.indexOf(material) < 0) out.push(material);
+        }
+      }
+    });
+    if (runtime.fallbackMaterial && out.indexOf(runtime.fallbackMaterial) < 0) {
+      out.push(runtime.fallbackMaterial);
+    }
+    return out;
+  }
+
+  function setShaderDataValue(material, name, value, kind) {
+    const shaderData = material && material.shaderData;
+    if (!shaderData || !Laya.Shader3D || typeof Laya.Shader3D.propertyNameToID !== "function") return;
+    const id = Laya.Shader3D.propertyNameToID(name);
+    if (kind === "color" && typeof shaderData.setColor === "function") {
+      shaderData.setColor(id, value);
+    } else if (kind === "number" && typeof shaderData.setNumber === "function") {
+      shaderData.setNumber(id, value);
+    }
+  }
+
+  function setMaterialValue(material, name, value) {
+    if (!material) return;
+    if (Array.isArray(value) && value.length >= 3) {
+      const color = new Laya.Color(
+        Math.max(0, Math.min(1, numberOr(value[0], 0))),
+        Math.max(0, Math.min(1, numberOr(value[1], 0))),
+        Math.max(0, Math.min(1, numberOr(value[2], 0))),
+        Math.max(0, Math.min(1, numberOr(value[3], 1))),
+      );
+      if ("albedoColor" in material) {
+        material.albedoColor = color;
+      }
+      setShaderDataValue(material, name, color, "color");
+      return;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      setShaderDataValue(material, name, typeof value === "boolean" ? (value ? 1 : 0) : value, "number");
+    }
+  }
+
+  function applyMaterialPatch(command) {
+    const values = command && command.material_patch && command.material_patch.values;
+    if (!values || typeof values !== "object") return;
+
+    const vector = [values.u_BaseColor, values.u_Color, values.albedoColor, values.color]
+      .find((item) => Array.isArray(item) && item.length >= 3);
+    if (vector) {
+      lastColor = [
+        Math.max(0, Math.min(1, numberOr(vector[0], lastColor[0]))),
+        Math.max(0, Math.min(1, numberOr(vector[1], lastColor[1]))),
+        Math.max(0, Math.min(1, numberOr(vector[2], lastColor[2]))),
+        Math.max(0, Math.min(1, numberOr(vector[3], lastColor[3]))),
+      ];
+    }
+
+    const scalar = numberOr(values.u_Metallic ?? values.u_Roughness ?? values.value, NaN);
+    if (Number.isFinite(scalar) && !vector) {
+      lastColor = [
+        Math.max(0, Math.min(1, scalar)),
+        Math.max(0, Math.min(1, 1 - scalar)),
+        Math.max(0, Math.min(1, 0.25 + 0.5 * scalar)),
+        1,
+      ];
+    }
+
+    const materials = collectMaterials(runtime.target);
+    for (const material of materials) {
+      for (const [name, value] of Object.entries(values)) {
+        setMaterialValue(material, name, value);
+      }
+    }
+  }
+
+  function drawView(command, view) {
+    const yaw = numberOr(view && view.yaw, 0);
+    const pitch = numberOr(view && view.pitch, 0);
+    const baseYaw = numberOr(command.target_base_yaw, 0);
+    const basePitch = numberOr(command.target_base_pitch, 0);
+    const yawSign = numberOr(command.target_yaw_sign, -1);
+    const pitchSign = numberOr(command.target_pitch_sign, -1);
+    runtime.target.transform.localRotationEuler = new Laya.Vector3(
+      basePitch + pitchSign * pitch,
+      baseYaw + yawSign * yaw,
+      numberOr(command.target_base_roll, 0),
+    );
+    if (runtime.fallbackMaterial) {
+      runtime.fallbackMaterial.albedoColor = new Laya.Color(lastColor[0], lastColor[1], lastColor[2], lastColor[3]);
+    }
+  }
+
+  function stageCanvas() {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) throw new Error("Laya canvas not found");
+    const out = document.createElement("canvas");
+    out.width = width;
+    out.height = height;
+    const ctx = out.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(canvas, 0, 0, width, height);
+    return { canvas: out, pixels: ctx.getImageData(0, 0, width, height).data };
+  }
+
+  async function canvasToPngBase64(canvas) {
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("PNG encoding failed")), "image/png");
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  async function postCaptureResult(command, view, canvas, score) {
+    if (command.return_images === false) return;
+    const viewId = view.view_id || "view";
+    const fileName = view.file_name || `${viewId}.png`;
+    await fetch(`${serverBaseUrl}/material-fit/capture-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nonce: command.nonce,
+        view_id: viewId,
+        file_name: fileName,
+        png_base64: await canvasToPngBase64(canvas),
+        score,
+        renderer: {
+          mode: runtime.mode,
+          scene_url: sceneUrl,
+          project_root: projectRoot,
+        },
+      }),
+    });
+  }
+
+  async function loadReferencePixels(reference) {
+    if (!reference || !reference.url) return null;
+    const response = await fetch(reference.url);
+    if (!response.ok) throw new Error("reference fetch failed: " + response.status);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    if (bitmap.close) bitmap.close();
+    return pixels;
+  }
+
+  function scorePixels(candidate, reference) {
+    let diff = 0;
+    const n = Math.min(candidate.length, reference.length);
+    for (let i = 0; i < n; i += 4) {
+      diff += Math.abs(candidate[i] - reference[i]);
+      diff += Math.abs(candidate[i + 1] - reference[i + 1]);
+      diff += Math.abs(candidate[i + 2] - reference[i + 2]);
+      diff += Math.abs(candidate[i + 3] - reference[i + 3]);
+    }
+    const mae = diff / Math.max(1, (n / 4) * 4) / 255;
+    const fitScore = Math.max(0, Math.min(1, 1 - mae));
+    return { diff_score: mae, fit_score: fitScore, rgb_mae: mae, alpha_mae: mae };
+  }
+
+  async function renderAndScore(command) {
+    applyMaterialPatch(command);
+    const refs = command.browser_score && Array.isArray(command.browser_score.reference_images)
+      ? command.browser_score.reference_images
+      : [];
+    const views = command.views && command.views.length ? command.views : [{ view_id: "v000_yaw0_pitch0", yaw: 0, pitch: 0 }];
+    const scoredViews = [];
+    for (let i = 0; i < views.length; i += 1) {
+      const view = views[i];
+      drawView(command, view);
+      await waitFrames(Number(command.settle_frames || 2));
+      const staged = stageCanvas();
+      const reference = refs.find((item) => item.view_id === view.view_id) || refs[i];
+      const referencePixels = await loadReferencePixels(reference);
+      const score = referencePixels
+        ? scorePixels(staged.pixels, referencePixels)
+        : { diff_score: 1, fit_score: 0, rgb_mae: 1, alpha_mae: 1 };
+      await postCaptureResult(command, view, staged.canvas, score);
+      scoredViews.push({ view_id: view.view_id || `v${i}`, ...score });
+    }
+    const fitScore = scoredViews.reduce((sum, item) => sum + item.fit_score, 0) / Math.max(1, scoredViews.length);
+    const diffScore = scoredViews.reduce((sum, item) => sum + item.diff_score, 0) / Math.max(1, scoredViews.length);
+    return {
+      enabled: true,
+      metric: command.browser_score && command.browser_score.metric || "runtime_laya_canvas_mae",
+      fit_score: fitScore,
+      score: fitScore,
+      diff_score: diffScore,
+      renderer: {
+        mode: runtime.mode,
+        scene_url: sceneUrl,
+        project_root: projectRoot,
+      },
+      views: scoredViews,
+      summary: { fit_score: fitScore, diff_score: diffScore },
+    };
+  }
+
+  async function pollOnce() {
+    if (busy) return;
+    const response = await fetch(`${serverBaseUrl}/material-fit/capture-command?last_nonce=${encodeURIComponent(lastNonce)}`);
+    if (!response.ok) return;
+    const command = await response.json();
+    if (!command || command.enabled === false || !command.nonce || command.nonce === lastNonce) return;
+    busy = true;
+    try {
+      lastNonce = command.nonce;
+      const browserScore = await renderAndScore(command);
+      await fetch(`${serverBaseUrl}/material-fit/capture-score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nonce: command.nonce, browser_score: browserScore }),
+      });
+    } catch (error) {
+      await fetch(`${serverBaseUrl}/material-fit/capture-log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: "error", message: String(error && error.stack || error) }),
+      }).catch(() => {});
+    } finally {
+      busy = false;
+    }
+  }
+
+  window.__MATERIAL_FIT_READY__ = true;
+  window.__MATERIAL_FIT_RENDERER__ = {
+    mode: runtime.mode,
+    sceneUrl,
+    projectRoot,
+    targetName: runtime.target && runtime.target.name,
+    cameraName: runtime.camera && runtime.camera.name,
+  };
+  setInterval(() => { pollOnce().catch(() => {}); }, 50);
+})();
+</script>
+</body>
+</html>

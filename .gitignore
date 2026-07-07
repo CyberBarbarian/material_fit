@@ -62,6 +62,8 @@ material_fit/experiments_out/
 /LayaAirIDE-*/
 /laya_project_minimal/
 /unity_references/
+examples/fish_laya_project/output/
+examples/fish_laya_project/.material_fit_browser_assets/
 
 # Codex/Desktop local state.
 /.codex/

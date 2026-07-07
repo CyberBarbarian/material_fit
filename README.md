@@ -1,32 +1,26 @@
 # Material Fit Inspector
 
-Material Fit Inspector is a local research tool for aligning material appearance across renderers, mainly Unity reference renders and Laya `.lmat` materials.
-
-The project does not train an end-to-end model. It runs a black-box optimization loop:
+Material Fit Inspector is a local research tool for aligning material appearance across renderers. The main target is:
 
 ```text
-Unity reference PNGs
-  -> write candidate Laya .lmat parameters
-  -> ask Laya to render the same views
+Unity reference renders
+  -> optimize Laya .lmat parameters
+  -> render the same views in Laya
   -> compare images
-  -> propose the next parameter set
+  -> keep proposing better parameters
 ```
 
-The current recommended workflow uses Laya Editor scripts to render screenshots from inside the Laya project. That part is required for real closed-loop runs.
+This is not an end-to-end trained model. The current system is a black-box optimizer around a render-and-score loop. New projects default to the no-IDE fast path: a persistent queue daemon plus a long-lived Laya runtime page running in Chromium.
 
 ## Repository Layout
 
 ```text
 .
 ├── README.md
-├── Editor/
-│   ├── CameraCapture.ts
-│   └── CameraCaptureEnv.ts
-├── tools/
-├── material_fit/
+├── Editor/                         # Optional Laya Editor fallback scripts
+├── material_fit/                   # Optimizer, .lmat IO, render bridge, scoring, tests
 │   ├── fit_material.py
-│   ├── fit_cli.py
-│   ├── fit_artifacts.py
+│   ├── fit_config.example.json
 │   ├── auto_adjust/
 │   ├── laya/
 │   ├── laya_capture/
@@ -35,72 +29,240 @@ The current recommended workflow uses Laya Editor scripts to render screenshots 
 │   ├── vision/
 │   ├── tests/
 │   └── docs/
-└── material_fit_ui/
-    ├── launch.py
-    ├── launch.bat
-    ├── backend/
-    ├── frontend/
-    └── requirements.txt
+├── material_fit_ui/                # FastAPI + Vue local control panel
+│   ├── launch.py
+│   ├── launch.bat
+│   ├── backend/
+│   ├── frontend/
+│   └── requirements.txt
+├── examples/                       # Fish Laya project and reference PNGs
+├── scripts/                        # Queue daemon and local renderer launchers
+└── tools/                          # Compatibility namespace for module imports
 ```
 
-Important directories:
+Important modules:
 
-- `Editor/`: Laya Editor extension scripts. Copy these into the target Laya project.
-- `material_fit/`: optimization, `.lmat` IO, image scoring, render drivers, tests, and docs.
-- `material_fit/laya_capture/`: Python side of Laya Editor / runtime capture.
-- `material_fit/optimizer/`: black-box optimization strategies.
-- `material_fit/vision/`: render comparison and scoring.
-- `material_fit_ui/`: local FastAPI + Vue control panel.
-- `tools/`: compatibility namespace for legacy `tools.material_fit.*` imports. Keep it.
+- `material_fit/optimizer/`: black-box optimization strategies and parameter encoders.
+- `material_fit/laya/`: Laya shader parsing and `.lmat` read/write helpers.
+- `material_fit/laya_capture/`: persistent queue daemon, HTTP capture bridge, and local runtime renderer.
+- `material_fit/vision/`: image loading, masking, perceptual scoring, and diff analysis.
+- `material_fit_ui/`: browser UI for creating projects, deriving configs, launching jobs, and inspecting iterations.
+- `scripts/`: operational entrypoints for the fast path.
 
-## What You Need
+Keep the `tools/` directory because it preserves compatibility with older configs that refer to `tools.material_fit...`. New commands should use the direct package path, for example `python -m material_fit.fit_material ...` from the repository root.
 
-For basic development:
+## Environment
 
-- Python 3.10+
-- Node.js 18+ and npm, only for the UI frontend
-- A Laya project containing the target `.lmat`, shader, scene, camera, and target model
-- Unity reference renders, usually PNGs from the same view set
+The supported default setup is a Windows local run. You do not need a remote
+machine for the included fish example or for normal local optimization.
 
-Install Python dependencies:
+Required for Windows local runs:
+
+- Windows 10/11.
+- Python 3.10+.
+- Node.js 18+ and npm.
+- Chromium runtime supplied by `playwright-chromium`; the local launcher installs it under ignored `artifacts/real_laya_run/`.
+- Pillow, installed through `material_fit_ui/requirements.txt`, for image scoring and browser-compatible `.tga` texture cache generation.
+- Laya engine JavaScript files from a local LayaAirIDE install.
+- Unity reference PNGs rendered from the target view set.
+- A Laya `.lmat` target material and, for real asset runs, the Laya scene/model/shader assets that should be rendered.
+
+On Windows, the local renderer first checks `LAYA_ENGINE_LIBS`. If it is not set, it looks under the normal per-user LayaAirIDE install location:
+
+```text
+%LOCALAPPDATA%/Programs/LayaAirIDE/resources/engine/libs
+```
+
+If your LayaAirIDE is elsewhere, set:
+
+```powershell
+$env:LAYA_ENGINE_LIBS = "D:\path\to\LayaAirIDE\resources\engine\libs"
+```
+
+The directory must contain files such as:
+
+```text
+laya.core.js
+laya.webgl_2D.js
+laya.d3.js
+laya.webgl_3D.js
+```
+
+## Install
+
+From the repository root:
 
 ```powershell
 python -m pip install -r material_fit_ui/requirements.txt
 python -m pip install pytest
 ```
 
-The UI launcher can run `npm install` for the frontend automatically. To install manually:
+For the UI frontend:
 
 ```powershell
 cd material_fit_ui/frontend
 npm install
 ```
 
-## Laya Project Setup
+The UI launcher can also run the frontend install automatically if `node_modules` is missing.
 
-Real optimization runs require Laya-side scripts. Copy these files from this repository:
+The fast local renderer installs `playwright-chromium` automatically the first time you run:
 
-```text
-Editor/CameraCapture.ts      -> <LayaProject>/assets/Editor/CameraCapture.ts
-Editor/CameraCaptureEnv.ts   -> <LayaProject>/assets/Editor/CameraCaptureEnv.ts
-Editor/*.meta                -> <LayaProject>/assets/Editor/
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1
 ```
 
-The scripts watch a command file and render screenshots from Laya Editor. The command file path should normally be:
+## Windows Quick Start
 
-```text
-<LayaProject>/assets/material_fit_capture_command.json
+For the included fish example, use this order:
+
+```powershell
+cd C:\path\to\material_fit
+python -m pip install -r material_fit_ui/requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1
 ```
 
-In the UI, set `laya_capture_command_path` to that file. The Python side updates it every iteration; the Laya Editor extension detects the new nonce, refreshes the material asset, renders the requested views, and writes PNGs plus a report JSON.
+Keep that renderer terminal open. In another terminal, start the UI:
 
-There is also a runtime fallback script:
-
-```text
-material_fit/laya_capture/laya/MaterialFitCapture.ts
+```powershell
+cd C:\path\to\material_fit
+python material_fit_ui/launch.py
 ```
 
-Use that only if you choose the runtime bridge / HTTP capture path. For normal usage, prefer the `Editor/CameraCapture*.ts` editor workflow.
+In the UI, create a project with these example paths:
+
+```text
+Laya material: examples/fish_laya_project/assets/resources/model/1504/mat/1504_body.lmat
+Laya shader:   examples/fish_laya_project/assets/resources/shader/Custom_low.shader
+Unity refs:    examples/fish_unity_refs/
+```
+
+The renderer loads `examples/fish_laya_project/assets/resources/game.ls` by
+default, so the example does not require copying a separate Laya project or
+starting LayaAirIDE.
+
+## Recommended Fast Path
+
+The default pipeline is:
+
+```text
+fit_material.py
+  -> writes candidate .lmat values
+  -> writes a request JSON into persistent_queue/queue/
+  -> persistent_queue_daemon.py exposes the request over HTTP
+  -> Chromium opens material_fit/laya_capture/runtime_renderer.html
+  -> Laya runtime renders the candidate and computes browser_score
+  -> daemon writes persistent_queue/results/<request>.result.json
+  -> optimizer uses that score for the next candidate
+```
+
+New UI projects derive this shape automatically:
+
+```json
+{
+  "use_laya_editor_capture": false,
+  "laya_capture": {
+    "persistent_queue": {
+      "enabled": true,
+      "state_dir": "material_fit/output/<project_id>/persistent_queue",
+      "cap_port": 8787
+    },
+    "browser_score": {
+      "enabled": true
+    }
+  },
+  "browser_score_context_render": {
+    "enabled": true
+  }
+}
+```
+
+Start the local renderer in a separate terminal. With the files included in this
+repository, this command loads the fish Laya project by default:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1
+```
+
+The defaults resolve to:
+
+```text
+ProjectRoot: examples/fish_laya_project
+Scene:       examples/fish_laya_project/assets/resources/game.ls
+```
+
+For another Laya project, pass both values explicitly:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1 `
+  -ProjectRoot D:\path\to\laya_project `
+  -Scene D:\path\to\laya_project\assets\resources\game.ls
+```
+
+Then run the UI or CLI optimization job. The optimizer-side queue daemon is started by the generated `ensure_command`; it creates:
+
+```text
+<state_dir>/ready.json
+<state_dir>/queue/
+<state_dir>/results/
+```
+
+You can also manage the daemon manually:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ensure_persistent_laya_queue.ps1 -StateDir <state_dir> -Port 8787
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop_persistent_laya_queue.ps1 -StateDir <state_dir>
+```
+
+The included `runtime_renderer.html` is a no-IDE Laya 3D harness. It now loads
+the real fish Laya scene through a local static server, builds an AssetDb-style
+UUID manifest for `res://` references, applies candidate material values in the
+live scene, and returns a browser-side `browser_score`. A fallback test object is
+kept only as a diagnostic path when the configured scene cannot be opened.
+
+This fast path is part of this repository snapshot. It is not expected to exist
+unchanged in the original upstream repository: the local tree includes additional
+runtime capture and queue-worker code such as
+`material_fit/laya_capture/persistent_queue_daemon.py`,
+`material_fit/laya_capture/runtime_renderer.html`, and the enhanced
+`MaterialFitCapture.ts` runtime script.
+
+The `.sh` scripts are auxiliary launchers from internal experiments; they are not
+the default deployment path and are not required for the fish example.
+
+## Input Files
+
+A practical run needs:
+
+- Unity reference image directory, with filenames such as `unity_ref_v000_yaw0_pitch0.png`.
+- Laya `.lmat` file to modify.
+- Laya shader file, when shader parsing or parameter discovery is needed.
+- Optional Unity shader/material exports for parameter mapping and semantic hints.
+- Laya scene/model assets if the renderer should display the real asset.
+
+Generated project configs and run outputs live under `material_fit/output/`.
+
+This repository includes a small fish example:
+
+```text
+examples/fish_laya_project/
+examples/fish_unity_refs/
+```
+
+For that example, use:
+
+```text
+Laya material: examples/fish_laya_project/assets/resources/model/1504/mat/1504_body.lmat
+Laya shader:   examples/fish_laya_project/assets/resources/shader/Custom_low.shader
+Laya scene:    examples/fish_laya_project/assets/resources/game.ls
+Unity refs:    examples/fish_unity_refs/
+```
+
+See `examples/README.md` for the asset layout. The Chromium runtime prepares a
+browser-decodable PNG cache for `.tga` textures before building the Laya AssetDb
+manifest, so the included fish scene can load its light map in the no-IDE path.
+The current probe is still expected to log a missing collider component script;
+that warning is nonfatal for material rendering.
 
 ## Start The UI
 
@@ -124,22 +286,22 @@ On Windows you can also run:
 material_fit_ui/launch.bat
 ```
 
-The UI is the recommended entrypoint for creating a project, selecting files, running preanalysis, running the Laya refresh probe, starting optimization jobs, and inspecting iteration images.
+The UI is the recommended entrypoint for creating a project, selecting files, running preanalysis, starting optimization jobs, and inspecting iteration images.
 
 ## Run From CLI
 
 Use module mode from the repository root:
 
 ```powershell
-python -m tools.material_fit.fit_material --help
+python -m material_fit.fit_material --help
 ```
 
-Do not run `python material_fit/fit_material.py` directly; the package uses relative imports and the compatibility namespace.
+Do not run `python material_fit/fit_material.py` directly; the package uses relative imports and expects module mode.
 
-A typical CLI run looks like this:
+A typical run:
 
 ```powershell
-python -m tools.material_fit.fit_material `
+python -m material_fit.fit_material `
   --config material_fit/output/<project_id>/runs/<run_id>/fit_config.json `
   --auto-adjust `
   --iterations 100 `
@@ -149,27 +311,59 @@ python -m tools.material_fit.fit_material `
   --apply-lmat
 ```
 
-`material_fit/fit_config.example.json` documents the config shape. It is illustrative, not directly runnable; replace all Laya/Unity paths with local paths.
+`material_fit/fit_config.example.json` documents the config shape. Replace all example asset paths before using it.
+
+## Optional Editor Fallback
+
+The old command-file capture path is still available when a project must render inside LayaAirIDE. Enable it with:
+
+```json
+{
+  "algorithm_config": {
+    "use_laya_editor_capture": true
+  }
+}
+```
+
+Then copy the fallback scripts into the Laya project:
+
+```text
+Editor/CameraCapture.ts      -> <LayaProject>/assets/Editor/CameraCapture.ts
+Editor/CameraCaptureEnv.ts   -> <LayaProject>/assets/Editor/CameraCaptureEnv.ts
+Editor/*.meta                -> <LayaProject>/assets/Editor/
+```
+
+Set `laya_capture_command_path` to:
+
+```text
+<LayaProject>/assets/material_fit_capture_command.json
+```
+
+This mode is slower because each iteration depends on Editor refresh/reimport behavior.
 
 ## Expected Speed
 
-If `laya_editor_capture.enabled=true`, each iteration includes:
+The fast path keeps the renderer alive and returns `browser_score` directly, avoiding most per-iteration editor startup, screenshot discovery, and Python-side image scoring overhead.
+
+Local no-IDE Laya runtime benchmark on this machine:
 
 ```text
-write .lmat
-  -> Laya Editor reimport / refresh
-  -> render one or more views
-  -> score images
-  -> write iteration artifacts
+100 requests
+320x240 render size
+total: 16.44 s
+mean: 0.157 s/request
+median: 0.094 s/request
+p90: 0.328 s/request
+throughput: 6.08 requests/s
 ```
 
-For this mode, around 4 seconds per iteration is a normal baseline. For example, 90 iterations in about 6 minutes is roughly 4 seconds per iteration and is not obviously misconfigured.
+The current default renderer loads the included fish Laya scene. Real cost depends on model complexity, shader cost, view count, texture IO, and browser/GPU availability, so remeasure on the target machine before comparing optimization algorithms.
 
-Parallel candidate evaluation is limited when the workflow shares one `material_fit_capture_command.json`; parallel workers cannot safely write the same command file at the same time. Speed work should focus on persistent renderer processes, reducing reimport/render overhead, or switching to a runtime bridge designed for batched requests.
+Editor fallback mode is usually much slower. A run like 90 iterations in about 6 minutes is roughly 4 seconds per iteration and is not surprising for Editor-driven capture.
 
-## Outputs And Files Not To Commit
+## Outputs Not To Commit
 
-Generated runtime data is intentionally ignored:
+Generated runtime data is ignored:
 
 ```text
 material_fit/output/
@@ -179,6 +373,8 @@ artifacts/
 LayaAirIDE-*/
 laya_project_minimal/
 unity_references/
+examples/fish_laya_project/output/
+examples/fish_laya_project/.material_fit_browser_assets/
 __pycache__/
 .pytest_cache/
 .codex/
@@ -195,41 +391,45 @@ Run:
 python -m pytest material_fit/tests -q
 ```
 
-The suite covers `.lmat` IO, scoring, optimizer behavior, UI backend config generation, Laya capture command handling, runtime bridge behavior, and legacy compatibility paths.
+The suite covers `.lmat` IO, scoring, optimizer behavior, UI backend config generation, Laya capture command handling, runtime bridge behavior, and compatibility paths.
 
-## Key Docs
+## Troubleshooting
 
-- `material_fit/docs/README.md`: documentation index.
-- `material_fit/docs/Project_Architecture.md`: architecture and data flow.
-- `material_fit/docs/File_Layout_And_Artifacts.md`: output and artifact layout.
-- `material_fit/docs/Laya_Multiview_Capture.md`: Laya Editor and runtime capture details.
-- `material_fit/docs/Core_Algorithms_and_Metrics.md`: core algorithms and metrics.
-- `material_fit/docs/Scoring_Mechanism_Design.md`: scoring design.
-- `material_fit/docs/learned_incremental_optimizer_design.html`: theoretical learned optimizer design.
+### Renderer cannot load Laya
 
-## Common Problems
+Check `LAYA_ENGINE_LIBS` and confirm it points to the directory containing `laya.core.js`, `laya.d3.js`, and the WebGL libraries.
 
-### Laya script seems missing
-
-The required Laya Editor scripts are in repository root `Editor/`. Copy them to `<LayaProject>/assets/Editor/`.
-
-### UI runs but optimization cannot capture images
+### Optimization waits forever for capture
 
 Check:
 
-- `laya_editor_capture.enabled` is true for the editor workflow.
-- `laya_capture_command_path` points to `<LayaProject>/assets/material_fit_capture_command.json`.
-- `CameraCapture.ts` and `CameraCaptureEnv.ts` are present under `<LayaProject>/assets/Editor/`.
-- The Laya scene contains the configured `camera_name` and `target_name`.
-- Laya Editor is open and has loaded the extension.
+- The runtime renderer script is still running.
+- The queue daemon has `<state_dir>/ready.json`.
+- The daemon port matches the renderer server URL.
+- `laya_capture.persistent_queue.enabled` is true.
+- `browser_score.enabled` is true.
 
-### Iterations are slower than expected
+### Editor fallback does not capture
 
-Check how many views are rendered per iteration, whether scene reload is enabled, and whether material reimport waits are large. Shared command-file editor capture is mostly serialized by design.
+Check:
 
-### Import says `tools.material_fit` is missing
+- `use_laya_editor_capture` is true.
+- `laya_capture_command_path` points to the Laya project command file.
+- The Editor scripts are present under `<LayaProject>/assets/Editor/`.
+- LayaAirIDE has the project open and the scene contains the configured camera and target.
 
-Run commands from the repository root and keep the `tools/` directory. It provides the compatibility namespace.
+### Import says `material_fit` is missing
+
+Run commands from the repository root. Keep the `tools/` directory only for older configs that still import `tools.material_fit...`.
+
+## Further Docs
+
+- `material_fit/docs/Project_Architecture.md`: architecture and data flow.
+- `material_fit/docs/File_Layout_And_Artifacts.md`: output and artifact layout.
+- `material_fit/docs/Laya_Multiview_Capture.md`: Laya capture details.
+- `material_fit/docs/Core_Algorithms_and_Metrics.md`: core algorithms and metrics.
+- `material_fit/docs/Scoring_Mechanism_Design.md`: scoring design.
+- `material_fit/docs/learned_incremental_optimizer_design.html`: learned optimizer design proposal.
 
 ## Provenance And License
 

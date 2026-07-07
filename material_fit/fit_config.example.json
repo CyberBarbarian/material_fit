@@ -30,7 +30,7 @@
     "calibrate_from_oracle_stabilization": false
   },
   "browser_score_context_render": {
-    "enabled": false,
+    "enabled": true,
     "note": "Enable for browser_score/persistent-render runs so the optimizer renders and scores the initial current params before proposing candidates."
   },
   "capture_screen_after_apply": false,
@@ -126,6 +126,28 @@
       "port": 8787,
       "timeout_s": 90,
       "output_subdir": "laya_multiview"
+    },
+    "persistent_queue": {
+      "enabled": true,
+      "state_dir": "tools/material_fit/output/fish_1580_smoke/persistent_queue",
+      "timeout_s": 240,
+      "poll_s": 0.02,
+      "cap_port": 8787,
+      "width": 320,
+      "height": 240,
+      "alpha_source": "render_alpha",
+      "freeze_animators": true,
+      "freeze_scene_scripts": true
+    },
+    "browser_score": {
+      "enabled": true,
+      "metric": "rgb_alpha_mae",
+      "reference_images": [
+        {
+          "view_id": "v000_yaw0_pitch0",
+          "path": "tools/material_fit/output/fish_1580/unity_multiview/unity_ref_v000_yaw0_pitch0.png"
+        }
+      ]
     },
     "target_name": "model",
     "views": [

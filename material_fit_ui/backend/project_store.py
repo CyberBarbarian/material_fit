@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import os
 import re
 import secrets
 import shutil
@@ -49,6 +50,7 @@ CONFIGS_DIR = "configs"
 JOBS_DIR = "jobs"
 
 _PROJECT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
+_VIEW_ID_RE = re.compile(r"(v\d{3}_yaw-?\d+(?:\.\d+)?_pitch-?\d+(?:\.\d+)?)")
 _IMPORT_FILE_SLOTS: dict[str, str] = {
     "laya_shader_path": "laya_shader",
     "unity_shader_path": "unity_shader",
@@ -89,6 +91,37 @@ _CMA_MATURE_DEFAULT_PRESET: dict[str, Any] = {
         "stability_foreground_ratio_threshold": 0.005,
         "research_metrics_profile": "tiered",
     },
+}
+_FAST_LAYA_CAPTURE_DEFAULT: dict[str, Any] = {
+    "persistent_queue": {
+        "enabled": True,
+        "timeout_s": 240,
+        "poll_s": 0.02,
+        "cap_port": 8787,
+        "width": 320,
+        "height": 240,
+        "alpha_source": "render_alpha",
+        "freeze_animators": True,
+        "freeze_scene_scripts": True,
+    },
+    "browser_score": {
+        "enabled": True,
+        "metric": "rgb_alpha_mae",
+        "reference_images": [],
+    },
+    "target_name": "model",
+    "camera_name": "Capture Camera",
+    "capture_mode": "rotate_target",
+    "render_backend": "draw_scene",
+    "views": [
+        {
+            "view_id": f"v{index:03d}_yaw{yaw}_pitch0",
+            "yaw": float(yaw),
+            "pitch": 0.0,
+            "file_name": f"laya_v{index:03d}_yaw{yaw}_pitch0.png",
+        }
+        for index, yaw in enumerate(range(0, 360, 45))
+    ],
 }
 
 
@@ -236,7 +269,11 @@ def create_project(
             },
             "apply_lmat": True,
             "capture_screen_after_apply": False,
-            "use_laya_editor_capture": True,
+            "use_laya_editor_capture": False,
+            "laya_capture": _new_fast_laya_capture_config(),
+            "browser_score_context_render": {
+                "enabled": True,
+            },
             "laya_editor_capture": {
                 "reload_scene_after_reimport": False,
                 "refresh_after_reimport_delay_ms": 800,
@@ -518,10 +555,10 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
     # absolute paths so fit_material uses them verbatim.
     output_dir_abs = str(paths.project_dir.resolve())
 
-    # The maintained capture path is the Laya Editor script path. The old
-    # desktop-region screenshot flow remains only as internal legacy code, not
-    # as a project-mode default.
-    use_laya_editor_capture = True
+    # Default project-mode runs use the persistent Laya/WebGL queue plus
+    # browser-side score payloads. The editor command-file workflow remains an
+    # explicit fallback for local interactive debugging.
+    use_laya_editor_capture = bool(algo.get("use_laya_editor_capture", False))
     image_pairs: list[dict[str, str]] = []
     # Unity references are now standardized as a multi-view directory. The
     # legacy single-reference image pair is intentionally no longer derived.
@@ -617,6 +654,16 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
     preanalysis = _read_json(preanalysis_path) if preanalysis_path.exists() else None
 
     analysis_performance = _normalize_analysis_performance(algo)
+    laya_capture = (
+        {}
+        if use_laya_editor_capture
+        else _normalize_fast_laya_capture_config(
+            algo.get("laya_capture"),
+            paths=paths,
+            inputs=inputs,
+            config=config,
+        )
+    )
     fit_config: dict[str, Any] = {
         "case_name": project.get("id"),
         "laya_shader_path": laya_shader,
@@ -654,7 +701,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "output_dir": output_dir_abs,
         "dry_run": bool(algo.get("dry_run", False)),
         "render_command": [],
-        "laya_capture": {},
+        "laya_capture": laya_capture,
         "laya_editor_capture": {
             "enabled": use_laya_editor_capture,
             "laya_project": _abs(inputs.get("laya_project_path")),
@@ -686,6 +733,14 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "optimizer": optimizer_value,
         "cma_es": cma_es_payload,
         "laya_refresh_probe": _normalize_laya_refresh_probe(algo.get("laya_refresh_probe")),
+        "browser_score_context_render": (
+            {"enabled": False}
+            if use_laya_editor_capture
+            else _normalize_browser_score_context_render(
+                algo.get("browser_score_context_render"),
+                enabled_by_default=True,
+            )
+        ),
         "laya_window": _normalize_laya_window(inputs.get("laya_window")),
         "laya_capture_anchor": _normalize_capture_anchor(
             inputs.get("laya_capture_anchor"),
@@ -1064,6 +1119,111 @@ def _normalize_laya_refresh_probe(value: Any) -> dict[str, float]:
         "mean_diff_change_threshold": change if change is not None and change >= 0.0 else 0.5,
         "mean_diff_restore_threshold": restore if restore is not None and restore >= 0.0 else 2.5,
     }
+
+
+def _new_fast_laya_capture_config() -> dict[str, Any]:
+    return json.loads(json.dumps(_FAST_LAYA_CAPTURE_DEFAULT, ensure_ascii=False))
+
+
+def _normalize_fast_laya_capture_config(
+    value: Any,
+    *,
+    paths: ProjectPaths,
+    inputs: dict[str, Any],
+    config: LoaderConfig,
+) -> dict[str, Any]:
+    payload = _new_fast_laya_capture_config()
+    if isinstance(value, dict):
+        payload = _deep_merge(payload, value)
+
+    queue_cfg = payload.get("persistent_queue") if isinstance(payload.get("persistent_queue"), dict) else {}
+    queue_cfg = dict(queue_cfg)
+    queue_cfg["enabled"] = bool(queue_cfg.get("enabled", True))
+    queue_cfg.setdefault("state_dir", str((paths.project_dir / "persistent_queue").resolve()))
+    queue_cfg.setdefault("timeout_s", 240)
+    queue_cfg.setdefault("poll_s", 0.02)
+    queue_cfg.setdefault("cap_port", 8787)
+    _ensure_fast_queue_commands(queue_cfg, config.project_root)
+    payload["persistent_queue"] = queue_cfg
+
+    browser_score = payload.get("browser_score") if isinstance(payload.get("browser_score"), dict) else {}
+    browser_score = dict(browser_score)
+    browser_score["enabled"] = bool(browser_score.get("enabled", True))
+    browser_score.setdefault("metric", "rgb_alpha_mae")
+    if not isinstance(browser_score.get("reference_images"), list) or not browser_score.get("reference_images"):
+        reference_dir = str(inputs.get("unity_reference_dir_path") or "").strip()
+        if not reference_dir:
+            reference_dir = _discover_unity_reference_dir(config.project_root)
+        reference_glob = str(inputs.get("unity_reference_glob") or "unity_ref_v*_yaw*_pitch*.png")
+        browser_score["reference_images"] = _build_browser_score_reference_images(reference_dir, reference_glob)
+    payload["browser_score"] = browser_score
+
+    payload["target_name"] = str(inputs.get("laya_capture_target_name") or payload.get("target_name") or "model")
+    payload["camera_name"] = str(inputs.get("laya_capture_camera_name") or payload.get("camera_name") or "Capture Camera")
+    return payload
+
+
+def _ensure_fast_queue_commands(queue_cfg: dict[str, Any], project_root: Path) -> None:
+    if queue_cfg.get("ensure_command"):
+        return
+    state_dir = str(queue_cfg.get("state_dir") or "")
+    port = str(queue_cfg.get("cap_port") or queue_cfg.get("capPort") or 8787)
+    if os.name == "nt":
+        ensure_script = (project_root / "scripts" / "ensure_persistent_laya_queue.ps1").resolve()
+        stop_script = (project_root / "scripts" / "stop_persistent_laya_queue.ps1").resolve()
+        queue_cfg["ensure_command"] = [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(ensure_script),
+            "-StateDir",
+            state_dir,
+            "-Port",
+            port,
+        ]
+        queue_cfg["stop_command"] = [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(stop_script),
+            "-StateDir",
+            state_dir,
+        ]
+    else:
+        ensure_script = (project_root / "scripts" / "ensure_persistent_laya_queue.sh").resolve()
+        stop_script = (project_root / "scripts" / "stop_persistent_laya_queue.sh").resolve()
+        queue_cfg["ensure_command"] = [str(ensure_script), state_dir, port]
+        queue_cfg["stop_command"] = [str(stop_script), state_dir]
+
+
+def _normalize_browser_score_context_render(value: Any, *, enabled_by_default: bool) -> dict[str, Any]:
+    payload = dict(value) if isinstance(value, dict) else {}
+    payload["enabled"] = bool(payload.get("enabled", enabled_by_default))
+    return payload
+
+
+def _build_browser_score_reference_images(reference_dir: str, reference_glob: str) -> list[dict[str, str]]:
+    if not reference_dir:
+        return []
+    directory = Path(reference_dir).expanduser()
+    if not directory.exists() or not directory.is_dir():
+        return []
+    out: list[dict[str, str]] = []
+    for path in sorted(directory.glob(reference_glob or "*.png")):
+        if not path.is_file():
+            continue
+        match = _VIEW_ID_RE.search(path.stem)
+        out.append(
+            {
+                "view_id": match.group(1) if match else path.stem,
+                "path": str(path.resolve()),
+            }
+        )
+    return out
 
 
 def _normalize_analysis_performance(algo: dict[str, Any]) -> dict[str, Any]:

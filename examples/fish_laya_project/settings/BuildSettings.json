@@ -1,0 +1,33 @@
+{
+  "name": "fish",
+  "displayName": "途游捕鱼",
+  "useCompressedEngine": false,
+  "startupScene": "res://d13c0108-0f68-4a12-ab6f-bc38acd3d4d6",
+  "includedScenes": [],
+  "enableRemoteMainPackage": true,
+  "mainPackageRemoteUrl": "https://fishqn.naler.cn/webroot/laya/test/v1/",
+  "enableSubpackages": true,
+  "subpackages": [
+    {
+      "path": "resources",
+      "autoLoad": true,
+      "remote": true,
+      "remoteUrl": "https://fishqn.naler.cn/webroot/laya/test/v1/"
+    }
+  ],
+  "android": {
+    "targetArchitectures": {
+      "ARMv7": false,
+      "ARM64": true,
+      "x86": false,
+      "x86-64": false
+    },
+    "exportFormat": "APK"
+  },
+  "wxgame": {
+    "appid": "wx97349cd14f80ec73"
+  },
+  "bytedancegame": {
+    "appid": "tt6d0d1bb0f20f47a502"
+  }
+}

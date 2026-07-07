@@ -1,0 +1,320 @@
+{
+  "version": "LAYAMATERIAL:04",
+  "props": {
+    "textures": [
+      {
+        "path": "res://91391ffb-3317-4ecc-85df-a0e8226d57a3",
+        "constructParams": [
+          128,
+          128,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_EmissionTexture"
+      },
+      {
+        "path": "res://00000000-0000-0000-0001-000000000000",
+        "constructParams": [
+          1,
+          1,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_BaseMap"
+      },
+      {
+        "path": "res://91391ffb-3317-4ecc-85df-a0e8226d57a3",
+        "constructParams": [
+          128,
+          128,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_MAER"
+      },
+      {
+        "path": "res://00000000-0000-0000-0001-000000000000",
+        "constructParams": [
+          1,
+          1,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_Mask"
+      },
+      {
+        "path": "res://00000000-0000-0000-0002-000000000001",
+        "constructParams": [
+          1,
+          1,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_IBLMap"
+      },
+      {
+        "path": "res://00000000-0000-0000-0001-000000000001",
+        "constructParams": [
+          1,
+          1,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_MatcapMap"
+      },
+      {
+        "path": "res://00000000-0000-0000-0001-000000000001",
+        "constructParams": [
+          1,
+          1,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_MatcapAddMap"
+      }
+    ],
+    "type": "Custom/Fish/FishStandard",
+    "renderQueue": 2000,
+    "materialRenderMode": 0,
+    "s_Cull": 2,
+    "s_Blend": 0,
+    "s_BlendSrc": 0,
+    "s_BlendDst": 0,
+    "s_BlendSrcRGB": 0,
+    "s_BlendDstRGB": 0,
+    "s_BlendSrcAlpha": 0,
+    "s_BlendDstAlpha": 0,
+    "s_BlendEquation": 0,
+    "s_BlendEquationRGB": 0,
+    "s_BlendEquationAlpha": 0,
+    "s_DepthTest": 1,
+    "s_DepthWrite": true,
+    "u_Metallic": 0,
+    "u_Smoothness": 1,
+    "u_OcclusionStrength": 1,
+    "u_EmissionColor": [
+      0.6162790697674418,
+      1,
+      0.8021438953488366,
+      0
+    ],
+    "u_ShadowColor": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "u_BaseColor": [
+      0.11627906976744186,
+      0.11627906976744186,
+      0.11627906976744186,
+      1
+    ],
+    "u_BaseMap_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_Gamma_Power": 1,
+    "u_MAER_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_MetallicRemapMin": 0,
+    "u_MetallicRemapMax": 1,
+    "u_SmoothnessRemapMin": 0,
+    "u_SmoothnessRemapMax": 0,
+    "u_GIIntensity": 1,
+    "u_BumpMap_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_BumpScale": 1,
+    "u_DiffuseThreshold": 0.5,
+    "u_DiffuseSmoothness": 0.1,
+    "u_Mask_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_IBLMapColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_IBLMapIntensity": 0,
+    "u_IBLMapPower": 1,
+    "u_IBLMapRotateX": 0,
+    "u_IBLMapRotateY": 0,
+    "u_IBLMapRotateZ": 0,
+    "u_MatcapMap_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_MatcapAngle": 0,
+    "u_MatcapStrength": 0,
+    "u_MatcapPow": 1,
+    "u_MatcapColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_MatcapAddMap_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_MatcapAddAngle": 0,
+    "u_MatcapAddStrength": 0,
+    "u_MatcapAddPow": 1,
+    "u_MatcapAddColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_EmissionTexture_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_EmissionScale": 3,
+    "u_SpecularSecondColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_SpecularSecondIntensity": 1,
+    "u_SpecularSecondThreshold": 64,
+    "u_SpecularSecondLightOffset": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_SpecularColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_SpecularIntensity": 1,
+    "u_SpecularThreshold": 0.5,
+    "u_SpecularSmooth": 0.5,
+    "u_GGXSpecular": 1,
+    "u_MluAlbedoColor": 1,
+    "u_SpecularLightOffset": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_FresnelColor": [
+      0.17829457364341084,
+      1,
+      1,
+      0
+    ],
+    "u_fresnelOffset": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_FresnelThreshold": 0.5,
+    "u_FresnelSmooth": 0.5,
+    "u_FresnelIntensity": 1,
+    "u_FresnelUesF0": 0.5,
+    "u_FresnelPow": 2,
+    "u_FresnelUseMoldeNormal": 1,
+    "u_AdjustHue": 0,
+    "u_AdjustSaturation": 0,
+    "u_AdjustLightness": 0,
+    "u_saturationProtection": 0,
+    "u_ContrastScale": 0,
+    "u_SpecularHighlights": 1,
+    "u_EnvironmentReflections": 1,
+    "u_SelfLightDir": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_Alpha": 1,
+    "u_Cutoff": 0.5,
+    "defines": [
+      "UV",
+      "EMISSION",
+      "TANGENT"
+    ]
+  }
+}

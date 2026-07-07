@@ -1,0 +1,39 @@
+{
+  "resolution": {
+    "designWidth": 1136,
+    "designHeight": 640,
+    "scaleMode": "fixedauto",
+    "screenMode": "horizontal"
+  },
+  "modules": {
+    "laya.ui": true,
+    "laya.d3": true,
+    "laya.spine": true,
+    "laya.particle": true,
+    "laya.particle3D": true,
+    "laya.postProcess": true
+  },
+  "addons": {
+    "laya.ui": "both"
+  },
+  "splash": {
+    "fit": "center"
+  },
+  "statEnum": {
+    "T_CullMain": false,
+    "CT_OpaqueDrawCall": false,
+    "CT_TransDrawCall": false,
+    "CT_DepthCastDrawCall": false,
+    "CT_ShadowDrawCall": false,
+    "CT_Instancing_DrawCall": false,
+    "M_GPUBuffer": false,
+    "M_AllTexture": false,
+    "M_RenderTexture": false,
+    "M_GPUMemory": false,
+    "C_Sprite2DCount": false,
+    "C_Sprite3DCount": false,
+    "C_BaseRenderCount": false,
+    "C_SkinnedMeshRenderCount": false,
+    "C_ShurikenParticleRenderCount": false
+  }
+}

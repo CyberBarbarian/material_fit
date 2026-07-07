@@ -1,0 +1,29 @@
+{
+  "type": 2,
+  "sRGB": true,
+  "wrapMode": 1,
+  "filterMode": 1,
+  "anisoLevel": 1,
+  "mipmap": false,
+  "pma": true,
+  "hdrEncodeFormat": 0,
+  "files": [
+    {
+      "file": "",
+      "format": 1,
+      "ext": "png"
+    }
+  ],
+  "platforms": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+  },
+  "sizeGrid": [
+    11,
+    9,
+    11,
+    9,
+    0
+  ]
+}

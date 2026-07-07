@@ -1,0 +1,162 @@
+{
+  "_$type": "Animator",
+  "enabled": true,
+  "controller": "null",
+  "cullingMode": 0,
+  "controllerLayers": [
+    {
+      "_$type": "AnimatorControllerLayer",
+      "playOnWake": true,
+      "name": "Base Layer",
+      "defaultWeight": 1,
+      "blendingMode": 0,
+      "states": [
+        {
+          "_$type": "AnimatorState",
+          "name": "New State",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 204,
+          "y": 84,
+          "id": "0",
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "_$type": "AnimatorState",
+          "name": "effect_prefab_jxs_ani_clip_1_01",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": -24,
+          "y": 216,
+          "clip": {
+            "_$type": "AnimationClip",
+            "_$uuid": "c3f4df20-c89c-4ad9-9452-4075fb540a76"
+          },
+          "id": "1",
+          "soloTransitions": [
+            {
+              "id": "0",
+              "exitByTime": true,
+              "exitTime": 1,
+              "transduration": 0.9958725,
+              "transstartoffset": 0
+            }
+          ],
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "_$type": "AnimatorState",
+          "name": "effect_prefab_jxs_ani_clip_1_02",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": -24,
+          "y": 288,
+          "clip": {
+            "_$type": "AnimationClip",
+            "_$uuid": "d2edb193-64c0-4429-9430-ec2a43cfc170"
+          },
+          "id": "2",
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "_$type": "AnimatorState",
+          "name": "effect_prefab_jxs_ani_clip_4_01",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 384,
+          "y": 216,
+          "clip": {
+            "_$type": "AnimationClip",
+            "_$uuid": "8c671444-bca9-4894-85d3-b9d45239f993"
+          },
+          "id": "3",
+          "soloTransitions": [
+            {
+              "id": "4",
+              "exitByTime": true,
+              "exitTime": 0.8846154,
+              "transduration": 0.25,
+              "transstartoffset": 0
+            }
+          ],
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "_$type": "AnimatorState",
+          "name": "effect_prefab_jxs_ani_clip_4_02",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 384,
+          "y": 288,
+          "clip": {
+            "_$type": "AnimationClip",
+            "_$uuid": "3cdd1009-cfee-4d95-abe1-ee7b39864ebf"
+          },
+          "id": "4",
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": -12,
+          "y": 96,
+          "soloTransitions": [
+            {
+              "id": "3"
+            }
+          ]
+        },
+        {
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": -108,
+          "y": -60
+        }
+      ],
+      "stageX": 140.84745762711864,
+      "stageY": 189.68926553672316,
+      "stageScale": 0.748587570621469
+    },
+    {
+      "_$type": "AnimatorControllerLayer",
+      "playOnWake": true,
+      "name": "New Layer",
+      "defaultWeight": 1,
+      "blendingMode": 0,
+      "states": [
+        {
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 120,
+          "soloTransitions": []
+        },
+        {
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 20
+        }
+      ]
+    }
+  ],
+  "layerW": 150
+}

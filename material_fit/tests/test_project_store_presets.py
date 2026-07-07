@@ -13,6 +13,76 @@ from tools.material_fit_ui.backend.case_loader import LoaderConfig  # noqa: E402
 from tools.material_fit_ui.backend.project_store import create_project, derive_fit_config, patch_project  # noqa: E402
 
 
+def test_default_project_derives_fast_persistent_browser_score_path(tmp_path):
+    config = LoaderConfig(
+        project_root=tmp_path,
+        image_root=tmp_path,
+        output_dir=tmp_path / "output",
+    )
+    reference_dir = tmp_path / "unity_refs"
+    reference_dir.mkdir()
+    reference_path = reference_dir / "unity_ref_v000_yaw0_pitch0.png"
+    reference_path.write_bytes(b"reference")
+    project = create_project(project_id="fast_default", name="Fast Default", config=config)
+    patch_project(
+        project["id"],
+        {
+            "inputs": {
+                "laya_shader_path": str(tmp_path / "shader.fs"),
+                "laya_material_lmat_path": str(tmp_path / "material.lmat"),
+                "unity_reference_dir_path": str(reference_dir),
+            },
+        },
+        config=config,
+    )
+
+    fit_config = derive_fit_config(project["id"], config=config)
+
+    assert fit_config["laya_editor_capture"]["enabled"] is False
+    assert fit_config["laya_capture"]["persistent_queue"]["enabled"] is True
+    assert fit_config["laya_capture"]["persistent_queue"]["cap_port"] == 8787
+    assert Path(fit_config["laya_capture"]["persistent_queue"]["state_dir"]).name == "persistent_queue"
+    assert fit_config["laya_capture"]["persistent_queue"]["ensure_command"]
+    assert fit_config["laya_capture"]["persistent_queue"]["stop_command"]
+    assert fit_config["laya_capture"]["browser_score"]["enabled"] is True
+    assert fit_config["laya_capture"]["browser_score"]["reference_images"] == [
+        {
+            "view_id": "v000_yaw0_pitch0",
+            "path": str(reference_path.resolve()),
+        }
+    ]
+    assert fit_config["browser_score_context_render"]["enabled"] is True
+    assert fit_config["capture_screen_after_apply"] is False
+
+
+def test_editor_capture_override_disables_fast_laya_capture(tmp_path):
+    config = LoaderConfig(
+        project_root=tmp_path,
+        image_root=tmp_path,
+        output_dir=tmp_path / "output",
+    )
+    project = create_project(project_id="editor_override", name="Editor Override", config=config)
+    patch_project(
+        project["id"],
+        {
+            "inputs": {
+                "laya_shader_path": str(tmp_path / "shader.fs"),
+                "laya_material_lmat_path": str(tmp_path / "material.lmat"),
+            },
+            "algorithm_config": {
+                "use_laya_editor_capture": True,
+            },
+        },
+        config=config,
+    )
+
+    fit_config = derive_fit_config(project["id"], config=config)
+
+    assert fit_config["laya_editor_capture"]["enabled"] is True
+    assert fit_config["laya_capture"] == {}
+    assert fit_config["browser_score_context_render"]["enabled"] is False
+
+
 def test_cma_mature_default_preset_derives_recommended_optimizer_stack(tmp_path):
     config = LoaderConfig(
         project_root=tmp_path,

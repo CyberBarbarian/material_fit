@@ -1,0 +1,225 @@
+{
+  "_$ver": 1,
+  "_$id": "ml09i2v0",
+  "_$type": "Sprite3D",
+  "name": "1504_die",
+  "_$comp": [
+    {
+      "_$type": "bdd19034-f104-4c6f-ad7f-e5091f806b77",
+      "scriptPath": "../src/Play/Fish/View/FishNode.ts",
+      "thickness": 4,
+      "animator": {
+        "_$ref": "tc6ge53m",
+        "_$type": "Animator"
+      },
+      "spriteRenderer": null,
+      "colliders": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "yztewe3h",
+      "_$type": "Sprite3D",
+      "name": "Adapter",
+      "_$comp": [
+        {
+          "_$type": "7f33604f-06b9-41ab-8697-f8a7fbb797eb",
+          "scriptPath": "../src/Play/Fish/View/FishAdapter.ts",
+          "flipEulerAngles": {
+            "_$type": "Vector3"
+          },
+          "flipScale": {
+            "_$type": "Vector3",
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "eeclmzh3",
+          "_$type": "Sprite3D",
+          "name": "FishView",
+          "_$child": [
+            {
+              "_$id": "tc6ge53m",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "transform": {
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6,
+                  "y": 0.6,
+                  "z": 0.6
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "761a4c2a-0303-437e-9415-adc66795d57e",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "die",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "1740e849-9199-41b6-b1f3-0d1dd305f6b5",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "die"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "zanxm8j2",
+                  "_$type": "Sprite3D",
+                  "name": "Bone001",
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.577344,
+                      "y": 2.073727,
+                      "z": -0.103
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.0002739312864473957,
+                      "y": 0.04361843784200105,
+                      "z": -0.00626992668979872,
+                      "w": -0.9990285505735952
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "i1vasc95",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.04024261,
+                          "y": 0.0143692,
+                          "z": -9.536743e-09
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.04357049904631233,
+                          "y": 0.0020594979549209244,
+                          "z": 0.9979342781568347,
+                          "w": -0.047165098967632366
+                        }
+                      }
+                    },
+                    {
+                      "_$id": "va6l93zu",
+                      "_$type": "Sprite3D",
+                      "name": "Bone023",
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.1166324,
+                          "y": -0.9719875,
+                          "z": -0.005524649
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.045390656880414555,
+                          "y": 0.004602689683668739,
+                          "z": 0.9976676314328182,
+                          "w": -0.0507720465105652
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "5wlmixre",
+                  "_$type": "Sprite3D",
+                  "name": "jixiesha",
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "z": 9.353099e-08
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "a3b64b8a-aca5-4dac-a524-5b8eadc0cd29",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "e69bdd51-15a3-4e60-9a49-a972a8d51f61",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "i1vasc95"
+                        },
+                        {
+                          "_$ref": "va6l93zu"
+                        },
+                        {
+                          "_$ref": "zanxm8j2"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "zanxm8j2"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.36705,
+                          "y": -2.03836,
+                          "z": -1.096355
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 0.5283995,
+                          "y": 1.023577,
+                          "z": 1.367086
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
