@@ -90,26 +90,35 @@ laya.webgl_3D.js
 
 ## Install
 
-From the repository root:
+Install these external tools first:
+
+```text
+1. Python 3.10+
+2. Node.js 18+ from https://nodejs.org/ ; this also installs npm
+3. LayaAirIDE, or another local copy of Laya engine libs
+```
+
+Then install Python dependencies from the repository root:
 
 ```powershell
 python -m pip install -r material_fit_ui/requirements.txt
-python -m pip install pytest
 ```
 
-For the UI frontend:
+The renderer launcher installs its own Chromium automation dependency
+(`playwright-chromium`) under `artifacts/real_laya_run/` on first run.
+
+The UI launcher installs frontend npm packages automatically when
+`material_fit_ui/frontend/node_modules/` is missing. To install them manually:
 
 ```powershell
 cd material_fit_ui/frontend
 npm install
 ```
 
-The UI launcher can also run the frontend install automatically if `node_modules` is missing.
-
-The fast local renderer installs `playwright-chromium` automatically the first time you run:
+Optional, only for running tests:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1
+python -m pip install pytest
 ```
 
 ## Windows Quick Start
@@ -119,7 +128,17 @@ For the included fish example, use this order:
 ```powershell
 cd C:\path\to\material_fit
 python -m pip install -r material_fit_ui/requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_windows_quickstart.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_laya_runtime_renderer.ps1
+```
+
+`check_windows_quickstart.ps1` verifies Python packages, Node/npm, the Laya
+engine files, and the included fish example assets before you start the renderer.
+If LayaAirIDE is not installed in the default location, set `LAYA_ENGINE_LIBS`
+first:
+
+```powershell
+$env:LAYA_ENGINE_LIBS = "D:\path\to\LayaAirIDE\resources\engine\libs"
 ```
 
 Keep that renderer terminal open. In another terminal, start the UI:
