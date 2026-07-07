@@ -18,6 +18,7 @@
   const serverBaseUrl = params.get("server") || "http://127.0.0.1:8787";
   const width = Number(params.get("width") || "320");
   const height = Number(params.get("height") || "240");
+  const startupDebugMaterial = params.get("debugMaterial") === "1" || params.get("debugMaterial") === "true";
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -38,6 +39,13 @@
   await loadScript(joinUrl(engineRoot, "laya.webgl_2D.js"));
   await loadScript(joinUrl(engineRoot, "laya.d3.js"));
   await loadScript(joinUrl(engineRoot, "laya.webgl_3D.js"));
+  await loadOptionalEngineScripts([
+    "laya.ani.js",
+    "laya.particleCommon.js",
+    "laya.particle3D.js",
+    "laya.trailCommon.js",
+    "laya.trail3D.js",
+  ]);
 
   const initResult = Laya.init(width, height);
   if (initResult && typeof initResult.then === "function") {
@@ -64,6 +72,17 @@
         console.log("[material-fit] loaded project bundle: " + bundle);
       } catch (error) {
         console.warn("[material-fit] optional project bundle not loaded: " + bundle + " " + error);
+      }
+    }
+  }
+
+  async function loadOptionalEngineScripts(names) {
+    for (const name of names) {
+      try {
+        await loadScript(joinUrl(engineRoot, name));
+        console.log("[material-fit] loaded optional engine script: " + name);
+      } catch (error) {
+        console.warn("[material-fit] optional engine script not loaded: " + name);
       }
     }
   }
@@ -102,6 +121,9 @@
   async function createRuntimeScene() {
     if (sceneUrl) {
       try {
+        if (/\.lh(?:$|\?)/i.test(sceneUrl)) {
+          return await createPrefabRuntimeScene(sceneUrl);
+        }
         const scene = await Laya.Scene.open(sceneUrl, false);
         await waitFrames(4);
         const sceneRoot = scene.scene3D || scene;
@@ -111,7 +133,8 @@
           throw new Error(`scene loaded but camera/target missing camera=${!!camera} target=${!!target}`);
         }
         console.log("[material-fit] loaded scene: " + sceneUrl);
-        return { mode: "scene", scene: sceneRoot, camera, target, fallbackMaterial: null };
+        const frame = frameCamera(camera, target);
+        return { mode: "scene", scene: sceneRoot, camera, target, fallbackMaterial: null, frame };
       } catch (error) {
         console.error("[material-fit] scene load failed, falling back to cube: " + (error && error.stack || error));
       }
@@ -130,7 +153,98 @@
     fallbackMaterial.albedoColor = new Laya.Color(lastColor[0], lastColor[1], lastColor[2], lastColor[3]);
     target.meshRenderer.material = fallbackMaterial;
     console.log("[material-fit] using fallback cube renderer");
-    return { mode: "fallback_cube", scene, camera, target, fallbackMaterial };
+    const frame = frameCamera(camera, target);
+    return { mode: "fallback_cube", scene, camera, target, fallbackMaterial, frame };
+  }
+
+  async function createPrefabRuntimeScene(prefabUrl) {
+    const scene = new Laya.Scene3D();
+    Laya.stage.addChild(scene);
+    const camera = new Laya.Camera(0, 0.1, 100);
+    camera.name = "Capture Camera";
+    scene.addChild(camera);
+    let prefab = await Laya.loader.load(prefabUrl);
+    prefab = normalizeLoadedResource(prefabUrl, prefab);
+    if (!prefab) {
+      throw new Error("prefab load returned empty: " + prefabUrl);
+    }
+    console.log("[material-fit] prefab resource type: " + resourceTypeName(prefab));
+    scene.addChild(prefab);
+    if (startupDebugMaterial) {
+      applyDebugMaterials(prefab);
+    }
+    await waitFrames(8);
+    const target = findNodeByName(prefab, "model") || prefab;
+    const frame = frameCamera(camera, target);
+    console.log("[material-fit] loaded prefab: " + prefabUrl);
+    return { mode: "prefab", scene, camera, target, fallbackMaterial: null, frame };
+  }
+
+  function normalizeLoadedResource(url, resource) {
+    let value = resource;
+    if (Array.isArray(value)) value = value[0];
+    if (value && typeof value._setParent === "function") return value;
+    const cached = Laya.loader && typeof Laya.loader.getRes === "function" ? Laya.loader.getRes(url) : null;
+    if (Array.isArray(cached)) value = cached[0];
+    else if (cached) value = cached;
+    if (value && typeof value._setParent === "function") return value;
+    if (value && typeof value.create === "function") return value.create();
+    return value;
+  }
+
+  function resourceTypeName(value) {
+    if (!value) return "null";
+    const ctor = value.constructor && value.constructor.name || typeof value;
+    return ctor + " keys=" + Object.keys(value).slice(0, 8).join(",");
+  }
+
+  function frameCamera(camera, target) {
+    const center = new Laya.Vector3(0, 0, 0);
+    const extent = new Laya.Vector3(2, 2, 2);
+    const bounds = aggregateBounds(target);
+    if (bounds) {
+      center.x = bounds.center.x;
+      center.y = bounds.center.y;
+      center.z = bounds.center.z;
+      extent.x = bounds.extent.x;
+      extent.y = bounds.extent.y;
+      extent.z = bounds.extent.z;
+    }
+    const radius = Math.max(1, extent.x, extent.y, extent.z) * 2.4;
+    camera.transform.position = new Laya.Vector3(center.x, center.y + radius * 0.15, center.z + radius);
+    camera.transform.lookAt(center, new Laya.Vector3(0, 1, 0));
+    if ("orthographic" in camera) {
+      camera.orthographic = true;
+      camera.orthographicVerticalSize = Math.max(2, Math.max(extent.x, extent.y) * 3.1);
+    }
+    return { center, extent, radius };
+  }
+
+  function aggregateBounds(root) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let maxZ = -Infinity;
+    walk(root, (node) => {
+      const renderer = node.meshRenderer || node.skinnedMeshRenderer || node.renderer || node._renderNode;
+      const bounds = renderer && renderer.bounds;
+      const center = bounds && (bounds.center || (typeof bounds.getCenter === "function" ? bounds.getCenter() : null));
+      const extent = bounds && (bounds.extents || bounds.extent || (typeof bounds.getExtent === "function" ? bounds.getExtent() : null));
+      if (!center || !extent) return;
+      minX = Math.min(minX, center.x - extent.x);
+      minY = Math.min(minY, center.y - extent.y);
+      minZ = Math.min(minZ, center.z - extent.z);
+      maxX = Math.max(maxX, center.x + extent.x);
+      maxY = Math.max(maxY, center.y + extent.y);
+      maxZ = Math.max(maxZ, center.z + extent.z);
+    });
+    if (!Number.isFinite(minX)) return null;
+    return {
+      center: new Laya.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2),
+      extent: new Laya.Vector3((maxX - minX) / 2, (maxY - minY) / 2, (maxZ - minZ) / 2),
+    };
   }
 
   function findNodeByName(root, name) {
@@ -195,7 +309,7 @@
   function collectMaterials(root) {
     const out = [];
     walk(root, (node) => {
-      const sources = [node && node.meshRenderer, node && node.skinnedMeshRenderer, node && node.renderer, node && node._renderNode];
+      const sources = collectNodeRenderableSources(node);
       for (const source of sources) {
         const materials = source && (source.sharedMaterials || source.materials || source._materials || (source.sharedMaterial ? [source.sharedMaterial] : null));
         if (!materials) continue;
@@ -208,6 +322,71 @@
       out.push(runtime.fallbackMaterial);
     }
     return out;
+  }
+
+  function collectRenderableSources(root) {
+    const out = [];
+    walk(root, (node) => {
+      const sources = collectNodeRenderableSources(node);
+      for (const source of sources) {
+        if (source && out.indexOf(source) < 0) out.push(source);
+      }
+    });
+    return out;
+  }
+
+  function collectNodeRenderableSources(node) {
+    if (!node) return [];
+    const out = [node.meshRenderer, node.skinnedMeshRenderer, node.renderer, node._renderNode];
+    if (typeof node.getComponent === "function") {
+      for (const type of [Laya.MeshRenderer, Laya.SkinnedMeshRenderer, Laya.SimpleSkinnedMeshRenderer]) {
+        if (!type) continue;
+        try {
+          const component = node.getComponent(type);
+          if (component) out.push(component);
+        } catch {
+          // Some Laya builds throw when a component class is absent or not registered.
+        }
+      }
+    }
+    for (const list of [node._components, node._component, node.components]) {
+      if (!Array.isArray(list)) continue;
+      for (const component of list) {
+        const ctorName = component && component.constructor && component.constructor.name || "";
+        if (/Renderer/i.test(ctorName)) out.push(component);
+      }
+    }
+    return out.filter(Boolean);
+  }
+
+  function makeDebugMaterial(index) {
+    const colors = [
+      [0.95, 0.35, 0.18, 1],
+      [0.18, 0.65, 0.95, 1],
+      [0.55, 0.9, 0.25, 1],
+      [0.95, 0.8, 0.18, 1],
+    ];
+    const rgba = colors[index % colors.length];
+    const material = new Laya.UnlitMaterial();
+    material.albedoColor = new Laya.Color(rgba[0], rgba[1], rgba[2], rgba[3]);
+    return material;
+  }
+
+  function applyDebugMaterials(root) {
+    const sources = collectRenderableSources(root);
+    for (let i = 0; i < sources.length; i += 1) {
+      const material = makeDebugMaterial(i);
+      const source = sources[i];
+      try {
+        if ("material" in source) source.material = material;
+        if ("sharedMaterial" in source) source.sharedMaterial = material;
+        if ("materials" in source) source.materials = [material];
+        if ("sharedMaterials" in source) source.sharedMaterials = [material];
+      } catch (error) {
+        console.warn("[material-fit] debug material assignment failed: " + error);
+      }
+    }
+    console.log("[material-fit] applied debug materials renderables=" + sources.length);
   }
 
   function setShaderDataValue(material, name, value, kind) {
@@ -242,6 +421,11 @@
   }
 
   function applyMaterialPatch(command) {
+    if (command && (command.debug_material || command.force_debug_material)) {
+      applyDebugMaterials(runtime.target);
+      return;
+    }
+
     const values = command && command.material_patch && command.material_patch.values;
     if (!values || typeof values !== "object") return;
 
@@ -277,18 +461,46 @@
   function drawView(command, view) {
     const yaw = numberOr(view && view.yaw, 0);
     const pitch = numberOr(view && view.pitch, 0);
+    if (command && Number.isFinite(Number(command.orthographic_vertical_size)) && "orthographicVerticalSize" in runtime.camera) {
+      runtime.camera.orthographic = true;
+      runtime.camera.orthographicVerticalSize = Number(command.orthographic_vertical_size);
+    }
     const baseYaw = numberOr(command.target_base_yaw, 0);
     const basePitch = numberOr(command.target_base_pitch, 0);
     const yawSign = numberOr(command.target_yaw_sign, -1);
     const pitchSign = numberOr(command.target_pitch_sign, -1);
-    runtime.target.transform.localRotationEuler = new Laya.Vector3(
-      basePitch + pitchSign * pitch,
-      baseYaw + yawSign * yaw,
-      numberOr(command.target_base_roll, 0),
-    );
+    if (command && command.capture_mode === "orbit_camera") {
+      runtime.target.transform.localRotationEuler = new Laya.Vector3(
+        basePitch,
+        baseYaw,
+        numberOr(command.target_base_roll, 0),
+      );
+      orbitCamera(runtime.camera, runtime.frame, yaw, pitch, command);
+    } else {
+      runtime.target.transform.localRotationEuler = new Laya.Vector3(
+        basePitch + pitchSign * pitch,
+        baseYaw + yawSign * yaw,
+        numberOr(command.target_base_roll, 0),
+      );
+    }
     if (runtime.fallbackMaterial) {
       runtime.fallbackMaterial.albedoColor = new Laya.Color(lastColor[0], lastColor[1], lastColor[2], lastColor[3]);
     }
+  }
+
+  function orbitCamera(camera, frame, yaw, pitch, command) {
+    const center = frame && frame.center || new Laya.Vector3(0, 0, 0);
+    const radius = numberOr(command && command.camera_distance, frame && frame.radius || 4);
+    const yawRad = (numberOr(command && command.yaw_offset, 0) + yaw) * Math.PI / 180;
+    const pitchRad = (numberOr(command && command.pitch_offset, 0) + pitch) * Math.PI / 180;
+    const cosPitch = Math.cos(pitchRad);
+    const position = new Laya.Vector3(
+      center.x + Math.sin(yawRad) * cosPitch * radius,
+      center.y + Math.sin(pitchRad) * radius + radius * 0.12,
+      center.z + Math.cos(yawRad) * cosPitch * radius,
+    );
+    camera.transform.position = position;
+    camera.transform.lookAt(center, new Laya.Vector3(0, 1, 0));
   }
 
   function stageCanvas() {

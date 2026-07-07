@@ -40,6 +40,7 @@ async function main() {
   if (projectRoot) query.set('projectRoot', toStaticUrl(assetBase, repoRoot, projectRoot));
   if (scene) query.set('scene', toStaticUrl(assetBase, repoRoot, scene));
   if (projectRoot) query.set('assetManifest', `${assetBase}/asset-manifest.json`);
+  if (args.debugMaterial === '1' || args.debugMaterial === 'true') query.set('debugMaterial', 'true');
   const url = toStaticUrl(assetBase, repoRoot, pagePath) + '?' + query.toString();
   const browser = await chromium.launch({
     headless: !headed,

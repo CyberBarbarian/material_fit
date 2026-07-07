@@ -7,6 +7,7 @@ param(
     [string]$EngineRoot = $env:LAYA_ENGINE_LIBS,
     [string]$ReadyFile = "",
     [int]$HoldMs = 0,
+    [switch]$DebugMaterial,
     [switch]$Headed
 )
 
@@ -74,6 +75,9 @@ if ($ReadyFile) {
 }
 if ($HoldMs -gt 0) {
     $args += @("--holdMs", "$HoldMs")
+}
+if ($DebugMaterial) {
+    $args += @("--debugMaterial", "true")
 }
 if ($Headed) {
     $args += @("--headed", "true")
