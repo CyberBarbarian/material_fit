@@ -1,113 +1,84 @@
 # Material Fit Inspector
 
-Material Fit Inspector 是一个跨引擎材质对齐工具。它把 Unity 里已经调好的参考效果作为目标，通过反复改写 Laya `.lmat`、触发同视角渲染截图、比较图像差异，再由黑盒优化器继续提出下一组参数。
+Material Fit Inspector is a local research tool for aligning material appearance across renderers, mainly Unity reference renders and Laya `.lmat` materials.
 
-这个仓库当前是 standalone 形态，根目录就是项目根。历史代码里仍有 `tools.material_fit.*` / `tools.material_fit_ui.*` import，仓库内的 `tools/__init__.py` 会把这些旧 namespace 映射到当前根目录下的 `material_fit/` 和 `material_fit_ui/`，所以不要删除 `tools/` 这个兼容包。
+The project does not train an end-to-end model. It runs a black-box optimization loop:
 
-## 当前结构
+```text
+Unity reference PNGs
+  -> write candidate Laya .lmat parameters
+  -> ask Laya to render the same views
+  -> compare images
+  -> propose the next parameter set
+```
+
+The current recommended workflow uses Laya Editor scripts to render screenshots from inside the Laya project. That part is required for real closed-loop runs.
+
+## Repository Layout
 
 ```text
 .
-├── README.md                         # 本入口文档
-├── tools/                            # 兼容旧 tools.* import 的 namespace shim
-├── Editor/                           # Laya Editor 扩展脚本，复制到 <LayaProject>/assets/Editor/
-├── material_fit/                     # 算法、CLI、Laya/Unity 适配、视觉评分、测试和文档
-│   ├── fit_material.py               # 自动调参主入口，必须通过 python -m tools.material_fit.fit_material 调用
-│   ├── auto_adjust/                  # 自动调参循环、历史样本、评分状态
-│   ├── optimizer/                    # heuristic / CMA-ES / semantic group / hybrid optimizer
-│   ├── laya/                         # .lmat 读写、Laya shader 解析、旧渲染驱动兼容层
-│   ├── laya_capture/                 # Laya Editor 截图桥接、runtime capture bridge
-│   ├── unity/                        # Unity shader/material 导出辅助
-│   ├── vision/                       # 图像 diff、mask、感知评分、人类接受度评分
-│   ├── tests/                        # pytest 回归测试
-│   └── docs/                         # 架构、评分、优化器、Laya 截图和研究设计文档
-└── material_fit_ui/                  # 本地 Web 控制台，FastAPI backend + Vue/Vite frontend
-    ├── launch.py                     # 一键启动后端和前端
-    ├── requirements.txt              # Python 依赖
-    ├── backend/                      # 项目管理、预分析、探针、job runner、API
-    └── frontend/                     # Vue 3 + TypeScript UI
+├── README.md
+├── Editor/
+│   ├── CameraCapture.ts
+│   └── CameraCaptureEnv.ts
+├── tools/
+├── material_fit/
+│   ├── fit_material.py
+│   ├── fit_cli.py
+│   ├── fit_artifacts.py
+│   ├── auto_adjust/
+│   ├── laya/
+│   ├── laya_capture/
+│   ├── optimizer/
+│   ├── unity/
+│   ├── vision/
+│   ├── tests/
+│   └── docs/
+└── material_fit_ui/
+    ├── launch.py
+    ├── launch.bat
+    ├── backend/
+    ├── frontend/
+    └── requirements.txt
 ```
 
-## 什么会进 Git
+Important directories:
 
-应该提交的是源码、测试、配置模板和文档：
+- `Editor/`: Laya Editor extension scripts. Copy these into the target Laya project.
+- `material_fit/`: optimization, `.lmat` IO, image scoring, render drivers, tests, and docs.
+- `material_fit/laya_capture/`: Python side of Laya Editor / runtime capture.
+- `material_fit/optimizer/`: black-box optimization strategies.
+- `material_fit/vision/`: render comparison and scoring.
+- `material_fit_ui/`: local FastAPI + Vue control panel.
+- `tools/`: compatibility namespace for legacy `tools.material_fit.*` imports. Keep it.
 
-```text
-tools/
-material_fit/
-material_fit_ui/
-README.md
-.gitignore
-```
+## What You Need
 
-不要提交本地运行载荷、缓存和实验产物：
-
-```text
-artifacts/
-LayaAirIDE-*/
-laya_project_minimal/
-unity_references/
-material_fit/output/
-material_fit_ui/frontend/node_modules/
-material_fit_ui/frontend/dist/
-__pycache__/
-.pytest_cache/
-.codex/
-.agents/
-```
-
-这些目录要么能重新安装/生成，要么包含本机绝对路径、Laya/Unity 资产、截图、日志或大体积运行结果。`.gitignore` 已经覆盖这些路径。
-
-## 环境准备
-
-基础开发和测试需要：
+For basic development:
 
 - Python 3.10+
-- Node.js 18+ 和 npm，仅在启动前端 UI 时需要
-- pytest，用于跑测试
-- `material_fit_ui/requirements.txt` 中的 Python 依赖，用于 UI 后端、CMA-ES、图像评分和感知指标
+- Node.js 18+ and npm, only for the UI frontend
+- A Laya project containing the target `.lmat`, shader, scene, camera, and target model
+- Unity reference renders, usually PNGs from the same view set
 
-安装 Python 依赖：
+Install Python dependencies:
 
 ```powershell
 python -m pip install -r material_fit_ui/requirements.txt
 python -m pip install pytest
 ```
 
-启动 UI 时，`material_fit_ui/launch.py` 会在缺少 `node_modules/` 时自动执行一次 `npm install`。如果要手动安装前端依赖：
+The UI launcher can run `npm install` for the frontend automatically. To install manually:
 
 ```powershell
 cd material_fit_ui/frontend
 npm install
 ```
 
-## 启动 UI
+## Laya Project Setup
 
-在仓库根目录执行：
-
-```powershell
-python material_fit_ui/launch.py
-```
-
-常用参数：
-
-```powershell
-python material_fit_ui/launch.py --no-browser
-python material_fit_ui/launch.py --backend-only
-python material_fit_ui/launch.py --frontend-only
-```
-
-Windows 上也可以双击：
-
-```text
-material_fit_ui/launch.bat
-```
-
-UI 负责项目配置、预分析、Laya 刷新探针、启动/取消优化 job、查看每轮截图和评分。真正的优化逻辑仍在 `material_fit/` 中。
-
-## Laya 项目侧脚本
-
-自动截图闭环需要把仓库里的 Laya Editor 扩展脚本放到目标 Laya 项目内：
+Real optimization runs require Laya-side scripts. Copy these files from this repository:
 
 ```text
 Editor/CameraCapture.ts      -> <LayaProject>/assets/Editor/CameraCapture.ts
@@ -115,23 +86,57 @@ Editor/CameraCaptureEnv.ts   -> <LayaProject>/assets/Editor/CameraCaptureEnv.ts
 Editor/*.meta                -> <LayaProject>/assets/Editor/
 ```
 
-这两个脚本负责在 Laya Editor 中监听 `assets/material_fit_capture_command.json`，刷新 `.lmat` 资源，并按同一相机/目标对象输出单视角或多视角 PNG。UI 项目配置里的 `laya_capture_command_path` 通常应指向：
+The scripts watch a command file and render screenshots from Laya Editor. The command file path should normally be:
 
 ```text
 <LayaProject>/assets/material_fit_capture_command.json
 ```
 
-运行时备用方案是 `material_fit/laya_capture/laya/MaterialFitCapture.ts`。只有在不用 Editor 扩展、改用 runtime bridge / HTTP capture 时，才需要把这个脚本放进 Laya 项目并挂到场景节点上。默认推荐优先使用 `Editor/CameraCapture*.ts` 这套编辑器截图链路。
+In the UI, set `laya_capture_command_path` to that file. The Python side updates it every iteration; the Laya Editor extension detects the new nonce, refreshes the material asset, renders the requested views, and writes PNGs plus a report JSON.
 
-## 运行 CLI
+There is also a runtime fallback script:
 
-不要直接执行 `python material_fit/fit_material.py`，这个文件内部使用 package relative import，直接跑会失败。应从仓库根目录通过兼容 namespace 调用：
+```text
+material_fit/laya_capture/laya/MaterialFitCapture.ts
+```
+
+Use that only if you choose the runtime bridge / HTTP capture path. For normal usage, prefer the `Editor/CameraCapture*.ts` editor workflow.
+
+## Start The UI
+
+From the repository root:
+
+```powershell
+python material_fit_ui/launch.py
+```
+
+Useful options:
+
+```powershell
+python material_fit_ui/launch.py --no-browser
+python material_fit_ui/launch.py --backend-only
+python material_fit_ui/launch.py --frontend-only
+```
+
+On Windows you can also run:
+
+```text
+material_fit_ui/launch.bat
+```
+
+The UI is the recommended entrypoint for creating a project, selecting files, running preanalysis, running the Laya refresh probe, starting optimization jobs, and inspecting iteration images.
+
+## Run From CLI
+
+Use module mode from the repository root:
 
 ```powershell
 python -m tools.material_fit.fit_material --help
 ```
 
-典型自动调参命令：
+Do not run `python material_fit/fit_material.py` directly; the package uses relative imports and the compatibility namespace.
+
+A typical CLI run looks like this:
 
 ```powershell
 python -m tools.material_fit.fit_material `
@@ -144,62 +149,95 @@ python -m tools.material_fit.fit_material `
   --apply-lmat
 ```
 
-真实闭环运行还需要用户提供有效的 Laya/Unity 资产路径，通常包括：
+`material_fit/fit_config.example.json` documents the config shape. It is illustrative, not directly runnable; replace all Laya/Unity paths with local paths.
 
-- Unity 参考图，作为目标图像。
-- Laya shader 和目标 `.lmat`。
-- Laya 项目路径和 Laya Editor 截图命令文件。
-- 可选的 Unity shader/material 参数导出文件。
+## Expected Speed
 
-`material_fit/fit_config.example.json` 是配置形状示例，不是可直接运行的配置。里面的路径需要替换成本机真实路径。
+If `laya_editor_capture.enabled=true`, each iteration includes:
 
-## 测试
+```text
+write .lmat
+  -> Laya Editor reimport / refresh
+  -> render one or more views
+  -> score images
+  -> write iteration artifacts
+```
 
-在仓库根目录执行：
+For this mode, around 4 seconds per iteration is a normal baseline. For example, 90 iterations in about 6 minutes is roughly 4 seconds per iteration and is not obviously misconfigured.
+
+Parallel candidate evaluation is limited when the workflow shares one `material_fit_capture_command.json`; parallel workers cannot safely write the same command file at the same time. Speed work should focus on persistent renderer processes, reducing reimport/render overhead, or switching to a runtime bridge designed for batched requests.
+
+## Outputs And Files Not To Commit
+
+Generated runtime data is intentionally ignored:
+
+```text
+material_fit/output/
+material_fit_ui/frontend/node_modules/
+material_fit_ui/frontend/dist/
+artifacts/
+LayaAirIDE-*/
+laya_project_minimal/
+unity_references/
+__pycache__/
+.pytest_cache/
+.codex/
+.agents/
+```
+
+Commit source code, tests, docs, and config templates. Do not commit local Laya projects, Unity projects, generated screenshots, optimizer run directories, or machine-specific absolute-path configs.
+
+## Tests
+
+Run:
 
 ```powershell
 python -m pytest material_fit/tests -q
 ```
 
-测试覆盖 `.lmat` 读写、评分、优化器、UI 后端项目存储、Laya capture bridge 和若干 legacy 兼容路径。测试会产生 `__pycache__/` 和 `.pytest_cache/`，这些缓存不应提交。
+The suite covers `.lmat` IO, scoring, optimizer behavior, UI backend config generation, Laya capture command handling, runtime bridge behavior, and legacy compatibility paths.
 
-## 关键文档
+## Key Docs
 
-- `material_fit/docs/README.md`：文档索引和当前代码入口。
-- `material_fit/docs/Project_Architecture.md`：项目结构、数据流、源码/产物清理边界。
-- `material_fit/docs/File_Layout_And_Artifacts.md`：运行产物和文件布局约定。
-- `material_fit/docs/Laya_Multiview_Capture.md`：Laya 多视角截图链路。
-- `material_fit/docs/Core_Algorithms_and_Metrics.md`：核心算法和指标。
-- `material_fit/docs/Scoring_Mechanism_Design.md`：评分机制设计。
-- `material_fit/docs/learned_incremental_optimizer_design.html`：学习型增量优化器的理论设计稿。
+- `material_fit/docs/README.md`: documentation index.
+- `material_fit/docs/Project_Architecture.md`: architecture and data flow.
+- `material_fit/docs/File_Layout_And_Artifacts.md`: output and artifact layout.
+- `material_fit/docs/Laya_Multiview_Capture.md`: Laya Editor and runtime capture details.
+- `material_fit/docs/Core_Algorithms_and_Metrics.md`: core algorithms and metrics.
+- `material_fit/docs/Scoring_Mechanism_Design.md`: scoring design.
+- `material_fit/docs/learned_incremental_optimizer_design.html`: theoretical learned optimizer design.
 
-部分深层历史文档仍可能使用 `tools/material_fit` 这种旧路径写法。当前 standalone 仓库以本 README 的目录边界和命令为准。
+## Common Problems
 
-## 开发注意事项
+### Laya script seems missing
 
-- 算法主循环在 `material_fit/fit_material.py`。
-- 搜索策略集中在 `material_fit/optimizer/`。
-- 图像评分集中在 `material_fit/vision/`。
-- Laya `.lmat` 安全写入在 `material_fit/laya/lmat_io.py`。
-- Laya Editor 截图桥接在 `material_fit/laya_capture/`。
-- UI job 生命周期在 `material_fit_ui/backend/job_manager.py`。
-- UI 项目状态在 `material_fit_ui/backend/project_store.py`。
+The required Laya Editor scripts are in repository root `Editor/`. Copy them to `<LayaProject>/assets/Editor/`.
 
-项目目标是优化“最终渲染表现”的相似度，不是恢复唯一正确的材质参数。当前主线仍是黑盒优化系统，没有训练一个端到端模型；学习型优化器设计目前作为研究方案和后续路线保留在文档中。
+### UI runs but optimization cannot capture images
 
-## 来源与参考
+Check:
 
-本公开仓库由本地 `material_fit` 工作区整理而来，保留了原仓库历史来源：
+- `laya_editor_capture.enabled` is true for the editor workflow.
+- `laya_capture_command_path` points to `<LayaProject>/assets/material_fit_capture_command.json`.
+- `CameraCapture.ts` and `CameraCaptureEnv.ts` are present under `<LayaProject>/assets/Editor/`.
+- The Laya scene contains the configured `camera_name` and `target_name`.
+- Laya Editor is open and has loaded the extension.
 
-- 上游仓库：`https://github.com/mcy233/material_fit.git`
-- 本分支整理内容：仓库入口文档、运行产物清理规则、standalone `tools.*` 兼容 shim、Laya capture/runtime bridge、稳定性评分、优化器拆分与相关测试。
+### Iterations are slower than expected
 
-实现和研究设计主要参考：
+Check how many views are rendered per iteration, whether scene reload is enabled, and whether material reimport waits are large. Shared command-file editor capture is mostly serialized by design.
 
-- Unity Manual / ShaderLab 文档，用于理解 Unity shader 和材质参数导出。
-- LayaAir / Laya Shader3D 与材质系统文档，用于 `.lmat`、Shader uniform 和截图链路适配。
-- CMA-ES / warm-start CMA-ES 相关黑盒优化方法，用于 `cma_cold`、`cma_warm` 和重启策略设计。
-- SSIM、感知相似度、foreground mask、multi-view aggregation 等图像相似度方法，用于跨引擎渲染结果评分。
-- `material_fit/docs/RelatedWork_Survey.md` 与 `material_fit/docs/learned_incremental_optimizer_design.html` 中整理的 learned optimizer / RL / inverse material design 方向资料。
+### Import says `tools.material_fit` is missing
 
-当前仓库未包含明确 `LICENSE` 文件。除非仓库 owner 后续补充许可证，否则请把它视为带来源说明的 source-available 研究代码，而不是已经声明开放授权的开源发布。
+Run commands from the repository root and keep the `tools/` directory. It provides the compatibility namespace.
+
+## Provenance And License
+
+This public repository was prepared from a local `material_fit` workspace and keeps the original upstream history reference:
+
+- Upstream: `https://github.com/mcy233/material_fit.git`
+- Current public mirror: `https://github.com/CyberBarbarian/material_fit`
+
+The implementation and design refer to Unity ShaderLab/material workflows, LayaAir Shader3D/material workflows, CMA-ES and warm-start CMA-ES style black-box optimization, SSIM/perceptual image similarity, foreground masking, and multi-view aggregation.
+
+There is currently no explicit `LICENSE` file in this repository. Until a license is added by the repository owner, treat this as source-available research code with provenance notes, not as a formally licensed open-source release.
