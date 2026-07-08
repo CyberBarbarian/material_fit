@@ -249,6 +249,75 @@ runtime capture and queue-worker code such as
 The `.sh` scripts are auxiliary launchers from internal experiments; they are not
 the default deployment path and are not required for the fish example.
 
+## Replaying The 2026-07-02 Successful Run On Windows
+
+The 2026-07-02 recovery run can be replayed locally without a Linux server after
+you have the Windows fast replay snapshot archive:
+
+```text
+exact_repro_20260702_181010_runtime_snapshot_windows_fast.tar.gz
+sha256: e3dc50993769e763346e72a39520d56b9ee8c7c9bc5aff5a5889ee1e4e92be47
+```
+
+This is a data artifact, not source code. It contains the forensic run snapshot
+plus a complete `runtime/operational_webroot` for the local no-IDE fast path.
+Put it under `artifacts/` or any other local directory, then extract it into a
+`snapshot/` folder:
+
+```powershell
+cd C:\path\to\material_fit
+New-Item -ItemType Directory -Force -Path artifacts\exact_repro_20260702_181010_runtime_snapshot\snapshot | Out-Null
+tar -xzf C:\path\to\exact_repro_20260702_181010_runtime_snapshot_windows_fast.tar.gz `
+  -C artifacts\exact_repro_20260702_181010_runtime_snapshot\snapshot
+```
+
+The older forensic-only archive is useful for auditing, but it does not contain
+the complete local webroot by itself. Use the `_windows_fast` archive for a clean
+Windows replay.
+
+If you have not run the normal Windows quick start on this checkout yet, install
+the Chromium automation dependency used by the replay worker:
+
+```powershell
+New-Item -ItemType Directory -Force -Path artifacts\real_laya_run | Out-Null
+Push-Location artifacts\real_laya_run
+npm.cmd init -y
+npm.cmd install playwright-chromium --no-save
+Pop-Location
+```
+
+Run a short local verification first:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_remote_exact_snapshot_replay.ps1 `
+  -SnapshotRoot artifacts\exact_repro_20260702_181010_runtime_snapshot\snapshot `
+  -OutputDir artifacts\local_exact_replay_check `
+  -Iterations 1 `
+  -MaxRuntimeSec 300
+```
+
+Then run the same experiment budget from the captured `run.sh`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_remote_exact_snapshot_replay.ps1 `
+  -SnapshotRoot artifacts\exact_repro_20260702_181010_runtime_snapshot\snapshot `
+  -OutputDir artifacts\local_exact_replay_1000
+```
+
+The replay script parses the captured `success_run/scripts/run.sh`, so the
+default long run uses the original settings: `ITERATIONS=1000`,
+`TARGET_SCORE=0.985`, `optimizer=cma_cold`, population size `8`, sigma `0.32`,
+and seed `20260702`.
+
+This replay path is still the no-IDE fast path. It starts a local persistent
+Chromium worker, serves the Laya web build, regenerates local target/start
+renders from the captured target/start requests, and then runs
+`python -m material_fit.fit_material` against the extracted release code. The
+PNG files stored inside the forensic archive are preserved as evidence, but the
+local optimizer uses the locally regenerated target/start renders because
+Windows Chromium/GPU output is not expected to be bit-identical to the remote
+Linux render.
+
 ## Input Files
 
 A practical run needs:
