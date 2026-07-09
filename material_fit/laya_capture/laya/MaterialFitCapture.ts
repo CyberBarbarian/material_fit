@@ -61,6 +61,8 @@ type CaptureCommand = {
     alpha_from_rgb?: boolean;
     alpha_from_rgb_threshold?: number;
     alpha_source?: "silhouette_mask" | "alpha_from_rgb" | "render_alpha";
+    visual_background_color?: number[] | string;
+    background_color?: number[] | string;
     image_format?: "png" | "raw_rgba";
     settle_frames?: number;
     freeze_animators?: boolean;
@@ -286,6 +288,7 @@ export class MaterialFitCapture extends Laya.Script3D {
                             width,
                             height,
                             false,
+                            command,
                         );
                         postTasks.push(this.postImage(command, view, index, dataUrl, width, height, patchResult));
                     }
@@ -872,7 +875,7 @@ export class MaterialFitCapture extends Laya.Script3D {
         }
     }
 
-    private pixelsToPngDataUrl(pixels: Uint8Array, width: number, height: number, flipY: boolean): string {
+    private pixelsToPngDataUrl(pixels: Uint8Array, width: number, height: number, flipY: boolean, command?: CaptureCommand): string {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -888,8 +891,42 @@ export class MaterialFitCapture extends Laya.Script3D {
             const targetOffset = y * width * 4;
             target.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
         }
+        this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
         context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
+    }
+
+    private applyVisualBackground(pixels: Uint8ClampedArray, color: [number, number, number]): void {
+        for (let i = 0; i < pixels.length; i += 4) {
+            if (pixels[i + 3] === 0 || (pixels[i] <= 1 && pixels[i + 1] <= 1 && pixels[i + 2] <= 1)) {
+                pixels[i] = color[0];
+                pixels[i + 1] = color[1];
+                pixels[i + 2] = color[2];
+                pixels[i + 3] = 255;
+            }
+        }
+    }
+
+    private resolveVisualBackgroundColor(command?: CaptureCommand): [number, number, number] {
+        const value = command?.visual_background_color || command?.background_color;
+        if (Array.isArray(value) && value.length >= 3) {
+            return [this.clampByte(value[0]), this.clampByte(value[1]), this.clampByte(value[2])];
+        }
+        if (typeof value === "string") {
+            const match = value.trim().match(/^#?([0-9a-f]{6})$/i);
+            if (match) {
+                return [
+                    parseInt(match[1].slice(0, 2), 16),
+                    parseInt(match[1].slice(2, 4), 16),
+                    parseInt(match[1].slice(4, 6), 16),
+                ];
+            }
+        }
+        return [255, 255, 255];
+    }
+
+    private clampByte(value: any): number {
+        return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
     }
 
     private copyPixelsForOutput(pixels: Uint8Array, width: number, height: number, flipY: boolean): Uint8Array {

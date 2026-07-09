@@ -10,6 +10,7 @@ from ..shared.models import ShaderParam
 from .adjustment_algorithm import AdjustmentStagePolicy
 from .cmaes_strategy import CmaesStrategy
 from .cold_start_hybrid_strategy import ColdStartHybridStrategy
+from .pattern16_strategy import Pattern16Strategy
 from .response_driven_strategy import ResponseDrivenSemanticStrategy
 from .semantic_graph import ShaderEffectGraph, graph_from_dict
 from .strategy_core import (
@@ -46,6 +47,7 @@ def build_strategy(
     semantic_graph: ShaderEffectGraph | dict[str, Any] | None = None,
     auto_adjust_mode: str = "fresh_fit",
     cold_start_prior_anchors: Sequence[dict[str, Any]] = (),
+    search_param_names: Sequence[str] | None = None,
 ) -> OptimizerStrategy:
     """Construct the requested strategy.
 
@@ -56,6 +58,7 @@ def build_strategy(
     * ``"cma_warm"`` — Warm-Started CMA-ES (E-006).
     * ``"semantic_group"`` — response-driven semantic scheduler.
     * ``"adaptive_response_search"`` — global-best response search.
+    * ``"pattern16"`` — validated 16D coordinate pattern search.
     * ``"semantic_group_legacy_081"`` — preserved pattern-search baseline.
     * ``"subspace_cma_es"`` — expensive CMA-ES inside a semantic subspace.
 
@@ -117,6 +120,12 @@ def build_strategy(
             initial_params=initial_params,
             shader_params=shader_params,
             prior_anchors=cold_start_prior_anchors,
+            search_param_names=search_param_names,
+        )
+    if optimizer == "pattern16":
+        return Pattern16Strategy(
+            initial_params=initial_params,
+            shader_params=shader_params,
         )
     if optimizer in ("cma_cold", "cma_warm"):
         config = cma_es_config or CmaesStrategyConfig()
@@ -154,7 +163,8 @@ def build_strategy(
         f"unknown optimizer: {optimizer!r} "
         "(expected 'heuristic', 'cma_cold', 'cma_warm', 'semantic_group', "
         "'adaptive_response_search', "
-        "'semantic_group_legacy_081', 'subspace_cma_es', or 'cold_start_hybrid')"
+        "'pattern16', 'semantic_group_legacy_081', 'subspace_cma_es', "
+        "or 'cold_start_hybrid')"
     )
 
 
@@ -219,6 +229,7 @@ __all__ = [
     "HeuristicStrategy",
     "OptimizerStrategy",
     "OptimizerUnavailableError",
+    "Pattern16Strategy",
     "SemanticGroupStrategy",
     "StrategyContext",
     "build_strategy",

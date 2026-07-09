@@ -437,7 +437,9 @@ export type OptimizerKind =
   | 'cma_warm'
   | 'semantic_group'
   | 'adaptive_response_search'
+  | 'pattern16'
   | 'semantic_group_legacy_081'
+  | 'cold_start_hybrid'
   | 'subspace_cma_es';
 
 export type OptimizerPreset =

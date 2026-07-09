@@ -68,31 +68,25 @@ function Stop-MaterialFitCommandLines {
     $repoText = if ($repoRoot) { [string]$repoRoot.Path } else { "C:\WorkSpace\material_fit" }
     $nodePatterns = @(
         "$repoText\material_fit\laya_capture\run_runtime_renderer.js",
-        "\persistent_browser_worker.js",
-        "\remote_repro_audit_",
-        "\remote_exact_snapshots\",
-        "\remote_exact_run_"
+        "\persistent_browser_worker.js"
     )
     $pythonPatterns = @(
         "\persistent_capture_server.py",
         "-m material_fit.laya_capture.persistent_queue_daemon",
         "-m material_fit.fit_material",
-        "-m http.server",
-        "\remote_repro_audit_",
-        "\remote_exact_snapshots\",
-        "\remote_exact_run_"
+        "-m http.server"
     )
     $powershellPatterns = @(
-        "$repoText\scripts\ensure_remote_style_laya_worker.ps1",
         "$repoText\scripts\ensure_persistent_laya_queue.ps1",
-        "$repoText\scripts\start_local_laya_runtime_renderer.ps1"
+        "$repoText\scripts\start_local_laya_runtime_renderer.ps1",
+        "$repoText\scripts\run_fish_core_experiment.ps1",
+        "$repoText\scripts\run_fish_finetune.ps1",
+        "$repoText\scripts\run_fish_zero_start.ps1"
     )
 
     $chromePatterns = @(
         "$repoText",
         "material_fit",
-        "remote_exact_snapshots",
-        "remote_snapshot_replays",
         "persistent_worker",
         "persistent_browser_worker",
         "ms-playwright"
@@ -100,8 +94,6 @@ function Stop-MaterialFitCommandLines {
     $wslPatterns = @(
         "persistent_browser_worker.js",
         "persistent_capture_server.py",
-        "remote_exact_snapshots",
-        "remote_snapshot_replays",
         "material_fit"
     )
 
@@ -120,8 +112,6 @@ function Stop-MaterialFitCommandLines {
         }
         $commandLine = [string]$process.CommandLine
         if ($commandLine.Contains("$repoText\scripts\cleanup_material_fit_background.ps1") -or
-            $commandLine.Contains("$repoText\scripts\run_remote_style_direct_request.ps1") -or
-            $commandLine.Contains("$repoText\scripts\stop_remote_style_laya_worker.ps1") -or
             $commandLine.Contains("$repoText\scripts\stop_persistent_laya_queue.ps1")) {
             continue
         }
@@ -164,7 +154,7 @@ function Stop-WslMaterialFitProcesses {
     if (-not $wsl) {
         return
     }
-    $script = "pkill -f 'python3 -m http.server .*remote_exact_snapshots.*webroot' || true; pkill -f 'persistent_browser_worker.js|persistent_capture_server.py' || true; pkill -f 'chrome-linux/chrome|chrome-headless-shell' || true"
+    $script = "pkill -f 'persistent_browser_worker.js|persistent_capture_server.py|material_fit.laya_capture.persistent_queue_daemon' || true; pkill -f 'chrome-linux/chrome|chrome-headless-shell' || true"
     if ($DryRun) {
         Write-Output "DRYRUN wsl cleanup distro=$WslDistro script=$script"
         return

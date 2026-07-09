@@ -191,6 +191,52 @@ def _serve_one_persistent_browser_score_request(state_dir: Path) -> None:
     raise AssertionError("persistent queue request was not observed")
 
 
+def _serve_persistent_queue_requests(state_dir: Path, observed: list[dict], count: int) -> None:
+    queue_dir = state_dir / "queue"
+    result_dir = state_dir / "results"
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and len(observed) < count:
+        requests = sorted(queue_dir.glob("*.request.json"))
+        if not requests:
+            time.sleep(0.02)
+            continue
+        request_path = requests[0]
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        command = request["command"]
+        output_dir = Path(command["output_dir"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if "warmup" not in request["request_id"]:
+            (output_dir / "laya_v000_yaw0_pitch0.png").write_bytes(b"persistent-queue-capture")
+        observed.append(
+            {
+                "request_id": request["request_id"],
+                "params_path": request.get("params_path"),
+                "command_params_path": command.get("paramsPath"),
+                "server_base_url": command.get("server_base_url"),
+                "post_url": command.get("post_url"),
+                "output_dir": command.get("output_dir"),
+                "values": command["material_patch"]["values"],
+            }
+        )
+        result_path = result_dir / f"{request['request_id']}.result.json"
+        result_path.write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "total_ms": 123,
+                    "browser_capture_ms": 100,
+                    "png_count": 1,
+                    "capture_count": 1,
+                    "missing": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        request_path.unlink()
+    if len(observed) != count:
+        raise AssertionError(f"observed {len(observed)} persistent queue requests, expected {count}")
+
+
 def test_render_driver_worker_pool_routes_iterations_to_isolated_workers(tmp_path):
     driver = RenderDriver(
         output_dir=tmp_path / "root",
@@ -326,6 +372,107 @@ def test_render_driver_can_render_via_persistent_queue(tmp_path):
     assert result["candidate_overrides"]["v000_yaw0_pitch0"] == str(screenshot)
     assert result["persistent_result"]["browser_capture_ms"] == 100
     assert screenshot.read_bytes() == b"\x00\x00\x00\x00"
+
+
+def test_persistent_queue_runs_configured_warmup_requests_before_first_render(tmp_path):
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "ready.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
+    remote_root = "/remote/run"
+    local_root = tmp_path / "local_run"
+    local_root.mkdir()
+    (local_root / "target_params.json").write_text("{}", encoding="utf-8")
+    (local_root / "start_params.json").write_text("{}", encoding="utf-8")
+
+    def write_source_request(path: Path, label: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "request_id": f"remote_{label}",
+                    "params_path": f"{remote_root}/{label}_params.json",
+                    "command": {
+                        "target_name": "model",
+                        "paramsPath": f"{remote_root}/{label}_params.json",
+                        "server_base_url": "http://127.0.0.1:9185",
+                        "post_url": "http://127.0.0.1:9185/material-fit/capture-result",
+                        "output_dir": f"{remote_root}/{label}_render",
+                        "material_patch": {
+                            "target_name": "model",
+                            "values": {"stage": label},
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    target_request = tmp_path / "remote_requests" / "target" / "persistent_request_command.json"
+    start_request = tmp_path / "remote_requests" / "start" / "persistent_request_command.json"
+    write_source_request(target_request, "target")
+    write_source_request(start_request, "start")
+
+    observed: list[dict] = []
+    driver = RenderDriver(
+        output_dir=tmp_path / "root",
+        dry_run=False,
+        capture_config={
+            "persistent_queue": {
+                "enabled": True,
+                "state_dir": str(state_dir),
+                "timeout_s": 3.0,
+                "warmup_timeout_s": 3.0,
+                "poll_s": 0.01,
+                "cap_port": 9999,
+                "path_replacements": [{"from": remote_root, "to": str(local_root)}],
+                "warmup_requests": [
+                    {
+                        "label": "target",
+                        "source_path": str(target_request),
+                        "output_dir": str(tmp_path / "warmup_target"),
+                    },
+                    {
+                        "label": "start",
+                        "source_path": str(start_request),
+                        "output_dir": str(tmp_path / "warmup_start"),
+                    },
+                ],
+            },
+            "target_name": "model",
+            "views": [
+                {
+                    "view_id": "v000_yaw0_pitch0",
+                    "yaw": 0.0,
+                    "pitch": 0.0,
+                    "file_name": "laya_v000_yaw0_pitch0.png",
+                }
+            ],
+        },
+    )
+
+    worker = threading.Thread(target=_serve_persistent_queue_requests, args=(state_dir, observed, 3))
+    worker.start()
+    result = driver.render_candidate(5, {"u_Metallic": 0.33})
+    worker.join(timeout=1.0)
+
+    assert result["status"] == "ok"
+    assert [item["values"] for item in observed] == [
+        {"stage": "target"},
+        {"stage": "start"},
+        {"u_Metallic": 0.33},
+    ]
+    assert observed[0]["params_path"] == str(local_root / "target_params.json")
+    assert observed[0]["command_params_path"] == str(local_root / "target_params.json")
+    assert observed[1]["params_path"] == str(local_root / "start_params.json")
+    assert observed[0]["server_base_url"] == "http://127.0.0.1:9999"
+    assert observed[0]["post_url"] == "http://127.0.0.1:9999/material-fit/capture-result"
+    assert observed[0]["output_dir"] == str(tmp_path / "warmup_target")
+    assert observed[1]["output_dir"] == str(tmp_path / "warmup_start")
+    records = json.loads((state_dir / "warmup_records.json").read_text(encoding="utf-8"))
+    assert [record["output_dir"] for record in records] == [
+        str(tmp_path / "warmup_target"),
+        str(tmp_path / "warmup_start"),
+    ]
 
 
 def test_render_driver_reset_persistent_queue_runs_stop_and_requires_ensure_again(tmp_path):
@@ -478,6 +625,38 @@ def test_persistent_queue_startup_settle_waits_once_and_after_reset(tmp_path, mo
     assert client.reset() is False
     client._ensure_ready()
     assert sleep_calls == [2.5, 2.5]
+
+
+def test_persistent_queue_ensure_command_does_not_capture_output_by_default(tmp_path, monkeypatch):
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "ready.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
+    calls: list[dict] = []
+
+    def fake_run(command, **kwargs):
+        calls.append({"command": command, "kwargs": kwargs})
+
+        class Completed:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Completed()
+
+    monkeypatch.setattr(render_driver_module.subprocess, "run", fake_run)
+    client = render_driver_module._PersistentQueueClient(
+        {
+            "state_dir": str(state_dir),
+            "ensure_command": [sys.executable, "-c", "print('ready')"],
+        }
+    )
+
+    client._ensure_ready()
+
+    kwargs = calls[0]["kwargs"]
+    assert kwargs["stdout"] is render_driver_module.subprocess.DEVNULL
+    assert kwargs["stderr"] is render_driver_module.subprocess.DEVNULL
+    assert "capture_output" not in kwargs
 
 
 def test_render_driver_can_restore_animators_when_explicitly_requested(tmp_path):

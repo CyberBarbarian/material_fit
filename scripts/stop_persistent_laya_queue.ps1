@@ -2,6 +2,15 @@ param(
     [string]$StateDir = $env:MATERIAL_FIT_PERSISTENT_STATE_DIR
 )
 
+function Stop-ProcessTree {
+    param([int]$ProcessId)
+    if ($ProcessId -le 0) {
+        return
+    }
+    $args = @("/F", "/T", "/PID", "$ProcessId")
+    & taskkill @args | Out-Null
+}
+
 if (-not $StateDir) {
     Write-Error "StateDir is required. Pass -StateDir or set MATERIAL_FIT_PERSISTENT_STATE_DIR."
     exit 2
@@ -18,7 +27,7 @@ if (Test-Path $pidFile) {
     if ($pidText) {
         $proc = Get-Process -Id ([int]$pidText) -ErrorAction SilentlyContinue
         if ($proc) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Stop-ProcessTree -ProcessId $proc.Id
         }
     }
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue

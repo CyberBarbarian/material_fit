@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
+from .capture_quality import analyze_png_capture_quality
+
 
 _VIEW_ID_RE = re.compile(r"(v\d{3}_yaw-?\d+(?:\.\d+)?_pitch-?\d+(?:\.\d+)?)")
 
@@ -30,6 +32,8 @@ class _RuntimeCaptureState:
     received: set[str] = field(default_factory=set)
     files_by_view: dict[str, str] = field(default_factory=dict)
     logs: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    capture_quality: dict[str, dict[str, Any]] = field(default_factory=dict)
     browser_score: dict[str, Any] | None = None
 
 
@@ -106,11 +110,17 @@ class RuntimeCaptureBridge:
             self._state.received = set()
             self._state.files_by_view = {}
             self._state.logs = []
+            self._state.errors = []
+            self._state.capture_quality = {}
             self._state.browser_score = None
             self._state.condition.notify_all()
 
             deadline = time.monotonic() + float(timeout_s)
             while not expected.issubset(self._state.received):
+                if self._state.errors:
+                    error = self._state.errors[0]
+                    self._state.command = None
+                    raise RuntimeError(f"Laya runtime capture failed: {error.get('reason') or error.get('error') or error}")
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     missing = sorted(expected - self._state.received)
@@ -129,6 +139,8 @@ class RuntimeCaptureBridge:
                 "received": sorted(self._state.received),
                 "files": screenshots,
                 "logs": list(self._state.logs),
+                "errors": list(self._state.errors),
+                "capture_quality": copy_json(self._state.capture_quality),
                 "browser_score": copy_json(self._state.browser_score),
             }
             browser_score = copy_json(self._state.browser_score)
@@ -171,6 +183,8 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                         "expected": state.expected_order,
                         "received": sorted(state.received),
                         "logs": state.logs[-20:],
+                        "errors": state.errors[-20:],
+                        "capture_quality": state.capture_quality,
                         "browser_score": state.browser_score,
                     }
                 self._write_json(payload)
@@ -225,10 +239,26 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                 sidecar = dict(payload)
                 sidecar.pop("png_base64", None)
                 sidecar["saved_path"] = str(output_path)
+                quality = analyze_png_capture_quality(image_bytes, state.command.get("visual_quality_guard"))
+                sidecar["capture_quality"] = quality
+                state.capture_quality[view_id] = quality
                 (state.output_dir / f"{output_path.stem}.json").write_text(
                     json.dumps(sidecar, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
+                if not quality.get("ok", True):
+                    error = {
+                        "kind": "capture_quality",
+                        "view_id": view_id,
+                        "file_name": file_name,
+                        "reason": quality.get("reason") or "capture_quality_failed",
+                        "capture_quality": quality,
+                    }
+                    state.errors.append(error)
+                    state.logs.append({"level": "error", **error})
+                    state.condition.notify_all()
+                    self._write_json({"ok": False, "error": error["reason"], "capture_quality": quality}, status=422)
+                    return
                 state.received.add(view_id)
                 state.files_by_view[view_id] = str(output_path)
                 state.condition.notify_all()

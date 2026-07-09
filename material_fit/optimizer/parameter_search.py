@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..shared.models import FitStage, ShaderParam
+from .param_policy import (
+    fixed_optimizer_param_reason,
+    is_numeric_search_value,
+    is_texture_param,
+    ordered_param_names,
+    zero_search_value,
+)
 
 
 DEFAULT_STAGES: list[FitStage] = [
@@ -21,17 +28,6 @@ DEFAULT_STAGES: list[FitStage] = [
 # ``"bump"``, ``"black"``) as scalar uniforms would silently corrupt the
 # .lmat by introducing ``props.u_BaseMap = "white"`` etc., which Laya then
 # fails to parse.
-_TEXTURE_PARAM_TYPES = frozenset({
-    "texture2d", "texture", "texturecube",
-    "sampler2d", "sampler", "samplercube",
-    "rendertexture",
-})
-
-
-def _is_texture_param(param: ShaderParam) -> bool:
-    return str(param.param_type).strip().lower() in _TEXTURE_PARAM_TYPES
-
-
 def _is_numeric_default(value: Any) -> bool:
     if isinstance(value, bool):
         return True  # bool is fine, Laya stores bool as bool
@@ -60,7 +56,7 @@ def build_initial_params(laya_material_params: dict[str, Any], shader_params: li
         if param.name in laya_material_params:
             result[param.name] = laya_material_params[param.name]
             continue
-        if _is_texture_param(param):
+        if is_texture_param(param):
             continue
         if param.default is None:
             continue
@@ -68,6 +64,91 @@ def build_initial_params(laya_material_params: dict[str, Any], shader_params: li
             continue
         result[param.name] = param.default
     return result
+
+
+def build_zero_searchable_initial_params(
+    baseline_params: dict[str, Any],
+    shader_params: list[ShaderParam],
+    *,
+    search_param_names: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    """Return a zero-start dict that keeps material-validity params intact."""
+
+    param_by_name = {param.name: param for param in shader_params}
+    search_names = set(search_param_names) if search_param_names is not None else None
+    result = {name: _clone_param_value(value) for name, value in baseline_params.items()}
+    for name in ordered_param_names(baseline_params, shader_params):
+        param = param_by_name.get(name)
+        if search_names is not None and name not in search_names:
+            continue
+        if fixed_optimizer_param_reason(name, param) is not None:
+            continue
+        value = baseline_params.get(name)
+        if not is_numeric_search_value(value):
+            continue
+        result[name] = zero_search_value(name, value, param)
+    return result
+
+
+def build_param_policy_audit(
+    params: dict[str, Any],
+    shader_params: list[ShaderParam],
+    *,
+    search_param_names: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    """Describe which params are searchable and which are locked for a run."""
+
+    param_by_name = {param.name: param for param in shader_params}
+    search_names = set(search_param_names) if search_param_names is not None else None
+    searchable: list[dict[str, Any]] = []
+    locked: list[dict[str, Any]] = []
+    for name in ordered_param_names(params, shader_params):
+        param = param_by_name.get(name)
+        value = params.get(name)
+        reason = fixed_optimizer_param_reason(name, param)
+        if reason is None and search_names is not None and name not in search_names:
+            reason = "not active in semantic search graph"
+        if reason is None and not is_numeric_search_value(value):
+            reason = "non-numeric parameter value"
+        if reason is None:
+            searchable.append(_policy_row(name, value, param, "searchable"))
+        else:
+            row = _policy_row(name, value, param, "locked")
+            row["reason"] = reason
+            locked.append(row)
+    return {
+        "searchable_param_count": len(searchable),
+        "locked_param_count": len(locked),
+        "searchable_params": searchable,
+        "locked_params": locked,
+    }
+
+
+def _policy_row(name: str, value: Any, param: ShaderParam | None, status: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": status,
+        "param_type": str(param.param_type) if param is not None else "",
+        "value_shape": _value_shape(value),
+    }
+
+
+def _value_shape(value: Any) -> str:
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, list):
+        return f"list[{len(value)}]"
+    return type(value).__name__
+
+
+def _clone_param_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
 
 
 def build_stage_plan(shader_params: list[ShaderParam]) -> list[FitStage]:

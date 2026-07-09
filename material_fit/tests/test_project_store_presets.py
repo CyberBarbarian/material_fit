@@ -41,10 +41,15 @@ def test_default_project_derives_fast_persistent_browser_score_path(tmp_path):
     assert fit_config["laya_editor_capture"]["enabled"] is False
     assert fit_config["laya_capture"]["persistent_queue"]["enabled"] is True
     assert fit_config["laya_capture"]["persistent_queue"]["cap_port"] == 8787
+    assert fit_config["laya_capture"]["persistent_queue"]["width"] == 900
+    assert fit_config["laya_capture"]["persistent_queue"]["height"] == 700
+    assert fit_config["laya_capture"]["persistent_queue"]["alpha_source"] == "render_alpha"
     assert Path(fit_config["laya_capture"]["persistent_queue"]["state_dir"]).name == "persistent_queue"
     assert fit_config["laya_capture"]["persistent_queue"]["ensure_command"]
     assert fit_config["laya_capture"]["persistent_queue"]["stop_command"]
     assert fit_config["laya_capture"]["browser_score"]["enabled"] is True
+    assert fit_config["laya_capture"]["browser_score"]["metric"] == "browser_fast_rgba_mae_v1"
+    assert fit_config["optimizer"] == "pattern16"
     assert fit_config["laya_capture"]["browser_score"]["reference_images"] == [
         {
             "view_id": "v000_yaw0_pitch0",
@@ -167,7 +172,7 @@ def test_start_job_records_raw_and_effective_algorithm_config_for_presets(monkey
     job_config = job_manager.json.loads(job_config_path.read_text(encoding="utf-8"))
 
     assert job_config["algorithm_config"]["optimizer_preset"] == "cma_mature_default"
-    assert job_config["algorithm_config"]["optimizer"] == "adaptive_response_search"
+    assert job_config["algorithm_config"]["optimizer"] == "pattern16"
     assert job_config["effective_algorithm_config"]["optimizer"] == "cma_warm"
     assert job_config["effective_algorithm_config"]["analysis_performance"]["best_full_validation"] is True
     assert job_config["effective_algorithm_config"]["analysis_performance"]["stability_validation_repeats"] == 2

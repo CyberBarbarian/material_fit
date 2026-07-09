@@ -98,15 +98,21 @@ _FAST_LAYA_CAPTURE_DEFAULT: dict[str, Any] = {
         "timeout_s": 240,
         "poll_s": 0.02,
         "cap_port": 8787,
-        "width": 320,
-        "height": 240,
+        "width": 900,
+        "height": 700,
         "alpha_source": "render_alpha",
         "freeze_animators": True,
+        "fixed_animation_state": "idle1",
+        "fixed_animation_layer": 0,
+        "fixed_animation_time": 0.0,
+        "restore_animators_after_capture": False,
         "freeze_scene_scripts": True,
     },
     "browser_score": {
         "enabled": True,
-        "metric": "rgb_alpha_mae",
+        "metric": "browser_fast_rgba_mae_v1",
+        "rgb_weight": 0.85,
+        "alpha_weight": 0.15,
         "reference_images": [],
     },
     "target_name": "model",
@@ -250,8 +256,8 @@ def create_project(
             },
         },
         "algorithm_config": {
-            "max_iterations": 300,
-            "target_score": 0.9,
+            "max_iterations": 120,
+            "target_score": 0.98,
             "optimizer_preset": "manual",
             "analysis_performance": {
                 "multiview_workers": "auto",
@@ -313,6 +319,7 @@ def create_project(
             # refine_current keeps the current .lmat as-is and only continues
             # local optimization.
             "auto_adjust_mode": "fresh_fit",
+            "initial_params_mode": "material",
             # Refresh is certified from the project preflight panel. Formal
             # auto-adjust runs must not write an extra probe value before the
             # first iteration because that can disturb the intended initial
@@ -322,10 +329,9 @@ def create_project(
                 "mean_diff_change_threshold": 0.5,
                 "mean_diff_restore_threshold": 2.5,
             },
-            # E-006/E-014/E-015: optimizer is pluggable. The new
-            # adaptive_response_search is the global-best response scheduler;
-            # legacy/subspace variants remain available for comparison runs.
-            "optimizer": "adaptive_response_search",
+            # Mainline fish optimizer: the reproduced 16D coordinate pattern
+            # search. Broader response/CMA variants remain comparison runs.
+            "optimizer": "pattern16",
             "cma_es": {
                 "mode": "warm",
                 "warm_start_iters": 12,
@@ -563,15 +569,17 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
     # Unity references are now standardized as a multi-view directory. The
     # legacy single-reference image pair is intentionally no longer derived.
 
-    optimizer_value = str(algo.get("optimizer", "heuristic")).strip().lower()
+    optimizer_value = str(algo.get("optimizer", "pattern16")).strip().lower()
     if optimizer_value not in (
         "heuristic",
         "cma_cold",
         "cma_warm",
         "semantic_group",
         "adaptive_response_search",
+        "pattern16",
         "semantic_group_legacy_081",
         "subspace_cma_es",
+        "cold_start_hybrid",
     ):
         optimizer_value = "heuristic"
     raw_cma_es = algo.get("cma_es") if isinstance(algo.get("cma_es"), dict) else {}
@@ -729,6 +737,7 @@ def derive_fit_config(project_id: str, config: LoaderConfig | None = None) -> di
         "fit_score_mode": _normalize_fit_score_mode(algo.get("fit_score_mode")),
         "multiview_scoring": _normalize_multiview_scoring(algo.get("multiview_scoring")),
         "auto_adjust_mode": str(algo.get("auto_adjust_mode", "fresh_fit")).lower(),
+        "initial_params_mode": str(algo.get("initial_params_mode", "material")).lower(),
         "analysis_performance": analysis_performance,
         "optimizer": optimizer_value,
         "cma_es": cma_es_payload,
@@ -1149,7 +1158,7 @@ def _normalize_fast_laya_capture_config(
     browser_score = payload.get("browser_score") if isinstance(payload.get("browser_score"), dict) else {}
     browser_score = dict(browser_score)
     browser_score["enabled"] = bool(browser_score.get("enabled", True))
-    browser_score.setdefault("metric", "rgb_alpha_mae")
+    browser_score.setdefault("metric", "browser_fast_rgba_mae_v1")
     if not isinstance(browser_score.get("reference_images"), list) or not browser_score.get("reference_images"):
         reference_dir = str(inputs.get("unity_reference_dir_path") or "").strip()
         if not reference_dir:

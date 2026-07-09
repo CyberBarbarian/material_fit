@@ -2942,6 +2942,9 @@
       this._nextPollAt = 0;
       this._pollFailureCount = 0;
       this._referenceCache = /* @__PURE__ */ new Map();
+      this._prefreezeApplied = false;
+      this._preFrozenScripts = [];
+      this._preFrozenAnimators = [];
     }
     onEnable() {
       Laya.Browser.window.__materialFitCapture = (command) => this.capture(command);
@@ -2952,6 +2955,28 @@
     }
     onDisable() {
       Laya.timer.clear(this, this.pollCommand);
+      this.restoreSceneScripts(this._preFrozenScripts);
+      this.restoreAnimators(this._preFrozenAnimators);
+      this._preFrozenScripts = [];
+      this._preFrozenAnimators = [];
+      this._prefreezeApplied = false;
+    }
+    prefreezeSceneForCapture() {
+      if (this._prefreezeApplied) {
+        return;
+      }
+      const root = this.sceneRoot();
+      const command = {
+        nonce: "prefreeze",
+        freeze_animators: true,
+        fixed_animation_state: "idle1",
+        fixed_animation_layer: 0,
+        fixed_animation_time: 0,
+        freeze_scene_scripts: true
+      };
+      this._preFrozenScripts = this.freezeSceneScripts(command, root);
+      this._preFrozenAnimators = this.freezeAnimators(command, root);
+      this._prefreezeApplied = true;
     }
     pollCommand() {
       return __async(this, null, function* () {
@@ -3010,7 +3035,28 @@
           const center = this.resolveCenter(command, target);
           const radius = this.resolveRadius(command, target);
           const captureMode = this.resolveCaptureMode(command, camera, target);
-          const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : null;
+          const preFreezeTargetEuler = target ? target.transform.localRotationEuler.clone() : null;
+          const frozenScripts = this.freezeSceneScripts(command, target || this.sceneRoot());
+          const frozenAnimators = this.freezeAnimators(command, target || this.sceneRoot());
+          const freezeSettleFrames = this.resolveAnimationFreezeSettleFrames(command);
+          if (frozenAnimators.length > 0) {
+            yield this.waitFrames(freezeSettleFrames);
+          }
+          const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : preFreezeTargetEuler;
+          const captureDiagnostics = {
+            prefreeze_applied: this._prefreezeApplied,
+            prefreeze_animators: this._preFrozenAnimators.length,
+            prefreeze_scripts: this._preFrozenScripts.length,
+            frozen_animators: frozenAnimators.length,
+            frozen_scripts: frozenScripts.length,
+            fixed_animation_state: command.fixed_animation_state || "",
+            fixed_animation_time: typeof command.fixed_animation_time === "number" ? command.fixed_animation_time : null,
+            animation_freeze_settle_frames: freezeSettleFrames,
+            pre_freeze_target_euler: this.vector3ToArray(preFreezeTargetEuler),
+            post_freeze_target_euler: target ? this.vector3ToArray(target.transform.localRotationEuler) : null,
+            original_target_euler: this.vector3ToArray(originalTargetEuler),
+            animators: this.describeAnimators(target || this.sceneRoot())
+          };
           const previousTarget = camera.renderTarget;
           const previousFov = camera.fieldOfView;
           const previousClearColor = camera.clearColor ? camera.clearColor.clone() : null;
@@ -3037,6 +3083,16 @@
             "material_patch",
             `applied=${patchResult.applied} materials=${patchResult.materialCount} values=${patchResult.valueCount}${patchResult.fallback ? ` fallback=${patchResult.fallback}` : ""}${patchResult.error ? ` error=${patchResult.error}` : ""}`
           );
+          if (frozenAnimators.length > 0) {
+            void this.postLog(
+              command,
+              "animation_freeze",
+              `animators=${frozenAnimators.length}${command.fixed_animation_state ? ` state=${command.fixed_animation_state}` : ""}`
+            );
+          }
+          if (frozenScripts.length > 0) {
+            void this.postLog(command, "script_freeze", `scripts=${frozenScripts.length}`);
+          }
           const views = command.views && command.views.length > 0 ? command.views : [{ yaw: 0, pitch: 0, file_name: "laya_capture.png" }];
           const settleFrames = this.resolveSettleFrames(command);
           const browserScoreEnabled = this.shouldUseBrowserScore(command);
@@ -3055,6 +3111,10 @@
                 this.placeCamera(camera, center, radius, view, command);
               }
               yield this.waitFrames(settleFrames);
+              if (captureMode === "rotate_target" && target && originalTargetEuler) {
+                this.rotateTargetForView(target, originalTargetEuler, view, command);
+                yield this.waitFrames(1);
+              }
               const pixels = yield this.readPixels(renderTexture, width, height);
               const alphaSource = this.resolveAlphaSource(command);
               if (command.transparent_background !== false && alphaSource === "silhouette_mask" && target) {
@@ -3080,14 +3140,21 @@
                   outputPixels,
                   width,
                   height,
-                  false
+                  false,
+                  command
                 );
                 postTasks.push(this.postImage(command, view, index, dataUrl, width, height, patchResult));
               }
             }
           } finally {
-            if (target && originalTargetEuler) {
-              target.transform.localRotationEuler = originalTargetEuler;
+            if (target && preFreezeTargetEuler) {
+              target.transform.localRotationEuler = preFreezeTargetEuler;
+            }
+            if (command.restore_animators_after_capture !== false) {
+              this.restoreAnimators(frozenAnimators);
+            }
+            if (command.restore_scene_scripts_after_capture !== false) {
+              this.restoreSceneScripts(frozenScripts);
             }
             camera.renderTarget = previousTarget;
             camera.fieldOfView = previousFov;
@@ -3098,7 +3165,7 @@
           }
           yield Promise.all(postTasks);
           if (browserScoreEnabled) {
-            yield this.postBrowserScore(command, this.aggregateBrowserScore(command, browserScoreViews, width, height, patchResult));
+            yield this.postBrowserScore(command, this.aggregateBrowserScore(command, browserScoreViews, width, height, patchResult, captureDiagnostics));
           }
           void this.postLog(command, "completed", `Captured ${views.length} views in ${Date.now() - startedAt}ms`);
         } catch (error) {
@@ -3253,12 +3320,14 @@
       const pitchSign = typeof command.target_pitch_sign === "number" ? command.target_pitch_sign : -1;
       const baseYaw = typeof command.target_base_yaw === "number" ? command.target_base_yaw : 0;
       const basePitch = typeof command.target_base_pitch === "number" ? command.target_base_pitch : 0;
+      const baseRoll = typeof command.target_base_roll === "number" ? command.target_base_roll : 0;
+      const preserveBase = command.preserve_target_base_rotation === true;
       const yaw = ((view.yaw || 0) + (command.yaw_offset || 0)) * yawSign;
       const pitch = ((view.pitch || 0) + (command.pitch_offset || 0)) * pitchSign;
       target.transform.localRotationEuler = new Laya.Vector3(
-        basePitch + pitch,
-        baseYaw + yaw,
-        baseEuler.z
+        (preserveBase ? baseEuler.x : 0) + basePitch + pitch,
+        (preserveBase ? baseEuler.y : 0) + baseYaw + yaw,
+        (preserveBase ? baseEuler.z : 0) + baseRoll
       );
     }
     waitFrames(count) {
@@ -3267,6 +3336,228 @@
           yield new Promise((resolve) => Laya.timer.frameOnce(1, this, resolve));
         }
       });
+    }
+    freezeAnimators(command, root) {
+      if (command.freeze_animators === false) {
+        return [];
+      }
+      const layaAny = Laya;
+      if (!root || !layaAny.Animator) {
+        return [];
+      }
+      const animators = this.collectComponents(root, layaAny.Animator);
+      const stateName = typeof command.fixed_animation_state === "string" && command.fixed_animation_state.length > 0 ? command.fixed_animation_state : "";
+      const layerIndex = Number.isFinite(command.fixed_animation_layer) ? Math.max(0, Math.floor(command.fixed_animation_layer)) : 0;
+      const normalizedTime = Number.isFinite(command.fixed_animation_time) ? Math.max(0, Math.min(1, command.fixed_animation_time)) : 0;
+      const states = [];
+      for (const animator of animators) {
+        const state = {
+          source: animator,
+          speed: typeof animator.speed === "number" ? animator.speed : null,
+          enabled: typeof animator.enabled === "boolean" ? animator.enabled : null,
+          sleep: typeof animator.sleep === "boolean" ? animator.sleep : null
+        };
+        states.push(state);
+        try {
+          if (state.enabled !== null) {
+            animator.enabled = true;
+          }
+          if (state.sleep !== null) {
+            animator.sleep = false;
+          }
+          if (stateName && typeof animator.play === "function") {
+            animator.speed = 1;
+            animator.play(stateName, layerIndex, normalizedTime);
+          }
+          if (typeof animator.speed === "number") {
+            animator.speed = 0;
+          }
+        } catch (error) {
+          console.warn(`[MaterialFitCapture] animator freeze failed: ${error}`);
+        }
+      }
+      return states;
+    }
+    restoreAnimators(states) {
+      for (const state of states) {
+        const animator = state.source;
+        try {
+          if (state.speed !== null) {
+            animator.speed = state.speed;
+          }
+          if (state.sleep !== null) {
+            animator.sleep = state.sleep;
+          }
+          if (state.enabled !== null) {
+            animator.enabled = state.enabled;
+          }
+        } catch (error) {
+          console.warn(`[MaterialFitCapture] animator restore failed: ${error}`);
+        }
+      }
+    }
+    freezeSceneScripts(command, root) {
+      if (command.freeze_scene_scripts === false) {
+        return [];
+      }
+      const layaAny = Laya;
+      if (!root || !layaAny.Script3D) {
+        return [];
+      }
+      const scripts = this.collectScriptComponents(root, layaAny.Script3D);
+      const states = [];
+      for (const script of scripts) {
+        if (!script || script === this) {
+          continue;
+        }
+        const state = {
+          source: script,
+          enabled: typeof script.enabled === "boolean" ? script.enabled : null,
+          privateEnabled: typeof script._enabled === "boolean" ? script._enabled : null,
+          rotate: this.isVector3Like(script.rotate) ? script.rotate.clone() : null
+        };
+        if (state.enabled === null && state.privateEnabled === null && state.rotate === null) {
+          continue;
+        }
+        states.push(state);
+        try {
+          if (state.enabled !== null) {
+            script.enabled = false;
+          }
+          if (state.privateEnabled !== null) {
+            script._enabled = false;
+          }
+          if (state.rotate !== null) {
+            script.rotate = new Laya.Vector3(0, 0, 0);
+          }
+        } catch (error) {
+          console.warn(`[MaterialFitCapture] script freeze failed: ${error}`);
+        }
+      }
+      return states;
+    }
+    restoreSceneScripts(states) {
+      for (const state of states) {
+        if (state.enabled === null && state.privateEnabled === null && state.rotate === null) {
+          continue;
+        }
+        try {
+          if (state.enabled !== null) {
+            state.source.enabled = state.enabled;
+          }
+          if (state.privateEnabled !== null) {
+            state.source._enabled = state.privateEnabled;
+          }
+          if (state.rotate !== null) {
+            state.source.rotate = state.rotate;
+          }
+        } catch (error) {
+          console.warn(`[MaterialFitCapture] script restore failed: ${error}`);
+        }
+      }
+    }
+    collectScriptComponents(root, scriptType) {
+      const scripts = this.collectComponents(root, scriptType);
+      this.walk(root, (node) => {
+        const rawComponents = node && Array.isArray(node._components) ? node._components : [];
+        for (const component of rawComponents) {
+          if (!component || component === this) {
+            continue;
+          }
+          const looksLikeScript = scriptType && component instanceof scriptType || typeof component.onUpdate === "function" || this.isVector3Like(component.rotate);
+          if (!looksLikeScript) {
+            continue;
+          }
+          this.addUniqueComponent(component, scripts);
+        }
+      });
+      return scripts;
+    }
+    isVector3Like(value) {
+      return value && typeof value.x === "number" && typeof value.y === "number" && typeof value.z === "number";
+    }
+    vector3ToArray(value) {
+      if (!value) {
+        return null;
+      }
+      return [value.x, value.y, value.z];
+    }
+    describeAnimators(root) {
+      const layaAny = Laya;
+      if (!root || !layaAny.Animator) {
+        return [];
+      }
+      const animators = this.collectComponents(root, layaAny.Animator);
+      return animators.map((animator, index) => {
+        const layerCount = typeof animator.controllerLayerCount === "number" ? animator.controllerLayerCount : 0;
+        const layers = [];
+        for (let layerIndex = 0; layerIndex < Math.min(layerCount, 8); layerIndex++) {
+          let layer = null;
+          try {
+            layer = typeof animator.getControllerLayer === "function" ? animator.getControllerLayer(layerIndex) : null;
+          } catch (e) {
+            layer = null;
+          }
+          const states = layer && Array.isArray(layer.states) ? layer.states.map((state) => this.animatorStateName(state)) : [];
+          let playState = null;
+          try {
+            playState = layer && typeof layer.getCurrentPlayState === "function" ? layer.getCurrentPlayState() : typeof animator.getCurrentAnimatorPlayState === "function" ? animator.getCurrentAnimatorPlayState(layerIndex) : null;
+          } catch (e) {
+            playState = null;
+          }
+          layers.push({
+            index: layerIndex,
+            name: layer ? layer.name || "" : "",
+            default_state: layer ? this.animatorStateName(layer.defaultState) : "",
+            default_state_name: layer ? layer.defaultStateName || "" : "",
+            states,
+            current_state: playState ? this.animatorStateName(playState.currentState || playState.animatorState) : "",
+            normalized_time: playState && typeof playState.normalizedTime === "number" ? playState.normalizedTime : null,
+            duration: playState && typeof playState.duration === "number" ? playState.duration : null
+          });
+        }
+        return {
+          index,
+          speed: typeof animator.speed === "number" ? animator.speed : null,
+          enabled: typeof animator.enabled === "boolean" ? animator.enabled : null,
+          sleep: typeof animator.sleep === "boolean" ? animator.sleep : null,
+          controller_layer_count: layerCount,
+          layers
+        };
+      });
+    }
+    animatorStateName(state) {
+      if (!state) {
+        return "";
+      }
+      return String(state.name || state._name || state.clipName || state._clipName || "");
+    }
+    collectComponents(root, componentType) {
+      const components = [];
+      this.walk(root, (node) => {
+        if (!node || !componentType) {
+          return;
+        }
+        try {
+          if (typeof node.getComponents === "function") {
+            const found = node.getComponents(componentType);
+            if (found && typeof found.length === "number") {
+              for (let i = 0; i < found.length; i++) {
+                this.addUniqueComponent(found[i], components);
+              }
+            }
+          } else if (typeof node.getComponent === "function") {
+            this.addUniqueComponent(node.getComponent(componentType), components);
+          }
+        } catch (e) {
+        }
+      });
+      return components;
+    }
+    addUniqueComponent(component, components) {
+      if (component && components.indexOf(component) < 0) {
+        components.push(component);
+      }
     }
     readPixels(renderTexture, width, height) {
       return __async(this, null, function* () {
@@ -3293,6 +3584,12 @@
         return Math.max(0, Math.floor(command.settle_frames));
       }
       return 2;
+    }
+    resolveAnimationFreezeSettleFrames(command) {
+      if (typeof command.animation_freeze_settle_frames === "number" && Number.isFinite(command.animation_freeze_settle_frames)) {
+        return Math.max(0, Math.floor(command.animation_freeze_settle_frames));
+      }
+      return 3;
     }
     resolveImageFormat(command) {
       return command.image_format === "raw_rgba" ? "raw_rgba" : "png";
@@ -3331,7 +3628,7 @@
             valueCount++;
           }
         }
-        return { applied: materials.length > 0, materialCount: materials.length, valueCount, ...(fallback ? { fallback } : {}) };
+        return __spreadValues({ applied: materials.length > 0, materialCount: materials.length, valueCount }, fallback ? { fallback } : {});
       } catch (error) {
         return { applied: false, materialCount: 0, valueCount: 0, error: String(error) };
       }
@@ -3464,7 +3761,7 @@
           }
           try {
             this.addRenderSource(node.getComponent(componentType), sources);
-          } catch {
+          } catch (e) {
           }
         }
       }
@@ -3538,7 +3835,7 @@
         pixels[i + 2] = Math.min(255, Math.round(pixels[i + 2] * scale));
       }
     }
-    pixelsToPngDataUrl(pixels, width, height, flipY) {
+    pixelsToPngDataUrl(pixels, width, height, flipY, command) {
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
@@ -3554,8 +3851,39 @@
         const targetOffset = y * width * 4;
         target.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
       }
+      this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
       context.putImageData(imageData, 0, 0);
       return canvas.toDataURL("image/png");
+    }
+    applyVisualBackground(pixels, color) {
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i + 3] === 0 || pixels[i] <= 1 && pixels[i + 1] <= 1 && pixels[i + 2] <= 1) {
+          pixels[i] = color[0];
+          pixels[i + 1] = color[1];
+          pixels[i + 2] = color[2];
+          pixels[i + 3] = 255;
+        }
+      }
+    }
+    resolveVisualBackgroundColor(command) {
+      const value = command && (command.visual_background_color || command.background_color);
+      if (Array.isArray(value) && value.length >= 3) {
+        return [this.clampByte(value[0]), this.clampByte(value[1]), this.clampByte(value[2])];
+      }
+      if (typeof value === "string") {
+        const match = value.trim().match(/^#?([0-9a-f]{6})$/i);
+        if (match) {
+          return [
+            parseInt(match[1].slice(0, 2), 16),
+            parseInt(match[1].slice(2, 4), 16),
+            parseInt(match[1].slice(4, 6), 16)
+          ];
+        }
+      }
+      return [255, 255, 255];
+    }
+    clampByte(value) {
+      return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
     }
     copyPixelsForOutput(pixels, width, height, flipY) {
       if (!flipY) {
@@ -3701,7 +4029,7 @@
         foreground_weight_sum: weightSum
       };
     }
-    aggregateBrowserScore(command, views, width, height, patchResult) {
+    aggregateBrowserScore(command, views, width, height, patchResult, diagnostics) {
       const viewCount = Math.max(1, views.length);
       let diffSum = 0;
       let fitSum = 0;
@@ -3726,12 +4054,14 @@
         worst_diff_score: worstDiff,
         views,
         material_patch: patchResult,
+        diagnostics: diagnostics || null,
         summary: {
           mean_diff_score: diffScore,
           mean_fit_score: fitScore,
           optimization_fit_score: fitScore,
           optimization_fit_score_source: "browser_score",
-          metric
+          metric,
+          diagnostics: diagnostics || null
         }
       };
     }
@@ -3839,6 +4169,7 @@
       return text;
     }
   };
+  __name(MaterialFitCapture, "MaterialFitCapture");
   __decorateClass([
     property8({ type: String, caption: "Server Base URL" })
   ], MaterialFitCapture.prototype, "serverBaseUrl", 2);
@@ -3857,9 +4188,7 @@
   MaterialFitCapture = __decorateClass([
     regClass9("6610f67d-602e-4f03-af59-29460829b477", "../src/MaterialFitCapture.ts")
   ], MaterialFitCapture);
-  MaterialFitCapture = __decorateClass([
-    regClass9("ZhD2fWAuTwOvWSlGCCm0dw", "../src/MaterialFitCapture.ts")
-  ], MaterialFitCapture);
+
   // src/Play/Effect/View/CoinExplodeView.ts
   var { regClass: regClass10, property: property9 } = Laya;
   var CoinExplodeView = class extends Laya.Script3D {
@@ -4780,6 +5109,10 @@
       this.rotate = new Laya.Vector3(0, 0, 0);
     }
     onUpdate() {
+      const globalAny = globalThis;
+      if (globalAny.__MATERIAL_FIT_DISABLE_EFFECT_ROTATE__ !== false) {
+        return;
+      }
       this.owner.transform.rotate(this.rotate, false, false);
     }
   };

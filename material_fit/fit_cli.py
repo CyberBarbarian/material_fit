@@ -64,6 +64,7 @@ def parse_fit_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "cma_warm",
             "semantic_group",
             "adaptive_response_search",
+            "pattern16",
             "semantic_group_legacy_081",
             "subspace_cma_es",
             "cold_start_hybrid",
@@ -75,6 +76,7 @@ def parse_fit_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "'cma_warm' is Warm-Started CMA-ES seeded from prior auto_adjust "
             "iterations; 'semantic_group' is the current response scheduler; "
             "'adaptive_response_search' is a global-best response evidence scheduler; "
+            "'pattern16' is the validated 16D coordinate pattern-search mainline; "
             "'semantic_group_legacy_081' preserves the old pattern-search baseline; "
             "'subspace_cma_es' runs expensive CMA-ES in a small active subspace; "
             "'cold_start_hybrid' runs semantic anchors plus local search from zero. "

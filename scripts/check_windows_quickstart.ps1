@@ -19,6 +19,7 @@ function Require-File {
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
+$repoRootPath = $repoRoot.Path
 
 Require-Command -Name "python" -InstallHint "Install Python 3.10+ and reopen PowerShell."
 Require-Command -Name "node" -InstallHint "Install Node.js 18+ from https://nodejs.org/ and reopen PowerShell."
@@ -42,15 +43,20 @@ foreach ($file in @("laya.core.js", "laya.webgl_2D.js", "laya.d3.js", "laya.webg
     Require-File -Path (Join-Path $EngineRoot $file) -Hint "Install LayaAirIDE or set LAYA_ENGINE_LIBS / -EngineRoot to the Laya engine libs directory."
 }
 
+& python -m material_fit.assets.fish_scene --repo-root $repoRootPath | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "Canonical fish source archives are missing or invalid. Put laya_project_minimal(3).zip and unity_references(1).zip under artifacts\source_archives\20260612_original_fish_inputs."
+}
+
 foreach ($file in @(
-    "examples\fish_laya_project\assets\resources\game.ls",
-    "examples\fish_laya_project\assets\resources\model\1504\mat\1504_body.lmat",
-    "examples\fish_laya_project\assets\resources\shader\Custom_low.shader",
-    "examples\fish_unity_refs\laya_v000_yaw0_pitch0.png",
+    "artifacts\original_zip_probe_20260612\laya_project_zip\laya_project_minimal\assets\resources\game.ls",
+    "artifacts\original_zip_probe_20260612\laya_project_zip\laya_project_minimal\assets\resources\model\1504\mat\fish_jxs_test.lmat",
+    "artifacts\original_zip_probe_20260612\laya_project_zip\laya_project_minimal\assets\resources\shader\Custom_low.shader",
+    "artifacts\original_zip_probe_20260612\unity_references_zip\unity_references\laya_v000_yaw0_pitch0.png",
     "material_fit\laya_capture\runtime_renderer.html",
     "material_fit\laya_capture\persistent_queue_daemon.py"
 )) {
-    Require-File -Path (Join-Path $repoRoot.Path $file) -Hint "The repository checkout is incomplete."
+    Require-File -Path (Join-Path $repoRootPath $file) -Hint "The repository checkout is incomplete."
 }
 
 Write-Host "Windows quick start prerequisites OK."

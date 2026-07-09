@@ -39,15 +39,21 @@ from tools.material_fit.optimizer.adjustment_algorithm import (  # noqa: E402
     build_adjustment_policies,
 )
 from tools.material_fit.optimizer.effective_bounds import effective_bounds_for_param  # noqa: E402
+from tools.material_fit.optimizer.parameter_search import build_zero_searchable_initial_params  # noqa: E402
 from tools.material_fit.optimizer.strategy import (  # noqa: E402
     CmaesStrategy,
     CmaesStrategyConfig,
     HeuristicStrategy,
     OptimizerUnavailableError,
+    Pattern16Strategy,
     StrategyContext,
     build_strategy,
     cmaes_strategy_config_from_dict,
     cmaes_strategy_config_to_dict,
+)
+from tools.material_fit.optimizer.pattern16_strategy import (  # noqa: E402
+    PATTERN16_PARAM_ORDER,
+    pattern16_search_param_names,
 )
 from tools.material_fit.shared.models import ShaderParam  # noqa: E402
 
@@ -260,6 +266,230 @@ def test_build_strategy_cold_start_hybrid():
 
     assert strategy.name == "cold_start_hybrid"
     assert strategy.wants_global_no_improve_check() is False
+
+
+def _pattern16_params() -> dict[str, object]:
+    values = {
+        "u_GammaPower": 1.55,
+        "u_Saturation": 0.85,
+        "u_TexPower": 1.35,
+        "u_AoPower": 0.55,
+        "u_EmissionPow": 0.214,
+        "u_IndirectStrength": 0.928,
+        "u_NormalScale": 0.529,
+        "u_ShadowSmoothness": 0.162,
+        "u_ShadowThreshold1": 0.30,
+        "u_ShadowThreshold2": 0.40,
+        "u_SpecularIntensity": 0.898,
+        "u_SpecularPower": 8.0,
+        "u_SpecularThreshold": 0.332,
+        "u_SpecularSmoothness": 0.68,
+        "u_RimIntensity": 1.183,
+        "u_RimWidth": 4.619,
+        "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+        "u_AlphaTestValue": 0.5,
+        "u_SkyRotateX": 231.0,
+    }
+    return {name: values[name] for name in values}
+
+
+def _pattern16_shader_params() -> list[ShaderParam]:
+    params = [
+        ShaderParam(name, "Range", default=0.0, range_min=0.0, range_max=8.0)
+        for name in PATTERN16_PARAM_ORDER
+    ]
+    params.extend(
+        [
+            ShaderParam("u_MainTex_ST", "Vector4", default=[1.0, 1.0, 0.0, 0.0]),
+            ShaderParam("u_AlphaTestValue", "Float", default=0.5),
+            ShaderParam("u_SkyRotateX", "Float", default=231.0),
+        ]
+    )
+    return params
+
+
+def test_build_strategy_pattern16_mainline():
+    initial = _pattern16_params()
+    strategy = build_strategy(
+        optimizer="pattern16",
+        initial_params=initial,
+        shader_params=_pattern16_shader_params(),
+        policies=build_adjustment_policies(_pattern16_shader_params()),
+        unity_material_params={},
+    )
+
+    assert isinstance(strategy, Pattern16Strategy)
+    assert strategy.name == "pattern16"
+    assert strategy.wants_global_no_improve_check() is False
+
+
+def test_pattern16_search_param_names_excludes_material_validity_params():
+    names = pattern16_search_param_names(_pattern16_params(), _pattern16_shader_params())
+
+    assert names == list(PATTERN16_PARAM_ORDER)
+    assert "u_MainTex_ST" not in names
+    assert "u_AlphaTestValue" not in names
+    assert "u_SkyRotateX" not in names
+
+
+def test_pattern16_zero_start_is_hard_but_not_destructive():
+    baseline = _pattern16_params()
+    baseline["u_Contrast"] = 1.25
+    shader_params = _pattern16_shader_params()
+    shader_params.append(ShaderParam("u_Contrast", "Float", default=1.0))
+    names = pattern16_search_param_names(baseline, shader_params)
+
+    zero_start = build_zero_searchable_initial_params(
+        baseline,
+        shader_params,
+        search_param_names=names,
+    )
+
+    assert names == list(PATTERN16_PARAM_ORDER)
+    for name in PATTERN16_PARAM_ORDER:
+        assert zero_start[name] == pytest.approx(0.0)
+
+    assert zero_start["u_Contrast"] == pytest.approx(1.25)
+    assert zero_start["u_MainTex_ST"] == [1.0, 1.0, 0.0, 0.0]
+    assert zero_start["u_AlphaTestValue"] == pytest.approx(0.5)
+    assert zero_start["u_SkyRotateX"] == pytest.approx(231.0)
+
+    strategy = build_strategy(
+        optimizer="pattern16",
+        initial_params=zero_start,
+        shader_params=shader_params,
+        policies=build_adjustment_policies(shader_params),
+        unity_material_params={},
+    )
+    first_params, first_decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=dict(zero_start),
+            analysis=_channel_analysis(),
+            diff_score=0.50,
+            fit_score=0.50,
+            state=AdjustmentState(best_params=dict(zero_start)),
+        )
+    )
+
+    assert first_decision["pattern16"]["param"] == "u_GammaPower"
+    assert first_params["u_GammaPower"] > 0.0
+
+
+def test_pattern16_coordinate_search_accepts_best_direction_before_next_param():
+    initial = _pattern16_params()
+    strategy = build_strategy(
+        optimizer="pattern16",
+        initial_params=initial,
+        shader_params=_pattern16_shader_params(),
+        policies=build_adjustment_policies(_pattern16_shader_params()),
+        unity_material_params={},
+    )
+    state = AdjustmentState(best_params=dict(initial))
+    first_params, first_decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=dict(initial),
+            analysis=_channel_analysis(),
+            diff_score=0.18,
+            fit_score=0.82,
+            state=state,
+        )
+    )
+    assert first_decision["optimizer"] == "pattern16"
+    assert first_decision["pattern16"]["param"] == "u_GammaPower"
+    assert first_decision["pattern16"]["direction"] == pytest.approx(-1.0)
+    assert first_params["u_GammaPower"] == pytest.approx(1.20)
+
+    second_params, second_decision = strategy.propose(
+        StrategyContext(
+            iteration=1,
+            current_params=first_params,
+            analysis=_channel_analysis(),
+            diff_score=0.20,
+            fit_score=0.80,
+            state=state,
+        )
+    )
+    assert second_decision["pattern16"]["param"] == "u_GammaPower"
+    assert second_decision["pattern16"]["direction"] == pytest.approx(1.0)
+    assert second_params["u_GammaPower"] == pytest.approx(1.90)
+
+    third_params, third_decision = strategy.propose(
+        StrategyContext(
+            iteration=2,
+            current_params=second_params,
+            analysis=_channel_analysis(),
+            diff_score=0.17,
+            fit_score=0.83,
+            state=state,
+        )
+    )
+    assert third_decision["pattern16"]["param"] == "u_Saturation"
+    assert third_decision["pattern16"]["previous_candidate"]["improved_local"] is True
+    assert third_params["u_GammaPower"] == pytest.approx(1.90)
+    assert third_params["u_Saturation"] == pytest.approx(0.65)
+
+
+def test_cold_start_hybrid_locks_material_validity_params_out_of_search_space():
+    initial_params = {
+        "u_Color": [0.0, 0.0, 0.0, 1.0],
+        "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+        "u_NormalTex_ST": [1.0, 1.0, 0.0, 0.0],
+        "u_AlphaTestValue": 0.5,
+        "u_SkyRotateX": 231.0,
+        "u_GammaPower": 0.0,
+        "u_SpecularIntensity": 0.0,
+    }
+    shader_params = [
+        ShaderParam("u_Color", "Color", default=[1.0, 1.0, 1.0, 1.0]),
+        ShaderParam("u_MainTex_ST", "Vector4", default=[1.0, 1.0, 0.0, 0.0]),
+        ShaderParam("u_NormalTex_ST", "Vector4", default=[1.0, 1.0, 0.0, 0.0]),
+        ShaderParam("u_AlphaTestValue", "Float", default=0.5),
+        ShaderParam("u_SkyRotateX", "Float", default=231.0),
+        ShaderParam("u_GammaPower", "Float", default=0.0, range_min=0.0, range_max=8.0),
+        ShaderParam("u_SpecularIntensity", "Float", default=0.0, range_min=0.0, range_max=2.0),
+    ]
+
+    strategy = build_strategy(
+        optimizer="cold_start_hybrid",
+        initial_params=initial_params,
+        shader_params=shader_params,
+        policies=build_adjustment_policies(shader_params),
+        unity_material_params={},
+    )
+
+    assert "u_GammaPower" in strategy._numeric_names  # type: ignore[attr-defined]
+    assert "u_SpecularIntensity" in strategy._numeric_names  # type: ignore[attr-defined]
+    assert "u_Color" in strategy._vector_names  # type: ignore[attr-defined]
+    assert "u_AlphaTestValue" not in strategy._numeric_names  # type: ignore[attr-defined]
+    assert "u_SkyRotateX" not in strategy._numeric_names  # type: ignore[attr-defined]
+    assert "u_MainTex_ST" not in strategy._vector_names  # type: ignore[attr-defined]
+    assert "u_NormalTex_ST" not in strategy._vector_names  # type: ignore[attr-defined]
+
+
+def test_cold_start_hybrid_respects_explicit_search_param_names():
+    initial_params = {
+        "u_GammaPower": 0.0,
+        "u_SpecularIntensity": 0.0,
+        "u_RimIntensity": 0.0,
+    }
+    shader_params = [
+        ShaderParam("u_GammaPower", "Float", default=0.0, range_min=0.0, range_max=8.0),
+        ShaderParam("u_SpecularIntensity", "Float", default=0.0, range_min=0.0, range_max=2.0),
+        ShaderParam("u_RimIntensity", "Float", default=0.0, range_min=0.0, range_max=3.0),
+    ]
+
+    strategy = build_strategy(
+        optimizer="cold_start_hybrid",
+        initial_params=initial_params,
+        shader_params=shader_params,
+        policies=build_adjustment_policies(shader_params),
+        unity_material_params={},
+        search_param_names=["u_GammaPower"],
+    )
+
+    assert strategy._numeric_names == ["u_GammaPower"]  # type: ignore[attr-defined]
 
 
 def test_cold_start_hybrid_bootstrap_uses_nonlocal_semantic_anchors():

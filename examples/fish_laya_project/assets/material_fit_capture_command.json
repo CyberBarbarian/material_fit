@@ -82,7 +82,7 @@
   "render_texture_srgb": true,
   "auto_capture": true,
   "refresh_assets": [
-    "resources/model/1504/mat/1504_body.lmat"
+    "resources/model/1504/mat/fish_jxs_test.lmat"
   ],
   "reload_scene_after_reimport": false,
   "refresh_after_reimport_delay_ms": 800,

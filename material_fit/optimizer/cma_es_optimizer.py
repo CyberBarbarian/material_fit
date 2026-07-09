@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import math
 import pickle
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -55,6 +54,11 @@ import numpy as np
 
 from ..shared.models import ShaderParam
 from .effective_bounds import effective_bounds_for_param
+from .param_policy import (
+    fixed_optimizer_param_reason,
+    is_texture_param_type,
+    looks_like_color_param,
+)
 from .semantic_graph import ParamSemantics, ShaderEffectGraph
 
 
@@ -76,34 +80,12 @@ BiasCallback = _Callable[[np.ndarray], np.ndarray]
 # ``parameter_search`` policy so the encoder cannot accidentally accept
 # something that the strict ``lmat_io.apply_params`` writer would reject
 # at the file level.
-_TEXTURE_PARAM_TYPES = frozenset({
-    "texture2d", "texture", "texturecube",
-    "sampler2d", "sampler", "samplercube",
-    "rendertexture",
-})
-
-# *_ST is Unity's per-texture (scale_u, scale_v, offset_u, offset_v) and
-# always matches the texture's physical layout, never the appearance.
-_NAME_BLACKLIST = {
-    "u_alpha",      # transparency, controlled by mask, not appearance
-    "u_cutoff",     # alpha cutoff threshold
-    "u_fresneluesf0",
-    "u_fresneluesemoldenormal",
-    "u_fresneluesnormal",
-    "u_specularhighlights",
-    "u_environmentreflections",
-}
-_NAME_SUFFIX_BLACKLIST = ("_st",)
-
 def _is_texture_type(param: ShaderParam) -> bool:
-    return str(param.param_type).strip().lower() in _TEXTURE_PARAM_TYPES
+    return is_texture_param_type(param.param_type)
 
 
 def _is_blacklisted_name(name: str) -> bool:
-    lower = name.lower()
-    if lower in _NAME_BLACKLIST:
-        return True
-    return any(lower.endswith(suffix) for suffix in _NAME_SUFFIX_BLACKLIST)
+    return fixed_optimizer_param_reason(name) is not None
 
 
 def _param_semantics_map(
@@ -480,11 +462,7 @@ class ParameterEncoder:
 
     @staticmethod
     def _looks_like_color(name: str, param: ShaderParam | None, length: int) -> bool:
-        if param is not None and str(param.param_type).strip().lower() == "color":
-            return True
-        if length == 4 and re.search(r"color|tint|albedo|emission", name, re.IGNORECASE):
-            return True
-        return False
+        return looks_like_color_param(name, param, length)
 
 
 # ----------------------------------------------------------------------

@@ -104,6 +104,34 @@ def _initial_params() -> dict[str, object]:
     }
 
 
+def test_initial_params_override_is_strict_handoff_boundary() -> None:
+    base = {
+        "u_TexPower": 1.0,
+        "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+    }
+
+    applied = fit_material._apply_initial_params_override(
+        base,
+        {
+            "u_TexPower": 2.5,
+            "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+        },
+        source="stage_a/best/params.json",
+    )
+
+    assert applied == {
+        "u_TexPower": 2.5,
+        "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+    }
+    assert base["u_TexPower"] == 1.0
+
+    with pytest.raises(ValueError, match="unknown"):
+        fit_material._apply_initial_params_override(base, {"u_NewParam": 1.0}, source="bad.json")
+
+    with pytest.raises(ValueError, match="shape"):
+        fit_material._apply_initial_params_override(base, {"u_MainTex_ST": [1.0, 1.0]}, source="bad.json")
+
+
 def _fake_analysis() -> dict:
     """Synthetic analyze_image_diff output mirroring the real shape."""
     channel = {
@@ -261,6 +289,50 @@ def test_browser_score_payload_can_optimize_mean_worst_blend() -> None:
     assert summary["optimization_diff_score"] == pytest.approx(0.12)
     assert summary["optimization_fit_score"] == pytest.approx(0.88)
     assert summary["optimization_fit_score_source"] == "browser_score_mean_worst_blend"
+
+
+def test_browser_score_payload_can_optimize_reference_foreground_mae(tmp_path: Path) -> None:
+    from PIL import Image
+
+    ref_dir = tmp_path / "ref"
+    cand_dir = tmp_path / "cand"
+    ref_dir.mkdir()
+    cand_dir.mkdir()
+    ref_path = ref_dir / "view.png"
+    cand_path = cand_dir / "view.png"
+    ref = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+    ref.putpixel((0, 0), (255, 0, 0, 255))
+    ref.save(ref_path)
+    Image.new("RGBA", (2, 1), (255, 255, 255, 255)).save(cand_path)
+    render_result = {
+        "status": "ok",
+        "screenshots": [str(cand_path)],
+        "browser_score": {
+            "enabled": True,
+            "metric": "browser_fast_rgba_mae_v1",
+            "fit_score": 0.99,
+            "diff_score": 0.01,
+            "views": [],
+        },
+    }
+
+    payload = fit_material._browser_score_analysis_payload(
+        render_result,
+        config={
+            "laya_capture": {
+                "browser_score": {
+                    "reference_images": [{"view_id": "v000", "path": str(ref_path)}],
+                }
+            },
+            "browser_score_objective": {"mode": "reference_foreground_mae"},
+        },
+    )
+
+    assert payload["fit_score"] == pytest.approx(1.0 / 3.0)
+    assert payload["diff_score"] == pytest.approx(2.0 / 3.0)
+    summary = payload["multiview_analysis"]["summary"]
+    assert summary["optimization_fit_score_source"] == "browser_score_reference_foreground_mae"
+    assert summary["foreground_pixel_count"] == 1
 
 
 class _StubDriver:

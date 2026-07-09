@@ -103,13 +103,12 @@ def start_job(
         isinstance(fit_config.get("laya_editor_capture"), dict)
         and fit_config["laya_editor_capture"].get("enabled")
     )
-    # E-010: per-optimizer iteration budget. Heuristic was designed
-    # around 6 iterations (one per stage); CMA-ES needs many more
-    # generations to converge on a 49-dim space (literature: 100+
-    # evals). Default to 30 for CMA-ES, 6 for heuristic, but always
-    # honour an explicit ``algo['max_iterations']`` override.
-    optimizer_value_for_default = str(algo.get("optimizer", "heuristic")).strip().lower()
-    if optimizer_value_for_default in ("cma_cold", "cma_warm", "subspace_cma_es"):
+    # Per-optimizer iteration budget. Pattern16 is the maintained
+    # mainline and its reproduced fish run used 120 evaluations.
+    optimizer_value_for_default = str(algo.get("optimizer", "pattern16")).strip().lower()
+    if optimizer_value_for_default == "pattern16":
+        default_iterations = 120
+    elif optimizer_value_for_default in ("cma_cold", "cma_warm", "subspace_cma_es"):
         default_iterations = 30
     elif optimizer_value_for_default == "adaptive_response_search":
         default_iterations = 300
@@ -190,15 +189,17 @@ def start_job(
     # E-006 (ExperimentLog.md): pluggable optimizer. The default
     # 'heuristic' value matches fit_material.py's own default, so old
     # projects without these fields still work unchanged.
-    optimizer_value = str(algo.get("optimizer", "heuristic")).strip().lower()
+    optimizer_value = str(algo.get("optimizer", "pattern16")).strip().lower()
     if optimizer_value not in (
         "heuristic",
         "cma_cold",
         "cma_warm",
         "semantic_group",
         "adaptive_response_search",
+        "pattern16",
         "semantic_group_legacy_081",
         "subspace_cma_es",
+        "cold_start_hybrid",
     ):
         optimizer_value = "heuristic"
     args.extend(["--optimizer", optimizer_value])

@@ -54,8 +54,15 @@ from .optimizer.adjustment_algorithm import (
     save_adjustment_state,
     should_abort_global,
 )
-from .optimizer.parameter_search import build_initial_params, build_stage_plan, generate_probe_candidates
-from .optimizer.semantic_graph import build_shader_effect_graph, graph_to_dict
+from .optimizer.parameter_search import (
+    build_initial_params,
+    build_param_policy_audit,
+    build_stage_plan,
+    build_zero_searchable_initial_params,
+    generate_probe_candidates,
+)
+from .optimizer.pattern16_strategy import pattern16_search_param_names
+from .optimizer.semantic_graph import build_shader_effect_graph, graph_from_dict, graph_to_dict
 from .optimizer.strategy import (
     CmaesStrategyConfig,
     OptimizerUnavailableError,
@@ -157,18 +164,48 @@ def main() -> int:
     laya_material_path = _resolve_path(project_root, config["laya_material_path"])
     laya_material_params = lmat_io.extract_params(laya_material)
     initial_params = build_initial_params(laya_material_params, laya_shader.params)
-    configured_optimizer = (args.optimizer or str(config.get("optimizer", "heuristic"))).strip().lower()
-    if configured_optimizer not in (
-        "heuristic",
-        "cma_cold",
-        "cma_warm",
-        "semantic_group",
-        "adaptive_response_search",
-        "semantic_group_legacy_081",
-        "subspace_cma_es",
-        "cold_start_hybrid",
-    ):
-        configured_optimizer = "heuristic"
+    initial_params_override_path = _initial_params_override_path(config, project_root)
+    initial_params_override: Any = None
+    if initial_params_override_path is not None:
+        initial_params_override = json.loads(initial_params_override_path.read_text(encoding="utf-8"))
+    material_defines = lmat_io.extract_defines(laya_material)
+    policy_graph = _semantic_graph_for_initial_policy(
+        config,
+        laya_shader.params,
+        initial_params,
+        material_defines,
+    )
+    if not isinstance(config.get("effect_graph"), dict):
+        config["effect_graph"] = policy_graph
+    configured_optimizer = _configured_optimizer_name(args.optimizer or config.get("optimizer", "heuristic"))
+    search_param_names = _configured_search_param_names(
+        config,
+        configured_optimizer,
+        initial_params,
+        laya_shader.params,
+        policy_graph,
+    )
+    initial_params_mode = _initial_params_mode(config)
+    if initial_params_mode == "zero_searchable":
+        initial_params = build_zero_searchable_initial_params(
+            initial_params,
+            laya_shader.params,
+            search_param_names=search_param_names,
+        )
+    if initial_params_override_path is not None:
+        initial_params = _apply_initial_params_override(
+            initial_params,
+            initial_params_override,
+            source=str(initial_params_override_path),
+        )
+    param_policy_audit = build_param_policy_audit(
+        initial_params,
+        laya_shader.params,
+        search_param_names=search_param_names,
+    )
+    param_policy_audit["initial_params_mode"] = initial_params_mode
+    if initial_params_override_path is not None:
+        param_policy_audit["initial_params_override_path"] = str(initial_params_override_path)
     adjustment_policies = build_adjustment_policies(laya_shader.params)
     adjustment_policies = _filter_policies_by_effect_graph(
         adjustment_policies,
@@ -204,6 +241,7 @@ def main() -> int:
     if unity_material_params:
         _write_json(output_dir / "unity_material_params.json", unity_material_params)
     _write_json(output_dir / "initial_params.json", initial_params)
+    _write_json(output_dir / "optimizer_param_policy.json", param_policy_audit)
     if _optimizer_needs_stage_artifacts(configured_optimizer):
         optimizer_dir = output_dir / "optimizer_artifacts" / configured_optimizer
         _write_json(optimizer_dir / "stage_plan.json", stage_plan_payload)
@@ -336,12 +374,141 @@ def main() -> int:
     print(f"Material fit framework prepared: {output_dir}")
     print(f"Laya shader params: {len(laya_shader.params)}")
     print(f"Stages: {len(stages)}")
+    print(
+        "Param policy: "
+        f"{param_policy_audit['searchable_param_count']} searchable, "
+        f"{param_policy_audit['locked_param_count']} locked "
+        f"(initial_params_mode={initial_params_mode})"
+    )
     print(f"Probe candidates: {len(emitted)}")
     if adjustment_result:
         print(f"Auto-adjust iterations: {len(adjustment_result.get('iterations', []))}")
         print(f"Auto-adjust best score: {adjustment_result.get('best_score')}")
         print(f"Auto-adjust best fit score: {adjustment_result.get('best_fit_score')}")
     return 0
+
+
+def _initial_params_mode(config: dict[str, Any]) -> str:
+    raw = None
+    nested = config.get("initial_params")
+    if isinstance(nested, dict):
+        raw = nested.get("mode")
+    if raw is None:
+        raw = config.get("initial_params_mode")
+    mode = str(raw or "material").strip().lower()
+    aliases = {
+        "baseline": "material",
+        "current": "material",
+        "source": "material",
+        "zero": "zero_searchable",
+        "zero_search": "zero_searchable",
+        "zero_searchable_params": "zero_searchable",
+    }
+    return aliases.get(mode, mode) if aliases.get(mode, mode) in {"material", "zero_searchable"} else "material"
+
+
+def _initial_params_override_path(config: dict[str, Any], project_root: Path) -> Path | None:
+    raw = None
+    nested = config.get("initial_params")
+    if isinstance(nested, dict):
+        raw = nested.get("override_path")
+    if raw is None:
+        raw = config.get("initial_params_override_path")
+    if raw in (None, ""):
+        return None
+    path = _resolve_path(project_root, str(raw))
+    if not path.exists():
+        raise FileNotFoundError(f"initial_params_override_path does not exist: {path}")
+    return path
+
+
+def _apply_initial_params_override(
+    initial_params: dict[str, Any],
+    override_params: Any,
+    *,
+    source: str,
+) -> dict[str, Any]:
+    if not isinstance(override_params, dict):
+        raise ValueError(f"initial params override must be a JSON object: {source}")
+
+    unknown = sorted(str(name) for name in override_params if name not in initial_params)
+    if unknown:
+        preview = ", ".join(unknown[:8])
+        raise ValueError(f"initial params override contains unknown keys from {source}: {preview}")
+
+    merged = dict(initial_params)
+    for name, value in override_params.items():
+        base_value = initial_params[name]
+        if not _initial_param_override_shape_matches(base_value, value):
+            raise ValueError(
+                f"initial params override shape mismatch for {name!r} from {source}: "
+                f"{type(base_value).__name__} vs {type(value).__name__}"
+            )
+        merged[str(name)] = value
+    return merged
+
+
+def _initial_param_override_shape_matches(base_value: Any, override_value: Any) -> bool:
+    if isinstance(base_value, bool):
+        return isinstance(override_value, bool)
+    if isinstance(base_value, (int, float)) and not isinstance(base_value, bool):
+        return isinstance(override_value, (int, float)) and not isinstance(override_value, bool)
+    if isinstance(base_value, str):
+        return isinstance(override_value, str)
+    if isinstance(base_value, list):
+        return isinstance(override_value, list) and len(base_value) == len(override_value)
+    return type(base_value) is type(override_value)
+
+
+def _configured_optimizer_name(value: Any) -> str:
+    name = str(value or "heuristic").strip().lower()
+    return name or "heuristic"
+
+
+def _configured_search_param_names(
+    config: dict[str, Any],
+    optimizer: str,
+    initial_params: dict[str, Any],
+    shader_params: list[Any],
+    policy_graph: dict[str, Any],
+) -> list[str]:
+    raw_names = config.get("search_param_names")
+    if isinstance(raw_names, list):
+        names = [str(name) for name in raw_names if isinstance(name, str) and name in initial_params]
+        if names:
+            return names
+    raw_space = str(config.get("search_param_space") or "").strip().lower()
+    if optimizer == "pattern16" or raw_space in {"pattern16", "fish_pattern16", "fish16"}:
+        return pattern16_search_param_names(initial_params, shader_params)
+    return _active_search_param_names(policy_graph, initial_params)
+
+
+def _semantic_graph_for_initial_policy(
+    config: dict[str, Any],
+    shader_params: list[Any],
+    initial_params: dict[str, Any],
+    material_defines: list[str],
+) -> dict[str, Any]:
+    configured = config.get("effect_graph")
+    if isinstance(configured, dict):
+        return configured
+    return graph_to_dict(
+        build_shader_effect_graph(
+            shader_params,
+            material_params=initial_params,
+            material_defines=material_defines,
+        )
+    )
+
+
+def _active_search_param_names(
+    semantic_graph: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
+    graph = graph_from_dict(semantic_graph)
+    if graph is None:
+        return []
+    return [name for name in graph.active_search_params() if name in params]
 
 
 def _resolve_path(project_root: Path, value: str | Path) -> Path:
@@ -994,6 +1161,16 @@ def _browser_score_analysis_payload(
     if browser_score is None:
         raise ValueError("render_result does not contain a browser_score payload")
 
+    foreground_score = _reference_foreground_browser_score(render_result, config=config)
+    if foreground_score is not None:
+        browser_score["raw_browser_score"] = copy.deepcopy(browser_score)
+        browser_score["metric"] = foreground_score["metric"]
+        browser_score["fit_score"] = foreground_score["fit_score"]
+        browser_score["score"] = foreground_score["fit_score"]
+        browser_score["diff_score"] = foreground_score["diff_score"]
+        browser_score["views"] = foreground_score["views"]
+        browser_score["summary"] = foreground_score["summary"]
+
     fit_score = _number_or_default(browser_score.get("fit_score"), math.nan)
     if not math.isfinite(fit_score):
         fit_score = _number_or_default(browser_score.get("score"), -math.inf)
@@ -1084,6 +1261,8 @@ def _browser_score_objective(
         objective_diff = mean_diff_score + penalty
         objective_fit = 1.0 - objective_diff
         source = "browser_score_mean_worst_blend"
+    elif mode == "reference_foreground_mae":
+        source = "browser_score_reference_foreground_mae"
     objective_diff = max(0.0, min(1.0, objective_diff)) if math.isfinite(objective_diff) else math.inf
     if not math.isfinite(objective_fit):
         objective_fit = 1.0 - objective_diff if math.isfinite(objective_diff) else -math.inf
@@ -1092,6 +1271,114 @@ def _browser_score_objective(
         "fit_score": objective_fit,
         "source": source,
         "worst_diff_score": worst_diff,
+    }
+
+
+def _reference_foreground_browser_score(
+    render_result: dict[str, Any],
+    *,
+    config: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(config, dict):
+        return None
+    objective_cfg = config.get("browser_score_objective")
+    if not isinstance(objective_cfg, dict) or str(objective_cfg.get("mode") or "") != "reference_foreground_mae":
+        return None
+    capture_cfg = config.get("laya_capture")
+    browser_cfg = capture_cfg.get("browser_score") if isinstance(capture_cfg, dict) else None
+    references = browser_cfg.get("reference_images") if isinstance(browser_cfg, dict) else None
+    screenshots = render_result.get("screenshots")
+    if not isinstance(references, list) or not isinstance(screenshots, list):
+        return None
+    screenshot_by_name = {
+        Path(str(path)).name: Path(str(path))
+        for path in screenshots
+        if isinstance(path, (str, Path))
+    }
+    views: list[dict[str, Any]] = []
+    for ref in references:
+        if not isinstance(ref, dict):
+            continue
+        ref_path = Path(str(ref.get("path") or ""))
+        cand_path = screenshot_by_name.get(ref_path.name)
+        if cand_path is None:
+            continue
+        view_score = _reference_foreground_view_score(
+            view_id=str(ref.get("view_id") or ref_path.stem),
+            reference_path=ref_path,
+            candidate_path=cand_path,
+            threshold=_number_or_default(objective_cfg.get("foreground_threshold"), 3.0),
+        )
+        if view_score is not None:
+            views.append(view_score)
+    if not views:
+        return None
+    diff_score = sum(float(view["diff_score"]) for view in views) / len(views)
+    fit_score = max(0.0, min(1.0, 1.0 - diff_score))
+    metric = "reference_foreground_rgb_mae_v1"
+    summary = {
+        "mean_diff_score": diff_score,
+        "mean_fit_score": fit_score,
+        "optimization_diff_score": diff_score,
+        "optimization_fit_score": fit_score,
+        "optimization_fit_score_source": "browser_score_reference_foreground_mae",
+        "metric": metric,
+        "view_count": len(views),
+        "foreground_pixel_count": sum(int(view.get("foreground_pixel_count", 0)) for view in views),
+    }
+    return {
+        "metric": metric,
+        "fit_score": fit_score,
+        "diff_score": diff_score,
+        "views": views,
+        "summary": summary,
+    }
+
+
+def _reference_foreground_view_score(
+    *,
+    view_id: str,
+    reference_path: Path,
+    candidate_path: Path,
+    threshold: float,
+) -> dict[str, Any] | None:
+    try:
+        import numpy as np
+        from PIL import Image
+    except Exception:
+        return None
+    if not reference_path.exists() or not candidate_path.exists():
+        return None
+    ref_rgba = np.asarray(Image.open(reference_path).convert("RGBA"), dtype=np.float32)
+    cand_rgba = np.asarray(Image.open(candidate_path).convert("RGBA"), dtype=np.float32)
+    if ref_rgba.shape != cand_rgba.shape:
+        return None
+    ref_alpha = ref_rgba[:, :, 3]
+    alpha_mask = ref_alpha > float(threshold)
+    if 0 < int(alpha_mask.sum()) < alpha_mask.size * 0.95:
+        mask = alpha_mask
+    else:
+        bg = ref_rgba[0, 0, :3]
+        mask = np.max(np.abs(ref_rgba[:, :, :3] - bg), axis=2) > float(threshold)
+    foreground_count = int(mask.sum())
+    if foreground_count <= 0:
+        return None
+    white = np.array([255.0, 255.0, 255.0], dtype=np.float32)
+    ref_a = ref_rgba[:, :, 3:4] / 255.0
+    cand_a = cand_rgba[:, :, 3:4] / 255.0
+    ref_rgb = ref_rgba[:, :, :3] * ref_a + white * (1.0 - ref_a)
+    cand_rgb = cand_rgba[:, :, :3] * cand_a + white * (1.0 - cand_a)
+    per_pixel = np.mean(np.abs(cand_rgb[mask] - ref_rgb[mask]) / 255.0, axis=1)
+    diff_score = float(np.mean(per_pixel))
+    fit_score = max(0.0, min(1.0, 1.0 - diff_score))
+    return {
+        "view_id": view_id,
+        "diff_score": diff_score,
+        "fit_score": fit_score,
+        "rgb_mae": diff_score,
+        "foreground_pixel_count": foreground_count,
+        "reference": str(reference_path),
+        "candidate": str(candidate_path),
     }
 
 
@@ -1202,6 +1489,13 @@ def _run_auto_adjustment(
             semantic_graph=semantic_graph,
             auto_adjust_mode=str(config.get("auto_adjust_mode", "fresh_fit")),
             cold_start_prior_anchors=_cold_start_prior_anchors_from_config(config),
+            search_param_names=_configured_search_param_names(
+                config,
+                optimizer,
+                current_params,
+                laya_shader_params,
+                semantic_graph,
+            ),
         )
     except (OptimizerUnavailableError, ValueError) as exc:
         payload = {
@@ -1272,7 +1566,7 @@ def _run_auto_adjustment(
         )
     fast_score_only_allowed = (
         bool(analysis_performance["fast_score_only"])
-        and optimizer in ("cma_cold", "cma_warm", "cold_start_hybrid")
+        and optimizer in ("cma_cold", "cma_warm", "cold_start_hybrid", "pattern16")
         and fit_score_mode in ("research", "perceptual")
     )
     if optimizer in ("cma_cold", "cma_warm", "cold_start_hybrid") and evaluation_batch_size > 1:
@@ -1584,6 +1878,8 @@ def _run_auto_adjustment(
             "all_semantic_groups_exhausted",
             "no_semantic_groups",
             "semantic_groups_exhausted",
+            "pattern16_no_searchable_params",
+            "pattern16_step_limit",
         }
         if decision.get("stop_reason") in early_stop_reasons:
             print(

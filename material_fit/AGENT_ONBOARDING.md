@@ -171,7 +171,7 @@ python -m tools.material_fit.fit_material --config <your-fit-config.json> --auto
 ## 8. 一些反直觉的点 / 常见踩坑
 
 1. **fit_score 不再是 1 - RGB MAE**。E-009 之后默认是 `perceptual_fit_score = 0.7·(1 - sqrt(weighted_MAE·4)) + 0.3·SSIM`，且只统计自动 mask 出来的前景区域。详见 [`docs/Metric_Validation.md`](docs/Metric_Validation.md)。如果你看到老文档说 fit_score = 1 - MAE，**那是错的**。
-2. **CMA-ES 默认迭代是 30 轮，启发式是 6 轮**。`job_manager` 按 optimizer 选默认（E-010）。
+2. **鱼实验默认 optimizer 是 `pattern16`**。默认预算是 120 轮；CMA-ES 默认 30 轮，启发式默认 6 轮。`job_manager` 按 optimizer 选默认。
 3. **CMA-ES 不参与 4-step abort 机制**。`OptimizerStrategy.wants_global_no_improve_check()` 让 CMA-ES 跑满预算（E-010）。
 4. **截图池有滚动上限**。`tools/material_fit/vision/test_image/laya_candidate_NN.png` 默认只保留 30 张，老的会被剪掉（E-012）。回看 30 轮以前的 iter 截图就没了。
 5. **Laya 编辑器失焦时不渲染**。E-007/E-008 在每次 .lmat 写入和截图之前都会 `SetForegroundWindow`。但 Windows 安全策略**有时**会拒绝；不通过的话 UI 探针会清楚显示"Laya is NOT refreshing"。

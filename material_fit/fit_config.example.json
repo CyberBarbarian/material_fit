@@ -1,41 +1,37 @@
 {
-  "_README_PLEASE_READ": [
-    "This is an ILLUSTRATIVE example, not a runnable config. Path resolution rule:",
-    "  - Relative paths are resolved against config_path.resolve().parents[2].",
-    "  - i.e., if you place this file at <repo>/tools/material_fit/output/<case>/fit_config.json,",
-    "    parents[2] = <repo>/, and 'assets/...' below means '<repo>/assets/...'.",
-    "  - When the UI persists a project, derive_fit_config writes ABSOLUTE paths to avoid this trap.",
-    "  - When you write a config by hand, the safest practice is to use absolute paths everywhere.",
-    "The 'assets/resources/...' paths below are taken from one specific user's Laya project layout",
-    "and will NOT exist in your environment. Replace them with paths to YOUR Laya/Unity assets.",
-    "cma_es.restart_center_mode accepts 'best', 'random', or 'alternate'.",
-    "cma_es.restart_population_schedule accepts 'ipop' or 'bipop'.",
-    "All keys starting with '_' are ignored by fit_material.py."
+  "_README": [
+    "Example config for the maintained fish fast path.",
+    "For normal use prefer scripts/run_fish_finetune.* or scripts/run_fish_zero_start.*.",
+    "The fish_core_experiment runner writes absolute paths into its generated fit_config.json.",
+    "If you use this file manually, copy it to artifacts/<run>/fit_config.json or replace paths with absolute paths."
   ],
-  "case_name": "fish_1580_smoke",
-  "laya_shader_path": "assets/resources/shader/FishStandard.shader",
-  "laya_material_path": "assets/resources/play/fish/1580/mat/1580_body.lmat",
+  "case_name": "fish_1504_default_finetune_fast_path_example",
+  "asset_set": {
+    "name": "fish_1504_default_finetune_from_original_zip_20260612",
+    "source_archive_dir": "artifacts/source_archives/20260612_original_fish_inputs",
+    "source_laya_project_dir": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal",
+    "source_scene_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/game.ls",
+    "source_scene_material_uuid": "4adc3c2d-41bc-4cad-87df-77ecfb84a558",
+    "source_scene_material_name": "fish_jxs_test.lmat",
+    "laya_project_dir": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal",
+    "scene_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/game.ls",
+    "baseline_material_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/model/1504/mat/fish_jxs_test.lmat",
+    "baseline_material_name": "fish_jxs_test.lmat",
+    "unity_reference_dir": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references",
+    "scene_material_uuid": "4adc3c2d-41bc-4cad-87df-77ecfb84a558"
+  },
+  "laya_shader_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/shader/Custom_low.shader",
+  "laya_material_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/model/1504/mat/fish_jxs_test.lmat",
   "unity_shader_path": "",
   "unity_material_params_path": "",
-  "reference_images": ["tools/material_fit/vision/test_image/unity_reference.png"],
-  "candidate_images": ["latest"],
-  "mask_images": [],
   "image_pairs": [],
-  "auto_adjust_target_score": 0.5,
-  "score_ceiling": {
-    "enabled": false,
-    "target_self_score": null,
-    "tolerance": 0.001,
-    "source": "disabled",
-    "calibrate_from_oracle_stabilization": false
-  },
-  "browser_score_context_render": {
-    "enabled": true,
-    "note": "Enable for browser_score/persistent-render runs so the optimizer renders and scores the initial current params before proposing candidates."
-  },
+  "initial_params_mode": "material",
+  "auto_adjust_target_score": 0.98,
   "capture_screen_after_apply": false,
-  "rerender_wait_ms": 1200,
-  "fit_score_mode": "perceptual",
+  "fit_score_mode": "research",
+  "browser_score_context_render": {
+    "enabled": true
+  },
   "analysis_performance": {
     "multiview_workers": "auto",
     "evaluation_batch_size": 1,
@@ -44,125 +40,162 @@
     "full_rerank_top_k": 0,
     "best_full_validation": false,
     "target_full_validation": false,
-    "snapshot_interval": 50,
+    "snapshot_interval": 1,
     "research_metrics_profile": "tiered",
     "fast_score_only": true,
-    "keep_last_n_artifacts": 5,
+    "keep_last_n_artifacts": 8,
     "always_keep_best_artifact": true,
     "always_keep_first_artifact": true
   },
-  "optimizer": "cma_warm",
-  "cma_es": {
-    "mode": "warm",
-    "warm_start_iters": 12,
-    "warm_start_source": "elite_archive_first",
-    "population_size": null,
-    "sigma": null,
-    "seed": null,
-    "hint_bias_mix_ratio": 0.30,
-    "stagnation_patience": 0,
-    "stagnation_min_delta": 0.001,
-    "stagnation_min_evaluations": 0,
-    "stagnation_max_restarts": 0,
-    "stagnation_stop_after_restarts": true,
-    "restart_center_mode": "best",
-    "restart_population_multiplier": 1.0,
-    "restart_population_schedule": "ipop",
-    "restart_max_population_size": null,
-    "initial_design_samples": 0,
-    "initial_design_method": "latin_hypercube",
-    "initial_design_include_current": true
-  },
-  "screen_capture": {
-    "capture_dir": "tools/material_fit/vision/test_image",
-    "state_file": "tools/material_fit/vision/test_image/.capture_region.json",
-    "prefix": "laya_candidate",
-    "region": "",
-    "max_keep": 30
-  },
-  "laya_window": {
-    "process_pattern": "LayaAirIDE",
-    "title_pattern": "",
-    "settle_ms": 250
-  },
-  "laya_capture_anchor": {
-    "enabled": false,
-    "offset_x": 0,
-    "offset_y": 0,
-    "width": 0,
-    "height": 0,
-    "process_pattern": "LayaAirIDE",
-    "title_pattern": ""
-  },
-  "output_dir": "tools/material_fit/output/fish_1580_smoke",
-  "dry_run": true,
+  "optimizer": "pattern16",
+  "output_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/output",
+  "external_backup_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/external_backups",
+  "dry_run": false,
   "render_command": [],
+  "laya_window": {
+    "process_pattern": "",
+    "title_pattern": "",
+    "settle_ms": 0
+  },
   "laya_editor_capture": {
-    "enabled": false,
-    "laya_project": "D:/project_data/laya/laya_research/laya_project",
-    "command_path": "D:/project_data/laya/laya_research/laya_project/assets/material_fit_capture_command.json",
-    "reference_dir": "D:/project_data/laya/laya_research/tools/material_fit/output/fish_1580/unity_multiview",
-    "reference_glob": "unity_ref_v*_yaw*_pitch*.png",
-    "refresh_assets": ["resources/play/fish/1580/mat/1580_body.lmat"],
-    "reload_scene_after_reimport": false,
-    "refresh_after_reimport_delay_ms": 800,
-    "camera_name": "Capture Camera",
-    "target_name": "model",
-    "alpha_source": "render_alpha",
-    "alpha_from_rgb_threshold": 1.0,
-    "mask_alpha_mode": "binary",
-    "mask_alpha_threshold": 1.0,
-    "render_texture_srgb": true,
-    "zero_transparent_rgb": false,
-    "align_target_bounds": false,
-    "timeout_s": 90,
-    "poll_interval_s": 0.5
+    "enabled": false
   },
   "laya_capture": {
-    "command": ["node", "tools/material_fit/vision/capture_laya.js"],
-    "runtime_bridge": {
-      "enabled": false,
-      "host": "127.0.0.1",
-      "port": 8787,
-      "timeout_s": 90,
-      "output_subdir": "laya_multiview"
-    },
     "persistent_queue": {
       "enabled": true,
-      "state_dir": "tools/material_fit/output/fish_1580_smoke/persistent_queue",
-      "timeout_s": 240,
+      "state_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/persistent_queue",
+      "timeout_s": 180,
       "poll_s": 0.02,
       "cap_port": 8787,
-      "width": 320,
-      "height": 240,
+      "width": 900,
+      "height": 700,
       "alpha_source": "render_alpha",
       "freeze_animators": true,
-      "freeze_scene_scripts": true
+      "fixed_animation_state": "idle1",
+      "fixed_animation_layer": 0,
+      "fixed_animation_time": 0.0,
+      "restore_animators_after_capture": false,
+      "freeze_scene_scripts": true,
+      "visual_quality_guard": {
+        "enabled": false
+      }
     },
     "browser_score": {
       "enabled": true,
-      "metric": "rgb_alpha_mae",
+      "metric": "browser_fast_rgba_mae_v1",
+      "rgb_weight": 0.85,
+      "alpha_weight": 0.15,
       "reference_images": [
         {
           "view_id": "v000_yaw0_pitch0",
-          "path": "tools/material_fit/output/fish_1580/unity_multiview/unity_ref_v000_yaw0_pitch0.png"
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v000_yaw0_pitch0.png"
+        },
+        {
+          "view_id": "v001_yaw45_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v001_yaw45_pitch0.png"
+        },
+        {
+          "view_id": "v002_yaw90_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v002_yaw90_pitch0.png"
+        },
+        {
+          "view_id": "v003_yaw135_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v003_yaw135_pitch0.png"
+        },
+        {
+          "view_id": "v004_yaw180_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v004_yaw180_pitch0.png"
+        },
+        {
+          "view_id": "v005_yaw225_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v005_yaw225_pitch0.png"
+        },
+        {
+          "view_id": "v006_yaw270_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v006_yaw270_pitch0.png"
+        },
+        {
+          "view_id": "v007_yaw315_pitch0",
+          "path": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references/laya_v007_yaw315_pitch0.png"
         }
       ]
     },
     "target_name": "model",
+    "camera_name": "Capture Camera",
+    "capture_mode": "rotate_target",
+    "render_backend": "draw_scene",
+    "return_images": true,
+    "use_orthographic": true,
+    "orthographic_vertical_size": 8.0,
+    "distance_scale": 2.2,
+    "min_distance": 1.0,
+    "yaw_offset": 0.0,
+    "pitch_offset": 0.0,
+    "target_yaw_sign": -1.0,
+    "target_pitch_sign": -1.0,
+    "transparent_background": true,
+    "zero_transparent_rgb": true,
+    "alpha_from_rgb": true,
+    "alpha_from_rgb_threshold": 1.0,
+    "visual_background_color": [255, 255, 255, 255],
+    "mask_alpha_mode": "binary",
+    "mask_alpha_threshold": 1.0,
+    "flip_y": false,
+    "render_texture_srgb": true,
+    "freeze_animators": true,
+    "fixed_animation_state": "idle1",
+    "fixed_animation_layer": 0,
+    "fixed_animation_time": 0.0,
+    "restore_animators_after_capture": false,
     "views": [
       {
         "view_id": "v000_yaw0_pitch0",
         "yaw": 0.0,
         "pitch": 0.0,
         "file_name": "laya_v000_yaw0_pitch0.png"
+      },
+      {
+        "view_id": "v001_yaw45_pitch0",
+        "yaw": 45.0,
+        "pitch": 0.0,
+        "file_name": "laya_v001_yaw45_pitch0.png"
+      },
+      {
+        "view_id": "v002_yaw90_pitch0",
+        "yaw": 90.0,
+        "pitch": 0.0,
+        "file_name": "laya_v002_yaw90_pitch0.png"
+      },
+      {
+        "view_id": "v003_yaw135_pitch0",
+        "yaw": 135.0,
+        "pitch": 0.0,
+        "file_name": "laya_v003_yaw135_pitch0.png"
+      },
+      {
+        "view_id": "v004_yaw180_pitch0",
+        "yaw": 180.0,
+        "pitch": 0.0,
+        "file_name": "laya_v004_yaw180_pitch0.png"
+      },
+      {
+        "view_id": "v005_yaw225_pitch0",
+        "yaw": 225.0,
+        "pitch": 0.0,
+        "file_name": "laya_v005_yaw225_pitch0.png"
+      },
+      {
+        "view_id": "v006_yaw270_pitch0",
+        "yaw": 270.0,
+        "pitch": 0.0,
+        "file_name": "laya_v006_yaw270_pitch0.png"
+      },
+      {
+        "view_id": "v007_yaw315_pitch0",
+        "yaw": 315.0,
+        "pitch": 0.0,
+        "file_name": "laya_v007_yaw315_pitch0.png"
       }
-    ],
-    "url": "http://127.0.0.1:3000/material-fit.html",
-    "viewport": { "width": 900, "height": 600 },
-    "waitUntil": "networkidle2",
-    "waitMs": 500,
-    "readyFunction": "return window.__MATERIAL_FIT_READY__ === true;",
-    "applyParamsFunction": "if (window.__applyMaterialFitParams) { return window.__applyMaterialFitParams(params); }"
+    ]
   }
 }

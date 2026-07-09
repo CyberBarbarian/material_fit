@@ -27,7 +27,11 @@ if str(ROOT) not in sys.path:
 from tools.material_fit.laya import lmat_io  # noqa: E402
 from tools.material_fit.laya.lmat_io import LmatWriteError  # noqa: E402
 from tools.material_fit.laya.shader_parser import parse_laya_shader  # noqa: E402
-from tools.material_fit.optimizer.parameter_search import build_initial_params  # noqa: E402
+from tools.material_fit.optimizer.parameter_search import (  # noqa: E402
+    build_initial_params,
+    build_zero_searchable_initial_params,
+)
+from tools.material_fit.shared.models import ShaderParam  # noqa: E402
 
 
 REAL_LMAT = ROOT / "assets/resources/play/fish/1580/mat/1580_body.lmat"
@@ -110,6 +114,65 @@ def test_build_initial_params_drops_texture_sampler_defaults(real_lmat, real_sha
     assert not string_vals, (
         f"initial_params still contains string-valued uniforms: {string_vals}"
     )
+
+
+def test_zero_searchable_initial_params_zeroes_searchable_but_preserves_validity_params() -> None:
+    """Zero-start may be visually blank, but must keep material-validity values."""
+    shader_params = [
+        ShaderParam("u_Color", "Color", default=[1, 1, 1, 1]),
+        ShaderParam("u_ShadowColor1", "Color", default=[0.5, 0.5, 0.5, 1]),
+        ShaderParam("u_RimColor", "Color", default=[0, 1, 1, 1]),
+        ShaderParam("u_MainTex_ST", "Vector4", default=[1, 1, 0, 0]),
+        ShaderParam("u_NormalTex_ST", "Vector4", default=[1, 1, 0, 0]),
+        ShaderParam("u_AlphaTestValue", "Float", default=0.5),
+        ShaderParam("u_SkyRotateX", "Float", default=231.0),
+        ShaderParam("u_SkyRotateY", "Float", default=255.0),
+        ShaderParam("u_TexPower", "Float", default=1.0),
+        ShaderParam("u_GammaPower", "Float", default=2.2),
+        ShaderParam("u_Saturation", "Float", default=1.0),
+        ShaderParam("u_Contrast", "Float", default=1.0),
+        ShaderParam("u_NormalScale", "Float", default=1.0),
+        ShaderParam("u_IndirectStrength", "Float", default=1.0),
+        ShaderParam("u_SpecularIntensity", "Float", default=0.9),
+        ShaderParam("u_EmissionPow", "Float", default=0.8),
+    ]
+    baseline = {
+        "u_Color": [0.85, 0.84, 0.70, 1.0],
+        "u_ShadowColor1": [0.7, 0.82, 0.82, 1.0],
+        "u_RimColor": [0.68, 1.0, 0.87, 1.0],
+        "u_MainTex_ST": [1.0, 1.0, 0.0, 0.0],
+        "u_NormalTex_ST": [1.0, 1.0, 0.0, 0.0],
+        "u_AlphaTestValue": 0.5,
+        "u_SkyRotateX": 231.0,
+        "u_SkyRotateY": 255.0,
+        "u_TexPower": 1.7,
+        "u_GammaPower": 2.2,
+        "u_Saturation": 0.86,
+        "u_Contrast": 1.0,
+        "u_NormalScale": 0.9,
+        "u_IndirectStrength": 1.4,
+        "u_SpecularIntensity": 0.9,
+        "u_EmissionPow": 0.8,
+    }
+
+    zero_start = build_zero_searchable_initial_params(baseline, shader_params)
+
+    assert zero_start["u_Color"] == [0.0, 0.0, 0.0, 1.0]
+    assert zero_start["u_ShadowColor1"] == [0.0, 0.0, 0.0, 1.0]
+    assert zero_start["u_RimColor"] == [0.0, 0.0, 0.0, 1.0]
+    assert zero_start["u_TexPower"] == 0.0
+    assert zero_start["u_GammaPower"] == 0.0
+    assert zero_start["u_Saturation"] == 0.0
+    assert zero_start["u_Contrast"] == 0.0
+    assert zero_start["u_NormalScale"] == 0.0
+    assert zero_start["u_IndirectStrength"] == 0.0
+    assert zero_start["u_SpecularIntensity"] == 0.0
+    assert zero_start["u_EmissionPow"] == 0.0
+    assert zero_start["u_MainTex_ST"] == [1.0, 1.0, 0.0, 0.0]
+    assert zero_start["u_NormalTex_ST"] == [1.0, 1.0, 0.0, 0.0]
+    assert zero_start["u_AlphaTestValue"] == 0.5
+    assert zero_start["u_SkyRotateX"] == 231.0
+    assert zero_start["u_SkyRotateY"] == 255.0
 
 
 def test_round_trip_preserves_structure(tmp_path, real_lmat, real_shader) -> None:

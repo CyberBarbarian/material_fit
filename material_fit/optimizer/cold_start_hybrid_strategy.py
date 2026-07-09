@@ -15,6 +15,7 @@ from .cold_start_hybrid_priors import (
     REFINE_PARAM_PRIORITY,
     REFINE_VECTOR_PRIORITY,
 )
+from .param_policy import is_optimizer_searchable_param
 from .strategy_core import (
     CmaesStrategyConfig,
     OptimizerStrategy,
@@ -52,16 +53,19 @@ class ColdStartHybridStrategy(OptimizerStrategy):
         initial_params: dict[str, Any],
         shader_params: Sequence[ShaderParam],
         prior_anchors: Sequence[dict[str, Any]] = (),
+        search_param_names: Sequence[str] | None = None,
     ) -> None:
         self._initial_params = _clone_params(initial_params)
         self._shader_params = list(shader_params)
         self._external_prior_anchors = self._normalize_prior_anchors(prior_anchors)
         self._bootstrap_anchors = self._external_prior_anchors + self._BOOTSTRAP_ANCHORS
         self._param_info = {param.name: param for param in self._shader_params}
+        self._search_param_names = set(search_param_names) if search_param_names is not None else None
         self._numeric_names = [
             name
             for name, value in self._initial_params.items()
             if isinstance(value, (int, float)) and not isinstance(value, bool)
+            and self._is_searchable_param(name)
         ]
         self._vector_names = [
             name
@@ -69,6 +73,7 @@ class ColdStartHybridStrategy(OptimizerStrategy):
             if isinstance(value, list)
             and value
             and all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value)
+            and self._is_searchable_param(name)
         ]
 
         self._phase = "bootstrap"
@@ -1533,6 +1538,11 @@ class ColdStartHybridStrategy(OptimizerStrategy):
             return True
         lower = name.lower()
         return any(token in lower for token in ("color", "tint", "albedo"))
+
+    def _is_searchable_param(self, name: str) -> bool:
+        if self._search_param_names is not None and name not in self._search_param_names:
+            return False
+        return is_optimizer_searchable_param(name, self._param_info.get(name))
 
     def _build_decision(
         self,

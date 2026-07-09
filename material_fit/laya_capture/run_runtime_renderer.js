@@ -42,13 +42,40 @@ async function main() {
   if (projectRoot) query.set('assetManifest', `${assetBase}/asset-manifest.json`);
   if (args.debugMaterial === '1' || args.debugMaterial === 'true') query.set('debugMaterial', 'true');
   const url = toStaticUrl(assetBase, repoRoot, pagePath) + '?' + query.toString();
-  const browser = await chromium.launch({
+  const launchOptions = {
     headless: !headed,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=default'],
-  });
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--use-angle=default',
+      ...splitChromiumArgs(args.chromiumArgs || process.env.MATERIAL_FIT_CHROMIUM_ARGS || ''),
+    ],
+  };
+  const chromiumExecutable = args.chromiumExecutable || process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || '';
+  if (chromiumExecutable) {
+    launchOptions.executablePath = chromiumExecutable;
+  }
+  console.log(JSON.stringify({
+    chromiumExecutable,
+    chromiumArgs: launchOptions.args,
+    cudaVisibleDevices: process.env.CUDA_VISIBLE_DEVICES || '',
+  }));
+  const browser = await chromium.launch(launchOptions);
   const page = await browser.newPage({ viewport: { width, height } });
+  let fatalExitStarted = false;
+  const exitOnFatalPageError = async (error) => {
+    if (fatalExitStarted) return;
+    fatalExitStarted = true;
+    console.error('[runtime-renderer:fatal]', error && error.stack || error);
+    await browser.close().catch(() => {});
+    await staticServer.close().catch(() => {});
+    process.exit(1);
+  };
   page.on('console', msg => console.log(`[runtime-renderer:${msg.type()}] ${msg.text()}`));
-  page.on('pageerror', err => console.error('[runtime-renderer:pageerror]', err && err.stack || err));
+  page.on('pageerror', err => {
+    console.error('[runtime-renderer:pageerror]', err && err.stack || err);
+    void exitOnFatalPageError(err);
+  });
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction('window.__MATERIAL_FIT_READY__ === true', { timeout: 30000 });
   const readyPath = args.readyFile ? path.resolve(args.readyFile) : '';
@@ -147,16 +174,56 @@ async function startStaticServer({ repoRoot, engineRoot, projectRoot, host, port
       res.end(String(error && error.stack || error));
     }
   });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, resolve);
-  });
+  await listenOnSafePort(server, host, port);
   const address = server.address();
   return {
     host,
     port: address.port,
     close: () => new Promise(resolve => server.close(resolve)),
   };
+}
+
+async function listenOnSafePort(server, host, port) {
+  const requested = Number(port || 0);
+  const candidates = requested > 0
+    ? [requested]
+    : Array.from({ length: 64 }, (_, i) => 18080 + i);
+  let lastError = null;
+  for (const candidate of candidates) {
+    if (isChromiumUnsafePort(candidate)) continue;
+    try {
+      await new Promise((resolve, reject) => {
+        const onError = error => {
+          server.off('listening', onListening);
+          reject(error);
+        };
+        const onListening = () => {
+          server.off('error', onError);
+          resolve();
+        };
+        server.once('error', onError);
+        server.once('listening', onListening);
+        server.listen(candidate, host);
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (error && error.code !== 'EADDRINUSE') throw error;
+    }
+  }
+  throw lastError || new Error('could not bind a safe static asset port');
+}
+
+function isChromiumUnsafePort(port) {
+  const unsafe = new Set([
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69,
+    77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119,
+    123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
+    526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
+    993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 5060, 5061, 6000, 6566,
+    6665, 6666, 6667, 6668, 6669, 6697, 10080,
+  ]);
+  return unsafe.has(Number(port));
 }
 
 function buildAssetManifest(repoRoot, projectRoot) {
@@ -250,6 +317,21 @@ function parseArgs(argv) {
     }
   }
   return out;
+}
+
+function splitChromiumArgs(value) {
+  if (!value) return [];
+  const text = String(value).trim();
+  if (!text) return [];
+  if (text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.map(item => String(item)).filter(Boolean);
+    } catch (_) {
+      return [];
+    }
+  }
+  return text.split(/[,\s]+/).map(item => item.trim()).filter(Boolean);
 }
 
 main().catch(error => {

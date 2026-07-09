@@ -28,7 +28,7 @@ tools/material_fit/output/<project_id>/
       laya_shader_params.json
       initial_params.json
       optimizer_artifacts/
-        adaptive_response_search/
+        pattern16/
           research_summary.json
       auto_adjust/
         state.json

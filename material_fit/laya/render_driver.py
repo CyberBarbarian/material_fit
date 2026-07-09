@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from ..laya_capture.capture_quality import default_visual_quality_guard
 from ..laya_capture.runtime_bridge import RuntimeCaptureBridge
 
 
@@ -597,7 +598,7 @@ class RenderDriver:
             encoding="utf-8",
         )
         screenshots = _capture_files(iteration_dir)
-        return {
+        result = {
             "status": "ok" if completed.returncode == 0 else "failed",
             "returncode": completed.returncode,
             "stdout": completed.stdout,
@@ -606,6 +607,13 @@ class RenderDriver:
             "screenshots": screenshots,
             "candidate_overrides": _build_candidate_overrides(screenshots),
         }
+        persistent_result = _read_optional_persistent_result(iteration_dir)
+        if persistent_result is not None:
+            result["persistent_result"] = persistent_result
+            browser_score = _browser_score_payload(persistent_result)
+            if browser_score is not None:
+                result["browser_score"] = browser_score
+        return result
 
     def capture_candidate(self, iteration: int, params: dict[str, Any]) -> dict[str, Any]:
         """Write candidate params and invoke the configured screenshot command.
@@ -1077,6 +1085,42 @@ def _build_candidate_overrides(files: list[str | Path]) -> dict[str, str]:
     return overrides
 
 
+def _path_replacements_from_config(config: dict[str, Any]) -> list[tuple[str, str]]:
+    raw = config.get("path_replacements", config.get("path_mappings", []))
+    if not isinstance(raw, list):
+        return []
+    replacements: list[tuple[str, str]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        source = entry.get("from") or entry.get("source") or entry.get("remote")
+        target = entry.get("to") or entry.get("target") or entry.get("local")
+        if source is None or target is None:
+            continue
+        source_text = str(source)
+        target_text = str(target)
+        if source_text:
+            replacements.append((source_text, target_text))
+    return replacements
+
+
+def _rewrite_string_paths(value: Any, replacements: list[tuple[str, str]]) -> Any:
+    if isinstance(value, str):
+        for source, target in replacements:
+            if not value.startswith(source):
+                continue
+            suffix = value[len(source):]
+            if "\\" in target:
+                suffix = suffix.replace("/", "\\")
+            return f"{target}{suffix}"
+        return value
+    if isinstance(value, list):
+        return [_rewrite_string_paths(item, replacements) for item in value]
+    if isinstance(value, dict):
+        return {key: _rewrite_string_paths(item, replacements) for key, item in value.items()}
+    return value
+
+
 class _PersistentQueueClient:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = copy.deepcopy(config)
@@ -1091,6 +1135,14 @@ class _PersistentQueueClient:
         self.ensure_command = [str(item) for item in config.get("ensure_command", [])] if isinstance(config.get("ensure_command"), list) else []
         self.stop_command = [str(item) for item in config.get("stop_command", [])] if isinstance(config.get("stop_command"), list) else []
         self.startup_settle_s = float(config.get("startup_settle_s", config.get("startup_settle_sec", 0.0)) or 0.0)
+        self.warmup_requests = config.get("warmup_requests", [])
+        if not isinstance(self.warmup_requests, list):
+            self.warmup_requests = []
+        self.warmup_timeout_s = float(config.get("warmup_timeout_s", config.get("warmup_timeout_sec", self.timeout_s)) or self.timeout_s)
+        self.path_replacements = _path_replacements_from_config(config)
+        self.warmup_record_file = Path(
+            str(config.get("warmup_record_file") or self.state_dir / "warmup_records.json")
+        ).expanduser()
         self.environment = {
             str(key): str(value)
             for key, value in (config.get("environment") or {}).items()
@@ -1160,6 +1212,9 @@ class _PersistentQueueClient:
         command.setdefault("fixed_animation_time", float(queue_cfg.get("fixed_animation_time", 0.0) or 0.0))
         command.setdefault("animation_freeze_settle_frames", int(queue_cfg.get("animation_freeze_settle_frames", 3) or 3))
         command.setdefault("render_backend", "draw_scene")
+        if "visual_quality_guard" not in command:
+            guard_cfg = queue_cfg.get("visual_quality_guard")
+            command["visual_quality_guard"] = copy.deepcopy(guard_cfg) if isinstance(guard_cfg, dict) else default_visual_quality_guard()
         command["nonce"] = f"persistent_{request_id}_{int(time.time() * 1000) % 1000000:06d}"
         command["server_base_url"] = server_base_url
         command["post_url"] = f"{server_base_url}/material-fit/capture-result"
@@ -1218,23 +1273,34 @@ class _PersistentQueueClient:
         if self.ensure_command:
             env = os.environ.copy()
             env.update(self.environment)
+            capture_ensure_output = _bool_config(self.config.get("capture_ensure_output"), False)
+            run_kwargs: dict[str, Any] = {
+                "check": False,
+                "text": True,
+                "encoding": "utf-8",
+                "env": env,
+            }
+            if capture_ensure_output:
+                run_kwargs["capture_output"] = True
+            else:
+                run_kwargs["stdout"] = subprocess.DEVNULL
+                run_kwargs["stderr"] = subprocess.DEVNULL
             completed = subprocess.run(
                 self.ensure_command,
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                env=env,
+                **run_kwargs,
             )
             if completed.returncode != 0:
+                stdout = completed.stdout if capture_ensure_output else "<not captured>"
+                stderr = completed.stderr if capture_ensure_output else "<not captured>"
                 raise RuntimeError(
                     "persistent queue ensure_command failed "
-                    f"returncode={completed.returncode}\nstdout={completed.stdout}\nstderr={completed.stderr}"
+                    f"returncode={completed.returncode}\nstdout={stdout}\nstderr={stderr}"
                 )
         if not self.ready_file.exists() or self.ready_file.stat().st_size == 0:
             raise RuntimeError(f"persistent queue is not ready: {self.ready_file}")
         if self.startup_settle_s > 0:
             time.sleep(self.startup_settle_s)
+        self._run_warmup_requests()
         self._ensured = True
 
     def reset(self) -> bool:
@@ -1272,6 +1338,106 @@ class _PersistentQueueClient:
         if not stop_path.exists():
             return []
         return [str(stop_path)]
+
+    def _server_base_url(self) -> str:
+        cap_port = int(self.config.get("cap_port", self.environment.get("CAP_PORT", 8787)) or 8787)
+        return str(self.config.get("server_base_url") or f"http://127.0.0.1:{cap_port}")
+
+    def _run_warmup_requests(self) -> None:
+        if not self.warmup_requests:
+            return
+
+        self.queue_dir.mkdir(parents=True, exist_ok=True)
+        self.result_dir.mkdir(parents=True, exist_ok=True)
+        records: list[dict[str, Any]] = []
+        for index, raw in enumerate(self.warmup_requests):
+            request_id, request = self._build_warmup_request(raw, index)
+            result = self._enqueue_request(request_id=request_id, request=request, timeout_s=self.warmup_timeout_s)
+            if not result.get("ok"):
+                raise RuntimeError(
+                    "persistent queue warmup request failed "
+                    f"request_id={request_id} error={result.get('error') or result}"
+                )
+            records.append(
+                {
+                    "request_id": request_id,
+                    "source_path": request.get("_warmup_source_path"),
+                    "output_dir": request.get("command", {}).get("output_dir"),
+                    "result": result,
+                }
+            )
+
+        self.warmup_record_file.parent.mkdir(parents=True, exist_ok=True)
+        self.warmup_record_file.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _build_warmup_request(self, raw: Any, index: int) -> tuple[str, dict[str, Any]]:
+        if isinstance(raw, (str, Path)):
+            entry: dict[str, Any] = {"source_path": str(raw)}
+        elif isinstance(raw, dict):
+            entry = copy.deepcopy(raw)
+        else:
+            raise ValueError(f"persistent_queue warmup_requests[{index}] must be a path or object")
+
+        source_text = entry.get("source_path") or entry.get("request_path") or entry.get("path")
+        if not source_text:
+            raise ValueError(f"persistent_queue warmup_requests[{index}] requires source_path")
+        source_path = Path(str(source_text)).expanduser()
+        if not source_path.exists():
+            raise FileNotFoundError(f"persistent queue warmup source does not exist: {source_path}")
+        request = json.loads(source_path.read_text(encoding="utf-8"))
+        request = _rewrite_string_paths(request, [*self.path_replacements, *_path_replacements_from_config(entry)])
+        if not isinstance(request, dict) or not isinstance(request.get("command"), dict):
+            raise ValueError(f"persistent queue warmup source is not a queue request: {source_path}")
+
+        label = str(entry.get("label") or source_path.parent.name or f"warmup_{index:02d}")
+        safe_label = re.sub(r"[^A-Za-z0-9_.-]+", "_", label).strip("_") or f"warmup_{index:02d}"
+        request_id = str(entry.get("request_id") or f"warmup_{index:02d}_{safe_label}_{time.time_ns()}_{os.getpid()}")
+        request["request_id"] = request_id
+        request["_warmup_source_path"] = str(source_path)
+
+        if entry.get("params_path"):
+            request["params_path"] = str(entry["params_path"])
+        elif request.get("params_path"):
+            request["params_path"] = str(request["params_path"])
+
+        command = request["command"]
+        if entry.get("params_path"):
+            command["paramsPath"] = str(entry["params_path"])
+        elif command.get("paramsPath"):
+            command["paramsPath"] = str(command["paramsPath"])
+
+        output_dir = Path(str(entry.get("output_dir") or self.state_dir / "warmup" / safe_label)).expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        server_base_url = self._server_base_url()
+        command["output_dir"] = str(output_dir)
+        command["server_base_url"] = server_base_url
+        command["post_url"] = f"{server_base_url}/material-fit/capture-result"
+        command["nonce"] = str(entry.get("nonce") or f"persistent_{request_id}_{int(time.time() * 1000) % 1000000:06d}")
+        request["command"] = command
+        return request_id, request
+
+    def _enqueue_request(self, *, request_id: str, request: dict[str, Any], timeout_s: float) -> dict[str, Any]:
+        if self.config.get("stop_file"):
+            stop_file = Path(str(self.config["stop_file"])).expanduser()
+        else:
+            stop_file = self.state_dir / "stop"
+        if stop_file.exists():
+            raise RuntimeError(f"persistent queue stop file exists before enqueue: {stop_file}")
+        request_path = self.queue_dir / f"{request_id}.request.json"
+        result_path = self.result_dir / f"{request_id}.result.json"
+        result_path.unlink(missing_ok=True)
+        tmp_path = request_path.with_suffix(request_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+        tmp_path.replace(request_path)
+
+        deadline = time.monotonic() + timeout_s
+        while not result_path.exists() or result_path.stat().st_size == 0:
+            if stop_file.exists():
+                raise RuntimeError(f"persistent queue stopped while waiting for result {result_path}")
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"timeout waiting for persistent warmup result {result_path}")
+            time.sleep(self.poll_s)
+        return json.loads(result_path.read_text(encoding="utf-8"))
 
 
 def _default_views() -> list[dict[str, Any]]:
@@ -1329,6 +1495,17 @@ def _browser_score_payload(result: dict[str, Any]) -> dict[str, Any] | None:
     if browser_score.get("fit_score") is None and browser_score.get("score") is None:
         return None
     return browser_score
+
+
+def _read_optional_persistent_result(iteration_dir: Path) -> dict[str, Any] | None:
+    result_path = iteration_dir / "persistent_render_result.json"
+    if not result_path.exists() or result_path.stat().st_size == 0:
+        return None
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"failed to read persistent_render_result.json: {exc}"}
+    return result if isinstance(result, dict) else {"ok": False, "error": "persistent_render_result.json is not an object"}
 
 
 def _with_reference_image_urls(command: dict[str, Any], base_url: str) -> dict[str, Any]:

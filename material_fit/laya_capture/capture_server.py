@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
+from .capture_quality import analyze_png_capture_quality, default_visual_quality_guard
+
 
 @dataclass
 class CaptureState:
@@ -18,6 +20,8 @@ class CaptureState:
     expected: set[str]
     received: set[str] = field(default_factory=set)
     logs: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    capture_quality: dict[str, dict[str, Any]] = field(default_factory=dict)
     browser_score: dict[str, Any] | None = None
 
 
@@ -84,6 +88,13 @@ def main() -> int:
     server.timeout = 0.2
     while True:
         server.handle_request()
+        if state.errors:
+            (output_dir / "capture_error.json").write_text(
+                json.dumps({"received": sorted(state.received), "errors": state.errors, "logs": state.logs}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[capture-server] failed; error={state.errors[0].get('reason') or state.errors[0].get('error')}", flush=True)
+            return 3
         if expected and state.received >= expected:
             print(f"[capture-server] completed {len(state.received)}/{len(expected)} views", flush=True)
             return 0
@@ -138,6 +149,8 @@ def build_command(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "views": views,
         "output_dir": str(output_dir),
     }
+    if "visual_quality_guard" not in explicit:
+        command["visual_quality_guard"] = default_visual_quality_guard()
     if material_patch:
         command["material_patch"] = material_patch
     fov = args.fov if args.fov is not None else explicit.get("fov", metadata.get("fieldOfView"))
@@ -212,6 +225,8 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
                         "expected": sorted(state.expected),
                         "received": sorted(state.received),
                         "logs": state.logs[-20:],
+                        "errors": state.errors[-20:],
+                        "capture_quality": state.capture_quality,
                         "browser_score": state.browser_score,
                     }
                 )
@@ -254,14 +269,29 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
             image_bytes = base64.b64decode(raw)
             output_path = state.output_dir / file_name
             output_path.write_bytes(image_bytes)
-            state.received.add(view_id)
             sidecar = dict(payload)
             sidecar.pop("png_base64", None)
             sidecar["saved_path"] = str(output_path)
+            quality = analyze_png_capture_quality(image_bytes, state.command.get("visual_quality_guard"))
+            sidecar["capture_quality"] = quality
+            state.capture_quality[view_id] = quality
             (state.output_dir / f"{output_path.stem}.json").write_text(
                 json.dumps(sidecar, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+            if not quality.get("ok", True):
+                error = {
+                    "kind": "capture_quality",
+                    "view_id": view_id,
+                    "file_name": file_name,
+                    "reason": quality.get("reason") or "capture_quality_failed",
+                    "capture_quality": quality,
+                }
+                state.errors.append(error)
+                state.logs.append({"level": "error", **error})
+                self.write_json({"ok": False, "error": error["reason"], "capture_quality": quality}, status=422)
+                return
+            state.received.add(view_id)
             self.write_json({"ok": True, "path": str(output_path), "received": sorted(state.received)})
 
         def handle_capture_score(self, payload: dict[str, Any]) -> None:

@@ -19,6 +19,7 @@
   const width = Number(params.get("width") || "320");
   const height = Number(params.get("height") || "240");
   const startupDebugMaterial = params.get("debugMaterial") === "1" || params.get("debugMaterial") === "true";
+  const allowFallbackScene = params.get("allowFallbackScene") === "1" || params.get("allowFallbackScene") === "true";
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -125,8 +126,10 @@
           return await createPrefabRuntimeScene(sceneUrl);
         }
         const scene = await Laya.Scene.open(sceneUrl, false);
-        await waitFrames(4);
         const sceneRoot = scene.scene3D || scene;
+        ensureRuntimeMaterialCompatibility(sceneRoot);
+        await waitFrames(4);
+        ensureRuntimeMaterialCompatibility(sceneRoot);
         const camera = findFirstCamera(sceneRoot) || findNodeByName(sceneRoot, "Capture Camera");
         const target = findNodeByName(sceneRoot, "model");
         if (!camera || !target) {
@@ -136,7 +139,13 @@
         const frame = frameCamera(camera, target);
         return { mode: "scene", scene: sceneRoot, camera, target, fallbackMaterial: null, frame };
       } catch (error) {
-        console.error("[material-fit] scene load failed, falling back to cube: " + (error && error.stack || error));
+        const message = "[material-fit] scene load failed: " + (error && error.stack || error);
+        console.error(message);
+        if (!allowFallbackScene) {
+          window.__MATERIAL_FIT_READY__ = { ok: false, error: message };
+          throw error;
+        }
+        console.warn("[material-fit] allowFallbackScene enabled; falling back to cube");
       }
     }
 
@@ -170,6 +179,7 @@
     }
     console.log("[material-fit] prefab resource type: " + resourceTypeName(prefab));
     scene.addChild(prefab);
+    ensureRuntimeMaterialCompatibility(prefab);
     if (startupDebugMaterial) {
       applyDebugMaterials(prefab);
     }
@@ -318,10 +328,56 @@
         }
       }
     });
-    if (runtime.fallbackMaterial && out.indexOf(runtime.fallbackMaterial) < 0) {
-      out.push(runtime.fallbackMaterial);
-    }
     return out;
+  }
+
+  function ensureRuntimeMaterialCompatibility(root) {
+    const materials = collectMaterials(root);
+    const directionLightDefine = Laya.Shader3D && typeof Laya.Shader3D.getDefineByName === "function"
+      ? Laya.Shader3D.getDefineByName("DIRECTIONLIGHT")
+      : null;
+    if (!directionLightDefine) return;
+
+    let patched = 0;
+    for (const material of materials) {
+      if (!looksLikeFishStandardMaterial(material)) continue;
+      try {
+        const hasDefine = typeof material.hasDefine === "function" && material.hasDefine(directionLightDefine);
+        if (!hasDefine && typeof material.addDefine === "function") {
+          material.addDefine(directionLightDefine);
+          patched += 1;
+        }
+      } catch (error) {
+        console.warn("[material-fit] material compatibility patch failed: " + error);
+      }
+    }
+    if (patched > 0) {
+      console.log("[material-fit] patched FishStandar_Low DIRECTIONLIGHT materials=" + patched);
+    }
+  }
+
+  function looksLikeFishStandardMaterial(material) {
+    if (!material) return false;
+    const shaderName = String(
+      material.shaderName
+      || material._shaderName
+      || material._shader && material._shader.name
+      || material.shader && material.shader.name
+      || "",
+    );
+    if (shaderName.indexOf("FishStandar") >= 0) return true;
+    const shaderData = material.shaderData;
+    if (!shaderData || !Laya.Shader3D || typeof Laya.Shader3D.propertyNameToID !== "function") return false;
+    const id = Laya.Shader3D.propertyNameToID("u_LightRotateX");
+    try {
+      if (typeof shaderData.getNumber === "function") {
+        const value = shaderData.getNumber(id);
+        return Number.isFinite(Number(value));
+      }
+    } catch {
+      return false;
+    }
+    return false;
   }
 
   function collectRenderableSources(root) {
@@ -389,7 +445,47 @@
     console.log("[material-fit] applied debug materials renderables=" + sources.length);
   }
 
+  const COLOR_PARAM_NAMES = new Set([
+    "albedoColor",
+    "color",
+    "u_BaseColor",
+    "u_Color",
+    "u_ReflectColor",
+    "u_ShadowColor1",
+    "u_ShadowColor2",
+    "u_SpecularColor",
+    "u_RimColor",
+  ]);
+
+  function isColorParamName(name) {
+    return COLOR_PARAM_NAMES.has(name) || String(name || "").toLowerCase().indexOf("color") >= 0;
+  }
+
   function setShaderDataValue(material, name, value, kind) {
+    if (kind === "color" && typeof material.setColor === "function") {
+      material.setColor(name, value);
+      return;
+    }
+    if (kind === "number" && typeof material.setFloat === "function") {
+      material.setFloat(name, value);
+      return;
+    }
+    if (kind === "bool" && typeof material.setBool === "function") {
+      material.setBool(name, Boolean(value));
+      return;
+    }
+    if (kind === "vector4" && typeof material.setVector4 === "function") {
+      material.setVector4(name, value);
+      return;
+    }
+    if (kind === "vector3" && typeof material.setVector3 === "function") {
+      material.setVector3(name, value);
+      return;
+    }
+    if (kind === "vector2" && typeof material.setVector2 === "function") {
+      material.setVector2(name, value);
+      return;
+    }
     const shaderData = material && material.shaderData;
     if (!shaderData || !Laya.Shader3D || typeof Laya.Shader3D.propertyNameToID !== "function") return;
     const id = Laya.Shader3D.propertyNameToID(name);
@@ -397,12 +493,20 @@
       shaderData.setColor(id, value);
     } else if (kind === "number" && typeof shaderData.setNumber === "function") {
       shaderData.setNumber(id, value);
+    } else if (kind === "bool" && typeof shaderData.setBool === "function") {
+      shaderData.setBool(id, Boolean(value));
+    } else if (kind === "vector4" && typeof shaderData.setVector === "function") {
+      shaderData.setVector(id, value);
+    } else if (kind === "vector3" && typeof shaderData.setVector3 === "function") {
+      shaderData.setVector3(id, value);
+    } else if (kind === "vector2" && typeof shaderData.setVector2 === "function") {
+      shaderData.setVector2(id, value);
     }
   }
 
   function setMaterialValue(material, name, value) {
     if (!material) return;
-    if (Array.isArray(value) && value.length >= 3) {
+    if (Array.isArray(value) && value.length === 4 && isColorParamName(name)) {
       const color = new Laya.Color(
         Math.max(0, Math.min(1, numberOr(value[0], 0))),
         Math.max(0, Math.min(1, numberOr(value[1], 0))),
@@ -415,8 +519,37 @@
       setShaderDataValue(material, name, color, "color");
       return;
     }
+    if (Array.isArray(value) && value.length === 4 && Laya.Vector4) {
+      setShaderDataValue(material, name, new Laya.Vector4(
+        numberOr(value[0], 0),
+        numberOr(value[1], 0),
+        numberOr(value[2], 0),
+        numberOr(value[3], 0),
+      ), "vector4");
+      return;
+    }
+    if (Array.isArray(value) && value.length === 3 && Laya.Vector3) {
+      setShaderDataValue(material, name, new Laya.Vector3(
+        numberOr(value[0], 0),
+        numberOr(value[1], 0),
+        numberOr(value[2], 0),
+      ), "vector3");
+      return;
+    }
+    if (Array.isArray(value) && value.length === 2 && Laya.Vector2) {
+      setShaderDataValue(material, name, new Laya.Vector2(
+        numberOr(value[0], 0),
+        numberOr(value[1], 0),
+      ), "vector2");
+      return;
+    }
     if (typeof value === "number" || typeof value === "boolean") {
-      setShaderDataValue(material, name, typeof value === "boolean" ? (value ? 1 : 0) : value, "number");
+      setShaderDataValue(
+        material,
+        name,
+        typeof value === "boolean" ? (value ? 1 : 0) : value,
+        typeof value === "boolean" ? "bool" : "number",
+      );
     }
   }
 
@@ -453,7 +586,11 @@
     const materials = collectMaterials(runtime.target);
     for (const material of materials) {
       for (const [name, value] of Object.entries(values)) {
-        setMaterialValue(material, name, value);
+        try {
+          setMaterialValue(material, name, value);
+        } catch (error) {
+          console.warn("[material-fit] material patch skipped " + name + ": " + error);
+        }
       }
     }
   }
@@ -514,6 +651,53 @@
     return { canvas: out, pixels: ctx.getImageData(0, 0, width, height).data };
   }
 
+  function visualBackgroundColor(command) {
+    const value = command && (command.visual_background_color || command.background_color);
+    if (Array.isArray(value) && value.length >= 3) {
+      return {
+        r: clampByte(value[0]),
+        g: clampByte(value[1]),
+        b: clampByte(value[2]),
+      };
+    }
+    if (typeof value === "string") {
+      const match = value.trim().match(/^#?([0-9a-f]{6})$/i);
+      if (match) {
+        const hex = match[1];
+        return {
+          r: parseInt(hex.slice(0, 2), 16),
+          g: parseInt(hex.slice(2, 4), 16),
+          b: parseInt(hex.slice(4, 6), 16),
+        };
+      }
+    }
+    return { r: 255, g: 255, b: 255 };
+  }
+
+  function clampByte(value) {
+    return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+  }
+
+  function canvasOnBackground(canvas, color) {
+    const out = document.createElement("canvas");
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const ctx = out.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(canvas, 0, 0);
+    const image = ctx.getImageData(0, 0, out.width, out.height);
+    const data = image.data;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] === 0 || (data[i] <= 1 && data[i + 1] <= 1 && data[i + 2] <= 1)) {
+        data[i] = color.r;
+        data[i + 1] = color.g;
+        data[i + 2] = color.b;
+        data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    return out;
+  }
+
   async function canvasToPngBase64(canvas) {
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob((value) => value ? resolve(value) : reject(new Error("PNG encoding failed")), "image/png");
@@ -531,7 +715,7 @@
     if (command.return_images === false) return;
     const viewId = view.view_id || "view";
     const fileName = view.file_name || `${viewId}.png`;
-    await fetch(`${serverBaseUrl}/material-fit/capture-result`, {
+    const response = await fetch(`${serverBaseUrl}/material-fit/capture-result`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -547,6 +731,10 @@
         },
       }),
     });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`capture-result rejected ${response.status}: ${text.slice(0, 300)}`);
+    }
   }
 
   async function loadReferencePixels(reference) {
@@ -596,7 +784,7 @@
       const score = referencePixels
         ? scorePixels(staged.pixels, referencePixels)
         : { diff_score: 1, fit_score: 0, rgb_mae: 1, alpha_mae: 1 };
-      await postCaptureResult(command, view, staged.canvas, score);
+      await postCaptureResult(command, view, canvasOnBackground(staged.canvas, visualBackgroundColor(command)), score);
       scoredViews.push({ view_id: view.view_id || `v${i}`, ...score });
     }
     const fitScore = scoredViews.reduce((sum, item) => sum + item.fit_score, 0) / Math.max(1, scoredViews.length);

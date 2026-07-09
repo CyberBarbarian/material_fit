@@ -26,7 +26,8 @@
 
 | optimizer 名称 | 类型 | 当前定位 |
 | --- | --- | --- |
-| `adaptive_response_search` | 全局最优中心的响应证据搜索 | 当前默认主算法 |
+| `pattern16` | 16 维坐标 pattern search | 当前鱼 finetune 默认主算法，复现早期高分白底 8 向实验 |
+| `adaptive_response_search` | 全局最优中心的响应证据搜索 | 实验性对照路线 |
 | `semantic_group` | 响应图驱动的语义调度器 | 保留为对照和继续研究版本 |
 | `semantic_group_legacy_081` | 旧版语义分组模式搜索 | 用于复现早期 0.8 附近结果的基线 |
 | `subspace_cma_es` | 语义子空间 CMA-ES | 更昂贵的黑盒对照算法 |
@@ -34,9 +35,22 @@
 | `cma_warm` | warm-start CMA-ES | 使用历史样本初始化的 CMA-ES |
 | `heuristic` | 启发式分阶段调参 | 早期生产路径和兼容基线 |
 
-### 2.1 `adaptive_response_search`
+### 2.1 `pattern16`
 
-这是当前默认主算法。核心思想是：所有候选都围绕当前全局最好参数生成，优化器根据真实试验响应来决定下一轮把预算给哪个参数或参数组合。
+这是当前鱼 finetune 默认主算法。核心思想是：只搜索已经通过远程复现实验证明有效的 16 个外观参数，按固定顺序对每个参数做 `-step/+step` 真实渲染探测，只接受 fit score 提升的候选；如果一整轮没有提升，就把 step 减半。
+
+主要机制：
+
+- 搜索白名单固定为 `u_GammaPower`、`u_Saturation`、`u_TexPower`、`u_AoPower`、`u_EmissionPow`、`u_IndirectStrength`、`u_NormalScale`、`u_ShadowSmoothness`、`u_ShadowThreshold1`、`u_ShadowThreshold2`、`u_SpecularIntensity`、`u_SpecularPower`、`u_SpecularThreshold`、`u_SpecularSmoothness`、`u_RimIntensity`、`u_RimWidth`。
+- zero-start 是这个 16 维搜索子空间上的困难初始化调试分支：上述 16 个参数置为 `0.0`，其它不在搜索空间内的数值参数和材质合法性参数继承 baseline `.lmat`。这样测试的是算法从弱外观参数出发的恢复能力，而不是测试贴图、UV、alpha、灯光/天空状态被破坏后的不可恢复场景。该路线仍在调试中，不作为当前稳定发布门槛。
+- zero-start 使用 Python 端 `reference_foreground_mae` 作为优化目标：用 Unity reference 的 alpha 前景作为鱼体 mask，只在前景区域计算 RGB MAE。原因是极端 zero 起点可能渲染成白底空图，旧的全画布 browser MAE 会被大面积背景稀释，错误地把空白图评为高分。
+- 每个候选都从当前 best 参数出发生成，坏候选不会污染后续搜索中心。
+- deliberate probe 会产生无提升甚至变差的样本，所以它不使用 heuristic 的全局 4-step no-improve abort。
+- 默认鱼实验使用 8 向 Unity reference、固定 `idle1` 动画、`900x700` 渲染和 `browser_fast_rgba_mae_v1`。
+
+### 2.2 `adaptive_response_search`
+
+这是保留的实验性对照路线。核心思想是：所有候选都围绕当前全局最好参数生成，优化器根据真实试验响应来决定下一轮把预算给哪个参数或参数组合。
 
 主要机制：
 

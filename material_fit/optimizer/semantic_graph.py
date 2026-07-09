@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
 from ..shared.models import ShaderDefine, ShaderParam
+from .param_policy import fixed_optimizer_param_reason
 
 
 @dataclass(frozen=True)
@@ -562,19 +563,8 @@ def _infer_gates(
 
 
 def _is_searchable(param: ShaderParam, lower: str, role: str) -> bool:
-    type_l = str(param.param_type).strip().lower()
-    if role == "texture":
-        return False
-    if type_l in {"bool", "boolean"}:
-        return False
-    if lower.endswith("_st") or lower.endswith("st"):
-        return False
-    if lower in {"u_alpha", "u_cutoff"}:
-        return False
-    if "alphatest" in lower.replace("_", ""):
-        return False
-    hidden = str(param.hidden or "").lower()
-    if hidden in {"true", "1", "yes"}:
+    _ = lower, role
+    if fixed_optimizer_param_reason(param.name, param) is not None:
         return False
     return True
 

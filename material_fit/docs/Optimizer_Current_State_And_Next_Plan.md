@@ -31,9 +31,15 @@ initial .lmat params
 
 ## 2. 当前可用的 optimizer
 
-### 2.1 `heuristic`
+### 2.1 `pattern16`
 
-`heuristic` 是默认生产路径，核心在 `optimizer/adjustment_algorithm.py`。
+`pattern16` 是当前鱼 finetune 默认生产路径，核心在 `optimizer/pattern16_strategy.py`。zero-start 使用同一参数约束做困难初始化实验，但仍在调试中，不作为稳定发布门槛。
+
+它复现早期高分实验的 16 维坐标 pattern search：固定 16 个外观参数白名单，按参数顺序尝试 `-step/+step`，只接受真实渲染 fit score 提升的候选；一整轮没有提升时把 step 减半。默认 fish runner 配套 8 向 Unity reference、固定 `idle1`、`900x700` 和 `browser_fast_rgba_mae_v1`。
+
+### 2.2 `heuristic`
+
+`heuristic` 是早期兼容路径，核心在 `optimizer/adjustment_algorithm.py`。
 
 它先建立固定 stage 表：
 

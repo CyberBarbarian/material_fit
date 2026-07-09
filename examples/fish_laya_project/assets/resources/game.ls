@@ -690,7 +690,7 @@
                       },
                       "sharedMaterials": [
                         {
-                          "_$uuid": "ccf4b590-dd96-44a9-8c55-592a4de906e8",
+                          "_$uuid": "4adc3c2d-41bc-4cad-87df-77ecfb84a558",
                           "_$type": "Material"
                         }
                       ],

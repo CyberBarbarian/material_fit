@@ -187,6 +187,8 @@ def run_server_until_done(server: ThreadingHTTPServer, state: CaptureState, *, t
     try:
         while True:
             server.handle_request()
+            if state.errors:
+                raise RuntimeError(f"Laya capture failed: {state.errors[0].get('reason') or state.errors[0].get('error') or state.errors[0]}")
             if state.browser_score is not None:
                 return
             if not expects_browser_score and state.expected and state.received >= state.expected:
@@ -207,6 +209,8 @@ def build_result_payload(state: CaptureState, *, output_dir: Path) -> dict[str, 
         "screenshots": screenshots,
         "received": sorted(state.received),
         "logs": state.logs,
+        "errors": state.errors,
+        "capture_quality": state.capture_quality,
     }
     if isinstance(state.browser_score, dict):
         payload["browser_score"] = state.browser_score

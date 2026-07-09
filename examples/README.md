@@ -13,7 +13,7 @@ This is a minimal Laya project for the fish asset used in the material fitting e
 ```text
 assets/resources/game.ls
 assets/resources/model/1504/prefab/1504.lh
-assets/resources/model/1504/mat/1504_body.lmat
+assets/resources/model/1504/mat/fish_jxs_test.lmat
 assets/resources/model/1504/shader/
 assets/resources/model/1504/tex/
 assets/resources/shader/Custom_low.shader
@@ -40,7 +40,7 @@ laya_v006_yaw270_pitch0.png
 laya_v007_yaw315_pitch0.png
 ```
 
-Despite the `laya_v...` filenames, this folder is the target reference set used by the optimizer. When creating a UI project, set the Unity reference directory to `examples/fish_unity_refs` and set the Laya material path to `examples/fish_laya_project/assets/resources/model/1504/mat/1504_body.lmat`.
+Despite the `laya_v...` filenames, this folder is the target reference set used by the optimizer. When creating a UI project, set the Unity reference directory to `examples/fish_unity_refs` and set the Laya material path to `examples/fish_laya_project/assets/resources/model/1504/mat/fish_jxs_test.lmat`.
 
 ## Local Fast Path
 

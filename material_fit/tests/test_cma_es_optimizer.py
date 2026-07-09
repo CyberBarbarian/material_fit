@@ -114,12 +114,15 @@ def test_encoder_excludes_textures_and_st_and_bools():
     assert fixed["u_FresnelUesF0"] is True
     # Alpha-only knob (u_Alpha) is blacklisted by name
     assert fixed["u_Alpha"] == 1.0
+    # Scene lighting direction belongs to the render setup, not material fit.
+    assert fixed["u_SelfLightDir"] == [0.0, 0.0, 0.0, 0.0]
 
     axis_names = {axis.param_name for axis in encoder.axes}
     assert "u_BaseMap" not in axis_names
     assert "u_BaseMap_ST" not in axis_names
     assert "u_FresnelUesF0" not in axis_names
     assert "u_Alpha" not in axis_names
+    assert "u_SelfLightDir" not in axis_names
 
     # Color params expose 3 axes (RGB) not 4 (RGBA)
     base_color_axes = [a for a in encoder.axes if a.param_name == "u_BaseColor"]
@@ -128,11 +131,6 @@ def test_encoder_excludes_textures_and_st_and_bools():
     for axis in base_color_axes:
         assert axis.low == 0.0
         assert axis.high == 1.0
-
-    # SelfLightDir is a 4-vec but not a color name → all 4 axes exposed
-    sl_axes = [a for a in encoder.axes if a.param_name == "u_SelfLightDir"]
-    assert len(sl_axes) == 4
-
 
 def test_encoder_round_trip_preserves_values():
     initial = _initial_params()

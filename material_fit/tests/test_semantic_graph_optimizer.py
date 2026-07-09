@@ -117,6 +117,7 @@ def test_semantic_graph_classifies_custom_low_misc_params_into_specific_groups()
             ShaderParam("u_LMap", "Texture2D", default="white"),
             ShaderParam("u_GammaPower", "Float", default=1.0),
             ShaderParam("u_LightRotateY", "Float", default=0.0),
+            ShaderParam("u_SkyRotateX", "Float", default=231.0),
             ShaderParam("u_AlphaTestValue", "Float", default=0.5),
             ShaderParam("u_IndirectStrength", "Float", default=1.0),
         ],
@@ -126,6 +127,7 @@ def test_semantic_graph_classifies_custom_low_misc_params_into_specific_groups()
             "u_SpeOffet": 0.0,
             "u_GammaPower": 1.0,
             "u_LightRotateY": 0.0,
+            "u_SkyRotateX": 231.0,
             "u_AlphaTestValue": 0.5,
             "u_IndirectStrength": 1.0,
         },
@@ -138,6 +140,9 @@ def test_semantic_graph_classifies_custom_low_misc_params_into_specific_groups()
     assert graph.params["u_LMap"].group == "shared_mask_lmap"
     assert graph.params["u_GammaPower"].group == "shared_mask_lmap"
     assert graph.params["u_LightRotateY"].group == "light_direction"
+    assert graph.params["u_LightRotateY"].searchable is False
+    assert graph.params["u_SkyRotateX"].group == "reflection_matcap"
+    assert graph.params["u_SkyRotateX"].searchable is False
     assert graph.params["u_AlphaTestValue"].group == "alpha_cutout"
     assert graph.params["u_AlphaTestValue"].searchable is False
     assert graph.params["u_IndirectStrength"].group == "reflection_matcap"
