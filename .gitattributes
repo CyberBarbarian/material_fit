@@ -2,3 +2,4 @@ vendor/** -text -whitespace
 examples/** -text -whitespace
 *.lmat -text -whitespace
 *.ls -text -whitespace
+material_fit/config/stage1_v86/*.json -text -whitespace
