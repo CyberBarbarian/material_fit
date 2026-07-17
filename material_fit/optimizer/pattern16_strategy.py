@@ -51,7 +51,7 @@ PATTERN16_BOUNDS: dict[str, tuple[float, float]] = {
     "u_SpecularThreshold": (0.0, 1.0),
     "u_SpecularSmoothness": (0.0, 1.0),
     "u_RimIntensity": (0.0, 3.0),
-    "u_RimWidth": (1.0, 8.0),
+    "u_RimWidth": (0.0, 8.0),
 }
 
 PATTERN16_INITIAL_STEPS: dict[str, float] = {

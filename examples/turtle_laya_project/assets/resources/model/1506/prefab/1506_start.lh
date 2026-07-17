@@ -1,0 +1,790 @@
+{
+  "_$ver": 1,
+  "_$id": "sy2m02jk",
+  "_$type": "Sprite3D",
+  "name": "1506",
+  "_$comp": [
+    {
+      "_$type": "bdd19034-f104-4c6f-ad7f-e5091f806b77",
+      "scriptPath": "../src/Play/Fish/View/FishNode.ts",
+      "thickness": 4,
+      "animators": [
+        {
+          "_$ref": "31xa0aik",
+          "_$type": "Animator"
+        }
+      ],
+      "spriteRenderer": null,
+      "colliders": [
+        {
+          "_$ref": "1bmp9xhg",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "vuqtwvda",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "qves23gh",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        }
+      ]
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "v6lojbuk",
+      "_$type": "Sprite3D",
+      "name": "Adapter",
+      "_$comp": [
+        {
+          "_$type": "7f33604f-06b9-41ab-8697-f8a7fbb797eb",
+          "scriptPath": "../src/Play/Fish/View/FishAdapter.ts",
+          "flipEulerAngles": {
+            "_$type": "Vector3"
+          },
+          "flipScale": {
+            "_$type": "Vector3",
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "7fr5s6a4",
+          "_$type": "Sprite3D",
+          "name": "FishView",
+          "_$child": [
+            {
+              "_$id": "31xa0aik",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "transform": {
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": 0.7071067811865475,
+                  "w": 0.7071067811865476
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6,
+                  "y": 0.6,
+                  "z": 0.6
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "24334208-ff28-4b0b-a1ab-ce79d4b2e958",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "shout",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "cc73ae14-48da-447a-bff7-05e8aea32450",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        },
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "move",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "bd7d154d-bb7c-4620-adaa-995ec1448fdd",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "move"
+                    }
+                  ]
+                },
+                {
+                  "_$type": "656335b0-758e-4533-80c6-07e4a007ebcb",
+                  "scriptPath": "../src/Play/Fish/BossAnimEventHandler.ts"
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "v47xfu2q",
+                  "_$type": "Sprite3D",
+                  "name": "Bone009",
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": 0.4662231,
+                      "y": 0.6537391
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": 0.7071067811865389,
+                      "y": -1.106354970564041e-07,
+                      "z": -1.106354970564041e-07,
+                      "w": -0.7071067811865389
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "lnlc5fb1",
+                      "_$type": "Sprite3D",
+                      "name": "Bip001",
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 2.230929,
+                          "y": 0.08960997,
+                          "z": 1.179226
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": -0.6246429120146663,
+                          "y": 4.3889050844181993e-07,
+                          "z": 0.7809105150203884,
+                          "w": 4.867621093626041e-07
+                        }
+                      },
+                      "_$child": [
+                        {
+                          "_$id": "qa1bsi1v",
+                          "_$type": "Sprite3D",
+                          "name": "Bip001 Pelvis",
+                          "transform": {
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": 0.4999999999997551,
+                              "y": 0.4999999999997551,
+                              "z": 0.49999929999975506,
+                              "w": -0.500000699999755
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "vg4l7vmo",
+                              "_$type": "Sprite3D",
+                              "name": "Bip001 Spine",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 0.7378854,
+                                  "y": -0.001643066,
+                                  "z": 1.106262e-06
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": 2.1347219730274854e-06,
+                                  "y": 7.319195907520924e-07,
+                                  "z": -0.051552469348627256,
+                                  "w": -0.9986702873816594
+                                }
+                              },
+                              "_$child": [
+                                {
+                                  "_$id": "ogavonn2",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bip001 L Thigh",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": -0.7337944,
+                                      "y": 0.0776091,
+                                      "z": 1.28388
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": -0.8029260507269751,
+                                      "y": -0.4347104733231971,
+                                      "z": -0.40749837499311725,
+                                      "w": 0.01678200897014134
+                                    }
+                                  },
+                                  "_$child": [
+                                    {
+                                      "_$id": "wq09ajn5",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bip001 L Calf",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 1.321545,
+                                          "y": -1.525879e-07,
+                                          "z": 3.051758e-07
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": -5.0512859672750064e-08,
+                                          "y": -4.4725449710244074e-08,
+                                          "z": 0.6709089956534844,
+                                          "w": -0.7415396951959001
+                                        }
+                                      },
+                                      "_$child": [
+                                        {
+                                          "_$id": "rf7315cz",
+                                          "_$type": "Sprite3D",
+                                          "name": "Bip001 L Foot",
+                                          "transform": {
+                                            "localPosition": {
+                                              "_$type": "Vector3",
+                                              "x": 0.8447245,
+                                              "y": 1.525879e-07,
+                                              "z": 3.051758e-07
+                                            },
+                                            "localRotation": {
+                                              "_$type": "Quaternion",
+                                              "x": -0.1910486946091334,
+                                              "y": 0.09509440731669844,
+                                              "z": -0.33549149053335653,
+                                              "w": -0.9175526741091973
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "_$id": "tsgvspia",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bip001 R Thigh",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": -0.7337944,
+                                      "y": 0.07761642,
+                                      "z": -1.28388
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": -0.8029260865986263,
+                                      "y": -0.4347116927443709,
+                                      "z": 0.4074970931986008,
+                                      "w": -0.01677982971993341
+                                    }
+                                  },
+                                  "_$child": [
+                                    {
+                                      "_$id": "ql4o47o6",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bip001 R Calf",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 1.321545,
+                                          "y": 7.629394e-08
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": 3.893680974774602e-08,
+                                          "y": 6.524632957729854e-08,
+                                          "z": 0.6709089956534839,
+                                          "w": -0.7415396951958997
+                                        }
+                                      },
+                                      "_$child": [
+                                        {
+                                          "_$id": "fovdeinf",
+                                          "_$type": "Sprite3D",
+                                          "name": "Bip001 R Foot",
+                                          "transform": {
+                                            "localPosition": {
+                                              "_$type": "Vector3",
+                                              "x": 0.8447244,
+                                              "y": 9.536743e-08,
+                                              "z": -3.051758e-07
+                                            },
+                                            "localRotation": {
+                                              "_$type": "Quaternion",
+                                              "x": 0.19104859789574063,
+                                              "y": -0.095094428952605,
+                                              "z": -0.3354914963048086,
+                                              "w": -0.9175526898938339
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "_$id": "1bmp9xhg",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bip001 Spine1",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": 1.883959,
+                                      "y": -0.001513061
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": -3.540271069777927e-14,
+                                      "y": 1.6019240315735536e-07,
+                                      "z": -0.057756161138360636,
+                                      "w": -0.9983307196768685
+                                    }
+                                  },
+                                  "_$comp": [
+                                    {
+                                      "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                      "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                      "radius": 1.6
+                                    }
+                                  ],
+                                  "_$child": [
+                                    {
+                                      "_$id": "2vd79fnc",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bip001 Neck",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 1.925004,
+                                          "y": 0.1808963
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": 8.90583332058684e-09,
+                                          "y": -2.6818890965410333e-07,
+                                          "z": 0.08945198322003878,
+                                          "w": -0.9959911358530908
+                                        }
+                                      },
+                                      "_$child": [
+                                        {
+                                          "_$id": "t91mv7oe",
+                                          "_$type": "Sprite3D",
+                                          "name": "Bip001 Head",
+                                          "transform": {
+                                            "localPosition": {
+                                              "_$type": "Vector3",
+                                              "x": 0.9792554,
+                                              "y": -0.00324173
+                                            },
+                                            "localRotation": {
+                                              "_$type": "Quaternion",
+                                              "x": -8.211167565969962e-09,
+                                              "y": 3.6319728080193496e-07,
+                                              "z": -0.12359979346669976,
+                                              "w": -0.9923321475468068
+                                            }
+                                          },
+                                          "_$child": [
+                                            {
+                                              "_$id": "vuqtwvda",
+                                              "_$type": "Sprite3D",
+                                              "name": "Bone006",
+                                              "transform": {
+                                                "localPosition": {
+                                                  "_$type": "Vector3",
+                                                  "x": 0.1826355,
+                                                  "y": 0.01322876,
+                                                  "z": -7.333756e-06
+                                                },
+                                                "localRotation": {
+                                                  "_$type": "Quaternion",
+                                                  "x": -0.9792617070569586,
+                                                  "y": -0.2025993807710212,
+                                                  "z": 4.297680592101374e-07,
+                                                  "w": 1.7046328382110123e-06
+                                                }
+                                              },
+                                              "_$comp": [
+                                                {
+                                                  "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                                  "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                                  "radius": 0.8
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "_$id": "q3ayid07",
+                                          "_$type": "Sprite3D",
+                                          "name": "Bip001 L Clavicle",
+                                          "transform": {
+                                            "localPosition": {
+                                              "_$type": "Vector3",
+                                              "x": -1.245607,
+                                              "y": -0.05733871,
+                                              "z": 0.7438919
+                                            },
+                                            "localRotation": {
+                                              "_$type": "Quaternion",
+                                              "x": -0.7042982160922023,
+                                              "y": -0.06297158143881017,
+                                              "z": -0.7042962160921568,
+                                              "w": 0.06297176143881429
+                                            }
+                                          },
+                                          "_$child": [
+                                            {
+                                              "_$id": "qw5x2mbg",
+                                              "_$type": "Sprite3D",
+                                              "name": "Bip001 L UpperArm",
+                                              "transform": {
+                                                "localPosition": {
+                                                  "_$type": "Vector3",
+                                                  "x": 0.583907,
+                                                  "y": 1.525879e-07,
+                                                  "z": -3.814697e-08
+                                                },
+                                                "localRotation": {
+                                                  "_$type": "Quaternion",
+                                                  "x": 0.27448759771259007,
+                                                  "y": -0.0020755599827035663,
+                                                  "z": 0.3689862969250963,
+                                                  "w": -0.887975992600157
+                                                }
+                                              },
+                                              "_$child": [
+                                                {
+                                                  "_$id": "66oqhdbx",
+                                                  "_$type": "Sprite3D",
+                                                  "name": "Bip001 L Forearm",
+                                                  "transform": {
+                                                    "localPosition": {
+                                                      "_$type": "Vector3",
+                                                      "x": 1.14661,
+                                                      "z": -1.525879e-07
+                                                    },
+                                                    "localRotation": {
+                                                      "_$type": "Quaternion",
+                                                      "x": -5.874753945914197e-09,
+                                                      "y": 2.237504979400456e-09,
+                                                      "z": 0.3559263967231708,
+                                                      "w": -0.9345139913964158
+                                                    }
+                                                  },
+                                                  "_$child": [
+                                                    {
+                                                      "_$id": "4gle6sf9",
+                                                      "_$type": "Sprite3D",
+                                                      "name": "Bip001 L Hand",
+                                                      "transform": {
+                                                        "localPosition": {
+                                                          "_$type": "Vector3",
+                                                          "x": 1.057945,
+                                                          "y": 1.525879e-07
+                                                        },
+                                                        "localRotation": {
+                                                          "_$type": "Quaternion",
+                                                          "x": 0.5623934796735647,
+                                                          "y": 0.28428868972503085,
+                                                          "z": 0.42454758465569165,
+                                                          "w": -0.6501175765029764
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "_$id": "3wduocid",
+                                          "_$type": "Sprite3D",
+                                          "name": "Bip001 R Clavicle",
+                                          "transform": {
+                                            "localPosition": {
+                                              "_$type": "Vector3",
+                                              "x": -1.245607,
+                                              "y": -0.05733444,
+                                              "z": -0.7438913
+                                            },
+                                            "localRotation": {
+                                              "_$type": "Quaternion",
+                                              "x": -0.7042982160922023,
+                                              "y": -0.06297158143881017,
+                                              "z": 0.7042962160921568,
+                                              "w": -0.06297176143881429
+                                            }
+                                          },
+                                          "_$child": [
+                                            {
+                                              "_$id": "swxwbgby",
+                                              "_$type": "Sprite3D",
+                                              "name": "Bip001 R UpperArm",
+                                              "transform": {
+                                                "localPosition": {
+                                                  "_$type": "Vector3",
+                                                  "x": 0.583907,
+                                                  "z": -7.629394e-08
+                                                },
+                                                "localRotation": {
+                                                  "_$type": "Quaternion",
+                                                  "x": -0.27448759771315984,
+                                                  "y": 0.002075558982707883,
+                                                  "z": 0.3689862969258622,
+                                                  "w": -0.8879759926020002
+                                                }
+                                              },
+                                              "_$child": [
+                                                {
+                                                  "_$id": "oycnbo72",
+                                                  "_$type": "Sprite3D",
+                                                  "name": "Bip001 R Forearm",
+                                                  "transform": {
+                                                    "localPosition": {
+                                                      "_$type": "Vector3",
+                                                      "x": 1.14661,
+                                                      "y": 1.525879e-07
+                                                    },
+                                                    "localRotation": {
+                                                      "_$type": "Quaternion",
+                                                      "x": 1.5285480403325053e-08,
+                                                      "y": 2.6068970687859903e-08,
+                                                      "z": 0.35592630939152675,
+                                                      "w": -0.9345140246582319
+                                                    }
+                                                  },
+                                                  "_$child": [
+                                                    {
+                                                      "_$id": "9g7qksnx",
+                                                      "_$type": "Sprite3D",
+                                                      "name": "Bip001 R Hand",
+                                                      "transform": {
+                                                        "localPosition": {
+                                                          "_$type": "Vector3",
+                                                          "x": 1.057945,
+                                                          "z": -1.525879e-07
+                                                        },
+                                                        "localRotation": {
+                                                          "_$type": "Quaternion",
+                                                          "x": -0.5623935162357527,
+                                                          "y": -0.284288708207138,
+                                                          "z": 0.42454761225627585,
+                                                          "w": -0.6501175187682592
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "_$id": "qves23gh",
+                              "_$type": "Sprite3D",
+                              "name": "Bone001",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": -0.8265324,
+                                  "y": -0.2521162,
+                                  "z": 1.525879e-07
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.0091422000842496,
+                                  "y": 0.9999582092150772,
+                                  "z": -9.970715091884748e-07,
+                                  "w": 3.8919330358659616e-08
+                                }
+                              },
+                              "_$comp": [
+                                {
+                                  "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                  "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                  "radius": 1
+                                }
+                              ],
+                              "_$child": [
+                                {
+                                  "_$id": "8iez74f2",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bone002",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": 1.419893,
+                                      "y": -3.051758e-07,
+                                      "z": -1.239777e-07
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": -5.179134771128287e-10,
+                                      "y": -2.954402869441658e-08,
+                                      "z": 0.017528969225375397,
+                                      "w": -0.9998463558156799
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "_$id": "6ak3l3s0",
+                          "_$prefab": "fc365dc3-cbe9-4c0a-a29c-a3e57f65bd7e",
+                          "name": "赤炎龙龟_自身特效",
+                          "active": true,
+                          "layer": 0,
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 2.3320315520545405,
+                              "y": 0.08961299586092723,
+                              "z": 2.012905483947514
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": 0.6246429249837465,
+                              "y": -3.411574935246023e-07,
+                              "z": -0.7809105046466596,
+                              "w": 3.645791229245546e-07
+                            },
+                            "localScale": {
+                              "_$type": "Vector3",
+                              "x": 1.6666665276645385,
+                              "y": 1.6666666269310677,
+                              "z": 1.6666665276637174
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "_$id": "gh6m3h3f",
+                  "_$type": "Sprite3D",
+                  "name": "fish_longgui_001",
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "da2d1ac2-2867-4472-b93e-de6082329340",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "2e3506af-a175-4762-97fb-d7df070c05d8",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "t91mv7oe"
+                        },
+                        {
+                          "_$ref": "vuqtwvda"
+                        },
+                        {
+                          "_$ref": "2vd79fnc"
+                        },
+                        {
+                          "_$ref": "1bmp9xhg"
+                        },
+                        {
+                          "_$ref": "q3ayid07"
+                        },
+                        {
+                          "_$ref": "qw5x2mbg"
+                        },
+                        {
+                          "_$ref": "66oqhdbx"
+                        },
+                        {
+                          "_$ref": "4gle6sf9"
+                        },
+                        {
+                          "_$ref": "vg4l7vmo"
+                        },
+                        {
+                          "_$ref": "qa1bsi1v"
+                        },
+                        {
+                          "_$ref": "qves23gh"
+                        },
+                        {
+                          "_$ref": "ogavonn2"
+                        },
+                        {
+                          "_$ref": "wq09ajn5"
+                        },
+                        {
+                          "_$ref": "rf7315cz"
+                        },
+                        {
+                          "_$ref": "8iez74f2"
+                        },
+                        {
+                          "_$ref": "3wduocid"
+                        },
+                        {
+                          "_$ref": "swxwbgby"
+                        },
+                        {
+                          "_$ref": "oycnbo72"
+                        },
+                        {
+                          "_$ref": "9g7qksnx"
+                        },
+                        {
+                          "_$ref": "tsgvspia"
+                        },
+                        {
+                          "_$ref": "ql4o47o6"
+                        },
+                        {
+                          "_$ref": "fovdeinf"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "qa1bsi1v"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -4.096722,
+                          "y": -3.414536,
+                          "z": -3.706925
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 8.222477,
+                          "y": 3.130794,
+                          "z": 3.890042
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

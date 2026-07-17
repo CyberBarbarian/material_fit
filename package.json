@@ -1,0 +1,18 @@
+{
+  "name": "material-fit-runtime",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Browser runtime for persistent LayaAir material rendering",
+  "scripts": {
+    "browser:install": "playwright install chromium",
+    "browser:install-linux": "playwright install --with-deps chromium",
+    "browser:reinstall": "playwright install --force chromium",
+    "browser:check": "node scripts/check_playwright.js"
+  },
+  "dependencies": {
+    "playwright": "1.61.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -82,6 +82,76 @@ def get_props(data: dict[str, Any]) -> dict[str, Any]:
 _RESERVED_TOP_LEVEL_KEYS = frozenset({"type", "renderQueue", "materialRenderMode"})
 
 
+def extract_discrete_state(data: dict[str, Any]) -> dict[str, Any]:
+    """Return shader and hard render state without textures or continuous uniforms."""
+
+    props = get_props(data)
+    return {
+        key: copy.deepcopy(value)
+        for key, value in props.items()
+        if key in _RESERVED_TOP_LEVEL_KEYS
+        or key == "defines"
+        or key.startswith("s_")
+        or isinstance(value, bool)
+    }
+
+
+def write_discrete_aligned_lmat(
+    start_path: str | Path,
+    target_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Copy only target shader/hard state onto a start material skeleton."""
+
+    start = load_lmat(start_path)
+    target = load_lmat(target_path)
+    result = copy.deepcopy(start)
+    start_props = get_props(start)
+    result_props = get_props(result)
+    target_state = extract_discrete_state(target)
+    missing = sorted(key for key in target_state if key not in start_props)
+    incompatible = sorted(
+        key
+        for key, value in target_state.items()
+        if key in start_props
+        and key != "defines"
+        and not _shape_compatible(start_props[key], value)
+    )
+    if missing or incompatible:
+        raise LmatWriteError(
+            "Cannot construct discrete-aligned material: "
+            f"missing={missing}, incompatible={incompatible}"
+        )
+    changed: list[str] = []
+    for key, value in target_state.items():
+        if result_props[key] != value:
+            changed.append(key)
+        result_props[key] = copy.deepcopy(value)
+    save_lmat(result, output_path)
+    rewritten = load_lmat(output_path)
+    shape_differences = [
+        row
+        for row in diff_shapes(start, rewritten)
+        if not row.startswith("SHAPE props.defines:")
+    ]
+    if shape_differences:
+        Path(output_path).unlink(missing_ok=True)
+        raise LmatWriteError(
+            "Discrete-aligned material changed structure:\n  "
+            + "\n  ".join(shape_differences)
+        )
+    return {
+        "contract": "lmat_discrete_alignment_v1",
+        "start_path": str(Path(start_path).expanduser().resolve()),
+        "target_path": str(Path(target_path).expanduser().resolve()),
+        "output_path": str(Path(output_path).expanduser().resolve()),
+        "copied_keys": sorted(target_state),
+        "changed_keys": sorted(changed),
+        "textures_copied_from_target": False,
+        "continuous_uniforms_copied_from_target": False,
+    }
+
+
 def extract_params(data: dict[str, Any]) -> dict[str, Any]:
     """Return the subset of ``props`` that look like adjustable uniforms.
 

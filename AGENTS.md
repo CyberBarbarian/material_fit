@@ -1,17 +1,105 @@
-## Material Fit Optimization Rules
+# Material Fit Repository Rules
 
-- For maintained fish experiments, use the original source archives under `artifacts/source_archives/20260612_original_fish_inputs/` through `material_fit.assets.fish_scene.resolve_fish_scene_assets`. The maintained default experiment is fish finetune from the zip's unpatched source scene and `fish_jxs_test.lmat` UUID `4adc3c2d-41bc-4cad-87df-77ecfb84a558`. The zero-start experiment uses the same baseline but is still an experimental/debug route, not the stable release gate.
-- Treat `pattern16` as the maintained fish mainline optimizer. It is the reproduced 16D coordinate pattern-search route using the historical 8-view Unity reference setup. Do not present `cold_start_hybrid`, CMA-ES, or response-search routes as the default fish algorithm; those are comparison/experimental paths unless explicitly requested.
-- Treat `python -m material_fit.experiments.fish_core_experiment --mode finetune --optimizer pattern16` and `scripts/run_fish_finetune.*` as the current canonical mainline fish finetune entrypoints. They must start from the real `fish_jxs_test.lmat` material state (`initial_params_mode=material`), use 8 fixed `idle1` views, `900x700`, and `browser_fast_rgba_mae_v1` unless the user explicitly asks for an ablation.
-- Do not use remote forensic `start_params.json` snapshots as the default Windows/Linux finetune start. Those snapshots belong to exact remote-run forensics, not the maintained cross-platform material-start experiment.
-- Read `material_fit/docs/Canonical_Fish_Task.md` before changing or running fish experiments. If that document conflicts with older README text, treat the canonical task document and this `AGENTS.md` as authoritative until README is updated.
-- For `pattern16`, the optimizer-searchable zero-start set is exactly the 16 appearance parameters in `material_fit.optimizer.pattern16_strategy.PATTERN16_PARAM_ORDER`. Locked/material-validity parameters still inherit from the baseline `.lmat`.
-- For maintained `pattern16` zero-start experiments, use the Python-side `reference_foreground_mae` objective. Do not use full-canvas browser MAE as the optimization target for this hard-start mode, because blank white renders can score artificially high when background dominates the image.
-- Treat `1504_body.lmat` as a non-default ablation or historical diagnostic material only. Do not use it in the two maintained fish experiments unless the user explicitly asks to inspect that branch.
-- Do not mix legacy `examples/fish_laya_project` runs with canonical original-zip runs in one comparison image. Before presenting a visual comparison, verify and report the source `asset_set`, `scene_path`, `baseline_material_path`, `unity_reference_dir`, and run directory for each column.
-- Main experiment contact sheets should compare the target, the experiment start, and the experiment best. Treat `raw_scene_render` only as a separate renderer/asset sanity check; do not label it as "Material start" or use it as the second column in an optimization result figure.
-- Treat "zero-start" as `initial_params_mode=zero_searchable`: start from the real baseline `.lmat`, preserve locked material-validity parameters, and initialize optimizer-searchable appearance parameters to zero. The starting render may therefore look nearly blank or black; that is acceptable for this experimental route, but do not present zero-start as fully stabilized.
-- Never interpret zero-start as "set every numeric `.lmat` value to zero". Do not hand-write all-zero `.lmat` or all-zero params snapshots for optimization runs unless the user explicitly asks for a destructive stress test.
-- Locked/material-validity parameters must remain inherited from the baseline `.lmat` and must not be zeroed: texture bindings, texture UV scale/offset such as `*_ST`, alpha/cutoff values such as `u_AlphaTestValue`, scene/environment orientation such as `u_SkyRotate*` and `u_LightRotate*`, hidden shader params, bool/toggle params, and engine render-state params.
-- If a best render looks grey/blue, flat, black, or textureless, check `output/initial_params.json`, `output/auto_adjust/best/params.json`, and `param_policy_audit` before blaming the optimizer. In particular, verify `u_MainTex_ST`, `u_NormalTex_ST`, `u_SpeTex_ST`, `u_EmissionTex_ST`, `u_AlphaTestValue`, and `u_SkyRotate*` still match the baseline material.
-- For visual reports, prefer a four-column comparison when diagnosing this failure mode: Unity target, zero-searchable start, old/bad best, new/fixed best.
+## Shell and process safety
+
+- On Windows, keep PowerShell commands explicit. Do not pipe directly after a
+  closing script block. For nested Python, SSH, or Bash logic, write a UTF-8
+  script instead of stacking quoted one-liners.
+- Every experiment owns its browser, queue, renderer, and helper processes.
+  Record PIDs under the run directory, terminate the owned process tree in a
+  `finally`/`trap`, and verify that no owned process remains.
+- Never mass-kill Chrome, Node.js, Python, LayaAirIDE, Codex, or user browser
+  processes. A readiness failure must stop the process it started before
+  raising.
+- On the Volcano server, inspect the GPU guard and active compute jobs before a
+  run. GPU 0 is reserved for the StarCraft workload. Material Fit normally uses
+  GPU 2 when it is free. Do not stop, reset, or reconfigure an unrelated job.
+  If a guarded device is freed for a bounded test, record and restore the exact
+  original guard configuration before reporting completion.
+
+## Packaged runtime
+
+- Runtime experiments must resolve assets from the tracked projects under
+  `examples/`, not ignored `artifacts/` directories or forensic snapshots.
+- Use the repository Playwright installation under `node_modules/` and the
+  vendored LayaAir 3.4.0 files under `vendor/layaair-3.4.0/libs/`.
+- `python -m material_fit.doctor` must pass before a real experiment.
+- Source ZIP archives under `artifacts/source_archives/` are optional provenance
+  records. They are not installation dependencies.
+
+## Capture contract
+
+- Fish, turtle, crocodile, and new adapters use yaw
+  `0,45,90,135,180,225,270,315`, pitch `0`, zero yaw/pitch offsets, model-bounds
+  framing, and a white comparison background.
+- Disable animation before startup settling. Do not restore the historical fish
+  `idle1@0.21875` exception or copy an editor camera tilt into optimizer
+  profiles.
+- A source `.lmat` copied to another project must preserve valid texture
+  bindings. Fail when any `res://UUID` texture cannot be resolved.
+- Render target and scorer sanity first, stop the target renderer, then start
+  the candidate renderer. Do not keep two WebGL scenes alive during a long run.
+
+## Shared Stage 1
+
+- The canonical entry point is
+  `python -m material_fit.experiments.material_human_reference_stage1`; platform
+  wrappers are `scripts/run_stage1.ps1` and `scripts/run_stage1.sh`.
+- The only public policy is
+  `v86_budget1500_initial_score_routed_unified`. It permits one initial score
+  plus at most 1,499 proposals. Child policy snapshots are immutable JSON under
+  `material_fit/config/stage1_v86/` and are verified by hash.
+- Start from each asset's original continuous and discrete state. Build the 16
+  legal hard-state candidates without target information. Do not copy target
+  defines, bools, render state, continuous parameters, or asset-specific hints
+  into the optimizer start.
+- V86 may use only the initial full-resolution PNG score to choose its low,
+  medium, or high route. The router and optimizer must not receive the asset
+  name, target material, target parameters, or human-adjusted parameters.
+- Freeze the selected hard state and all six scene/light coordinates before the
+  final 40-coordinate material refinement.
+- Browser iterations return score and residual vectors only. Target, start,
+  scorer-sanity, and final evidence captures emit the eight PNG files.
+- Judge the `<=500 ms` speed gate from isolated stable decision iteration time,
+  excluding startup and report generation.
+
+Accepted Linux evidence is recorded in
+`material_fit/docs/EXPERIMENTS.md`. Old V3-V85 strategy experiments are not
+runtime APIs and must not be reintroduced as branches in the main runner.
+
+## Phase 0.5
+
+- Phase 0.5 perturbs and recovers the same 40 material coordinates while keeping
+  six scene/light coordinates fixed. Asset adapters and optimizer policy remain
+  separate.
+- The optimizer-visible config may reference target PNGs only. Target material
+  and target parameters belong under `private_audit/` and must not appear in
+  `fit_config.json`.
+- Require stable independent target renders, near-1.0 same-parameter score, high
+  tiny-perturbation score, eight real target/start/best PNGs, and a cleanup
+  audit before accepting a run.
+
+## Pattern16 and zero start
+
+- Pattern16 remains the fish cross-engine baseline against the tracked Unity
+  reference PNGs. It searches exactly the 16 names in
+  `PATTERN16_PARAM_ORDER`.
+- Zero start means `initial_params_mode=zero_searchable`: zero the 16 searchable
+  appearance values and inherit all material-validity state from the baseline
+  `.lmat`.
+- Never zero texture bindings, texture `*_ST` transforms, alpha/cutoff values,
+  hidden shader values, bool/toggle values, render state, or scene/light
+  orientation. A fully numeric all-zero material is a destructive stress test,
+  not the maintained experiment.
+- If a best render is flat, blue, grey, black, or textureless, audit locked
+  values before changing the optimizer.
+
+## Repository maintenance
+
+- Keep the root README limited to current installation and runnable workflows.
+  Historical experiment narratives belong in Git history, not executable
+  branches or active wrappers.
+- New assets add adapter data and tests; they do not add asset-name branches to
+  optimizer code.
+- Run `python -m pytest -q` after changes. For deployment changes, also test the
+  documented bootstrap and a real run on both Windows and Linux.

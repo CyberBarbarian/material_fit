@@ -1,0 +1,116 @@
+{
+    "schema_version":  1,
+    "asset_id":  "turtle_1506",
+    "project_root":  "laya_project_minimal",
+    "scene":  "assets/resources/model/1506/prefab/1506_start.lh",
+    "width":  800,
+    "height":  484,
+    "runtime":  {
+                    "target_name":  "model",
+                    "material_target_name":  "fish_longgui_001",
+                    "background_color":  [
+                                             143,
+                                             159,
+                                             185,
+                                             255
+                                         ],
+                    "ambient_color":  [
+                                          0.424308,
+                                          0.4578516,
+                                          0.5294118,
+                                          1
+                                      ],
+                    "startup_settle_frames":  1,
+                    "environment":  {
+                                        "preset":  "laya_prefab_editor"
+                                    },
+                    "camera":  {
+                                   "orthographic":  false,
+                                   "field_of_view":  60,
+                                   "distance":  7.0,
+                                   "yaw":  -45,
+                                   "pitch":  14.420773,
+                                   "height_offset":  0
+                               },
+                    "material_compatibility":  [
+                                                   {
+                                                       "shader_name_contains":  "FishStandar",
+                                                       "enable_defines":  [
+                                                                              "DIRECTIONLIGHT"
+                                                                          ]
+                                                   }
+                                               ]
+                },
+    "capture_defaults":  {
+                             "target_name":  "model",
+                             "capture_mode":  "orbit_camera",
+                             "preserve_target_transform":  true,
+                             "camera_distance":  7.0,
+                             "yaw_offset":  -45,
+                             "pitch_offset":  14.420773,
+                             "camera_height_factor":  0,
+                             "animation_mode":  "disabled",
+                             "freeze_animators":  true,
+                             "settle_frames":  0,
+                             "animation_freeze_settle_frames":  0,
+                             "visual_background_color":  [
+                                                             143,
+                                                             159,
+                                                             185,
+                                                             255
+                                                         ],
+                             "views":  [
+                                           {
+                                               "view_id":  "v000_yaw0_pitch0",
+                                               "yaw":  0,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v000_yaw0_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v001_yaw45_pitch0",
+                                               "yaw":  45,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v001_yaw45_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v002_yaw90_pitch0",
+                                               "yaw":  90,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v002_yaw90_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v003_yaw135_pitch0",
+                                               "yaw":  135,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v003_yaw135_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v004_yaw180_pitch0",
+                                               "yaw":  180,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v004_yaw180_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v005_yaw225_pitch0",
+                                               "yaw":  225,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v005_yaw225_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v006_yaw270_pitch0",
+                                               "yaw":  270,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v006_yaw270_pitch0.png"
+                                           },
+                                           {
+                                               "view_id":  "v007_yaw315_pitch0",
+                                               "yaw":  315,
+                                               "pitch":  0,
+                                               "file_name":  "laya_v007_yaw315_pitch0.png"
+                                           }
+                                       ]
+                         },
+    "validation_variants":  [
+
+                            ]
+}

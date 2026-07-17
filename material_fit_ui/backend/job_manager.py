@@ -186,8 +186,7 @@ def start_job(
         except (TypeError, ValueError):
             pass
 
-    # E-006 (ExperimentLog.md): pluggable optimizer. The default
-    # 'heuristic' value matches fit_material.py's own default, so old
+    # The 'heuristic' default matches fit_material.py, so old
     # projects without these fields still work unchanged.
     optimizer_value = str(algo.get("optimizer", "pattern16")).strip().lower()
     if optimizer_value not in (

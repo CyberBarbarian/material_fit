@@ -12,6 +12,53 @@ def test_runtime_renderer_material_patch_preserves_vector_uniform_types() -> Non
     assert "COLOR_PARAM_NAMES.has(name)" in text
 
 
+def test_runtime_renderer_material_patch_supports_strict_define_variants() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "MATERIAL_DEFINE_ALLOWLIST" in text
+    assert '"NORMALMAP"' in text
+    assert '"NORMALMAP_Y_INVERT"' in text
+    assert '"RIMSMOOTHNESS"' in text
+    assert "standalone source-material state is a valid no-op" in text
+    assert "NORMALMAP_Y_INVERT requires NORMALMAP" not in text
+    assert "material.addDefine(define)" in text
+    assert "material.removeDefine(define)" in text
+    assert "material.hasDefine(define)" in text
+    assert "if (isEnabled === shouldEnable) continue;" in text
+    assert "material_patch: materialPatch" in text
+
+
+def test_runtime_renderer_material_patch_supports_hard_render_states() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "MATERIAL_RENDER_STATE_PROPERTIES" in text
+    assert 's_BlendSrc: "blendSrc"' in text
+    assert 's_DepthWrite: "depthWrite"' in text
+    assert "applyMaterialRenderStates(material, renderStates)" in text
+    assert "render_state_count: renderStateCount" in text
+
+
+def test_runtime_renderer_supports_score_only_downsampled_readback() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "scoreReadbackDimensions" in text
+    assert "browserScore.readback_width" in text
+    assert "browserScore.readback_height" in text
+    assert "render_width: width" in text
+    assert "readback_width: scoreReadbackDimensions(command).width" in text
+
+
+def test_component_browser_scores_skip_unused_full_alpha_scans() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "useMaterialComponents ? false : hasForegroundAlpha(candidate)" in text
+    assert "useMaterialComponents ? false : hasForegroundAlpha(reference)" in text
+
+
 def test_runtime_renderer_does_not_silently_fallback_when_scene_url_fails() -> None:
     renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
     text = renderer.read_text(encoding="utf-8")
@@ -20,6 +67,18 @@ def test_runtime_renderer_does_not_silently_fallback_when_scene_url_fails() -> N
     assert "window.__MATERIAL_FIT_READY__ = { ok: false" in text
     assert "scene load failed, falling back to cube" not in text
     assert "capture-result rejected" in text
+
+
+def test_runtime_renderer_auto_frames_skinned_mesh_local_bounds() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "renderer.localBounds || renderer._localBounds" in text
+    assert "function boundsCenterExtent(bounds)" in text
+    assert "function transformLocalBounds(parts, transform)" in text
+    assert "transform.worldMatrix || transform._worldMatrix" in text
+    assert "command && command.camera_center" in text
+    assert "profile.center" in text
 
 
 def test_runtime_renderer_patches_scene_materials_before_scene_ready() -> None:
@@ -35,6 +94,188 @@ def test_runtime_renderer_patches_scene_materials_before_scene_ready() -> None:
     assert text.index(scene_patch) < text.index('console.log("[material-fit] loaded scene: " + sceneUrl);')
 
 
+def test_runtime_renderer_freezes_animation_pose_for_each_view() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "function freezeAnimators(command, root)" in text
+    assert "function applyFixedAnimation(command, animator)" in text
+    assert "function defaultAnimationStateName(animator, layerIndex)" in text
+    assert "command.fixed_animation_time" in text
+    assert "const FIXED_ANIMATION_SAMPLE_SPEED = 1e-6;" in text
+    assert "animator.speed = FIXED_ANIMATION_SAMPLE_SPEED;" in text
+    assert "animator.speed = 1;" not in text
+    scene_open = text.index("const scene = await Laya.Scene.open(sceneUrl, false);")
+    startup_disable = text.index("prepareStartupAnimators(sceneRoot);", scene_open)
+    startup_settle = text.index("await waitFrames(4);", scene_open)
+    assert scene_open < startup_disable < startup_settle
+    assert "resolveAnimationFreezeSettleFrames(command)" in text
+    assert "const frozenAnimators = freezeAnimators(command, runtime.target || runtime.scene);" in text
+
+    render_body = text[text.index("async function renderAndScore(command)") :]
+    assert render_body.index("drawView(command, view);") < render_body.index("stageCanvas(command);")
+    assert render_body.index("applyFixedAnimations(command, frozenAnimators);") < render_body.index("stageCanvas(command);")
+
+
+def test_laya_capture_uses_frame_time_independent_animation_sampling() -> None:
+    capture = (
+        Path(__file__).resolve().parents[1]
+        / "laya_capture"
+        / "laya"
+        / "MaterialFitCapture.ts"
+    )
+    text = capture.read_text(encoding="utf-8")
+
+    assert "animator.speed = 1e-6;" in text
+    assert "animator.speed = 1;" not in text
+
+
+def test_runtime_renderer_preserves_explicit_zero_settle_frames() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "Math.max(0, Math.floor(Number(count)))" in text
+    assert "resolveSettleFrames(command)" in text
+    assert "command.settle_frames || 2" not in text
+
+
+def test_runtime_renderer_skips_iteration_pngs_when_browser_score_is_enabled() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "function shouldEmitCaptureArtifacts(command)" in text
+    assert 'browserScore.emit_artifacts === "always"' in text
+    assert "if (shouldEmitCaptureArtifacts(command))" in text
+
+
+def test_runtime_renderer_white_artifacts_use_the_scored_pixel_buffer() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "canvasFromPixels(staged.pixels, staged.width, staged.height)" in text
+    assert "canvasOnBackground(staged.canvas, background)" not in text
+
+
+def test_runtime_renderer_background_composite_preserves_opaque_black_pixels() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    function_body = text[
+        text.index("function canvasOnBackground") : text.index("async function canvasToPngBase64")
+    ]
+
+    assert "ctx.fillStyle" in function_body
+    assert "ctx.fillRect(0, 0, out.width, out.height)" in function_body
+    assert "ctx.drawImage(canvas, 0, 0)" in function_body
+    assert "data[i] <= 1" not in function_body
+
+
+def test_runtime_renderer_caches_references_and_scores_one_pixel_buffer() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    render_body = text[text.index("async function renderAndScore(command)") :]
+
+    assert "const referencePixelCache = new Map();" in text
+    assert "const referenceV2FeatureCache = new WeakMap();" in text
+    assert "const referenceV4FeatureCache = new WeakMap();" in text
+    assert "referencePixelCache.get(cacheKey)" in text
+    assert "referencePixelCache.set(cacheKey, pixels)" in text
+    assert "function prepareMaterialReference(reference)" in text
+    assert "const preparedReference = useMaterialComponents ? prepareMaterialReference(reference) : null;" in text
+    assert "let scoreReadbackCanvas = null;" in text
+    assert "scoreReadbackContext.clearRect(0, 0, dimensions.width, dimensions.height);" in text
+    assert "? scorePixels(" in render_body
+    assert "const scoreCandidatePixels = staged.pixels;" in render_body
+    assert "canvasPixels(whiteArtifactCanvas)" not in render_body
+    assert "canvasPixels(visualCanvas)" not in render_body
+
+
+def test_runtime_renderer_browser_score_uses_foreground_weighted_rgba_objective() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    score_body = text[text.index("function scorePixels(candidate, reference") :]
+    render_body = text[text.index("async function renderAndScore(command)") :]
+
+    assert "rgb_weight" in score_body
+    assert "alpha_weight" in score_body
+    assert "function foregroundWeightAt(pixels, index, useAlpha)" in text
+    assert "function hasForegroundAlpha(pixels)" in text
+    assert "cachedSilhouetteAlpha(command, view)" in text
+    assert "distanceFromWhite > 8" in text
+    assert "foregroundWeight" in score_body
+    assert "Math.max(candidateForeground, referenceForeground)" in score_body
+    assert "Math.max(candidateAlpha, referenceAlpha)" not in score_body
+    assert "foreground_weight_sum" in score_body
+    assert "mask_iou" in score_body
+    assert "material_components" in score_body
+    assert "foreground_overlap_coefficient" in score_body
+    assert "0.70 * meanFitScore + 0.20 * p10Score + 0.10 * orderedScores[0]" in render_body
+    assert "const p10Score = linearQuantile(orderedScores, 0.10);" in render_body
+    assert render_body.index("const background = visualBackgroundColor(command)") < render_body.index("? scorePixels(")
+    assert "cross_engine_components_v2_raw_rgba_white_composite_v2" in render_body
+    assert "cross_engine_components_v3_raw_rgba_white_composite_v3" in render_body
+    assert "cross_engine_components_v4_python_parity_v1" in render_body
+    assert "cross_engine_components_v5_strict_canvas_core_v1" in render_body
+    assert 'metric === "cross_engine_foreground_components_v3"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v4"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v5_strict_core"' in score_body
+    assert "materialComponents.chroma_hue" in score_body
+    assert "function scoreMaterialComponentsV4" in text
+    assert "if (useMaterialComponentsV4) {" in score_body
+    assert "return scoreMaterialComponentsV4(" in score_body
+    assert "const residualSums = new Float64Array" in text
+    assert "residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals)" in text
+    assert "function exactColorDistributionError" in text
+    assert "function exactMultiscaleLuminanceError" in text
+    assert "function exactDetailError" in text
+    assert "function exactHighlightError" in text
+    assert (
+        "const minimumForegroundPixels = Math.min("
+        in text
+    )
+    assert "const minimumCoreBasisPixels = strictCanvasCore" in text
+    assert "? pixelCount" in text
+    assert ": minimumForegroundPixels" in text
+    assert "Math.floor(0.02 * minimumCoreBasisPixels)" in text
+    assert "if (coreCount < minimumCorePixels || overlapCoefficient < 0.75)" in text
+    assert "minimum_trusted_core_pixels: minimumCorePixels" in text
+    assert 'minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground"' in text
+    assert "minimum_core_basis_pixels: minimumCoreBasisPixels" in text
+    assert "minimum_foreground_pixels: minimumForegroundPixels" in text
+    assert "fit_score: 0" in text
+    assert "geometry_valid: false" in text
+    assert "return Math.round(channel * weight + 255 * (1 - weight));" in text
+
+
+def test_runtime_renderer_browser_score_emits_signed_grid_residuals() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    score_body = text[text.index("function scorePixels(candidate, reference") :]
+
+    assert "residual_grid_size" in score_body
+    assert "residual_sketch_size" in score_body
+    assert "signed_rgb_grid_sketch_v2" in text
+    assert "signed_rgb_grid_sketch_chroma_v3" in text
+    assert "residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals)" in score_body
+    assert "structured_residual_features" in score_body
+    assert ': "signed_rgb_grid_sketch_chroma_v3")' in score_body
+    assert '"signed_rgb_grid_sketch_chroma_v4_python_parity"' in score_body
+    assert ': "signed_rgb_grid_sketch_v2"' in score_body
+
+
+def test_laya_ide_capture_browser_score_uses_visual_white_background_pixels() -> None:
+    capture = Path(__file__).resolve().parents[1] / "laya_capture" / "laya" / "MaterialFitCapture.ts"
+    text = capture.read_text(encoding="utf-8")
+    score_body = text[text.index("private scorePixels(") :]
+
+    assert "copyPixelsForBrowserScore(outputPixels, command)" in text
+    assert "private foregroundWeightAt(" in text
+    assert "distanceFromWhite > 8" in text
+    assert "Math.max(candidateForeground, referenceForeground)" in score_body
+    assert "Math.max(candidateAlpha, referenceAlpha)" not in score_body
+    assert "residual_grid_size" in score_body
+    assert "structured_residual_features" in score_body
+
+
 def test_runtime_renderer_node_exits_on_pageerror() -> None:
     runner = Path(__file__).resolve().parents[1] / "laya_capture" / "run_runtime_renderer.js"
     text = runner.read_text(encoding="utf-8")
@@ -42,3 +283,34 @@ def test_runtime_renderer_node_exits_on_pageerror() -> None:
     assert "exitOnFatalPageError" in text
     assert "page.on('pageerror'" in text
     assert "process.exit(1);" in text
+
+
+def test_runtime_renderer_uses_asset_profile_without_hardcoded_model_contract() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    runner = Path(__file__).resolve().parents[1] / "laya_capture" / "run_runtime_renderer.js"
+    renderer_text = renderer.read_text(encoding="utf-8")
+    runner_text = runner.read_text(encoding="utf-8")
+
+    assert 'params.get("assetProfile")' in renderer_text
+    assert 'runtimeProfile.target_name || "model"' in renderer_text
+    assert "runtime.materialTarget || runtime.target" in renderer_text
+    assert "commandWithProfileDefaults" in renderer_text
+    assert "preserve_target_transform" in renderer_text
+    assert "args.assetProfile" in runner_text
+    assert "'/project/'" in runner_text
+    assert "'/environment/'" in runner_text
+    assert "preferredImportedTexture" in runner_text
+    assert "Number(metadata && metadata.shape) === 1" in runner_text
+    assert "sourceExtensionByUuid[uuid] === '.exr'" in runner_text
+
+
+def test_profile_driven_runtime_samples_default_pose_before_startup_settle() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert 'configuredAnimationMode(null) !== "disabled"' in text
+    assert "prepareStartupAnimators(prefab);" in text
+    assert 'if (animationMode === "disabled")' in text
+    assert 'animator.play(stateName, layerIndex, 0);' in text
+    assert 'startup animators sampled-at-zero count=' in text
+    assert text.index("prepareStartupAnimators(prefab);") < text.index("await waitFrames(runtimeProfile.startup_settle_frames")

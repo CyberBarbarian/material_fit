@@ -1,1 +1,0 @@
-LayaIDE MCPServer

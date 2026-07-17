@@ -369,7 +369,6 @@ export interface LayaSceneNodesPayload {
 export type FitScoreMode = 'linear' | 'perceptual' | 'human_accept' | 'research';
 export type AutoAdjustMode = 'fresh_fit' | 'refine_current';
 
-// E-007 (ExperimentLog.md): magenta-probe preflight result.
 // Mirrors ProbeResult.to_dict() in tools/material_fit/laya/refresh_probe.py.
 export interface FocusLogEntry {
   step: string;
@@ -459,8 +458,7 @@ export interface CmaEsConfig {
   /**
    * E-010: blend ratio for `analysis.adjustment_hints` into each
    * CMA-ES proposal. 0 disables (legacy), 0.30 is the recommended
-   * default, > 0.5 is heavy expert-driven exploration. See
-   * `tools/material_fit/docs/ExperimentLog.md` E-010.
+   * default, > 0.5 is heavy expert-driven exploration.
   */
   hint_bias_mix_ratio: number;
   /**

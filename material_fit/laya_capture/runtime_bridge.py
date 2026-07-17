@@ -100,6 +100,11 @@ class RuntimeCaptureBridge:
         payload = _with_reference_image_urls(payload, self.base_url)
         expected_order = _expected_view_ids(payload)
         expected = set(expected_order)
+        browser_score_config = payload.get("browser_score")
+        expect_browser_score = (
+            isinstance(browser_score_config, dict)
+            and browser_score_config.get("enabled") is True
+        )
 
         with self._state.condition:
             self._state.command = payload
@@ -116,7 +121,10 @@ class RuntimeCaptureBridge:
             self._state.condition.notify_all()
 
             deadline = time.monotonic() + float(timeout_s)
-            while not expected.issubset(self._state.received):
+            while (
+                not expected.issubset(self._state.received)
+                or (expect_browser_score and self._state.browser_score is None)
+            ):
                 if self._state.errors:
                     error = self._state.errors[0]
                     self._state.command = None
@@ -125,7 +133,10 @@ class RuntimeCaptureBridge:
                 if remaining <= 0:
                     missing = sorted(expected - self._state.received)
                     self._state.command = None
-                    raise RuntimeCaptureTimeout(f"Timed out waiting for Laya runtime capture views: {missing}")
+                    score_state = "missing" if expect_browser_score and self._state.browser_score is None else "received"
+                    raise RuntimeCaptureTimeout(
+                        f"Timed out waiting for Laya runtime capture views: {missing}; browser_score={score_state}"
+                    )
                 self._state.condition.wait(timeout=min(0.2, remaining))
 
             screenshots = [
@@ -209,7 +220,16 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                     return
                 if parsed.path == "/material-fit/capture-log":
                     with state.condition:
-                        state.logs.append(payload)
+                        entry = dict(payload)
+                        state.logs.append(entry)
+                        if str(entry.get("level") or "").lower() == "error":
+                            state.errors.append(
+                                {
+                                    "kind": "runtime_log",
+                                    "reason": str(entry.get("message") or entry.get("error") or entry),
+                                    "payload": entry,
+                                }
+                            )
                         state.condition.notify_all()
                     self._write_json({"ok": True})
                     return
@@ -280,11 +300,14 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                 score_payload = dict(browser_score)
                 score_payload.setdefault("enabled", True)
                 state.browser_score = score_payload
-                (state.output_dir / "browser_score.json").write_text(
-                    json.dumps(score_payload, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
-                state.received.update(state.expected)
+                command = state.command if isinstance(state.command, dict) else {}
+                if command.get("persist_browser_score", True) is not False:
+                    (state.output_dir / "browser_score.json").write_text(
+                        json.dumps(score_payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                if command.get("return_images") is False:
+                    state.received.update(state.expected)
                 state.condition.notify_all()
                 self._write_json({"ok": True, "received": sorted(state.received), "browser_score": score_payload})
 

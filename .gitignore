@@ -14,6 +14,9 @@ __pycache__/
 *.so
 .Python
 .pytest_cache/
+.venv/
+venv/
+.runtime/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -27,6 +30,7 @@ dist/
 # ----------------------------------------------------------------------------
 # Node / Vite (UI frontend)
 # ----------------------------------------------------------------------------
+/node_modules/
 material_fit_ui/frontend/node_modules/
 material_fit_ui/frontend/dist/
 material_fit_ui/frontend/.vite/
@@ -64,6 +68,15 @@ material_fit/experiments_out/
 /unity_references/
 examples/fish_laya_project/output/
 examples/fish_laya_project/.material_fit_browser_assets/
+examples/*_laya_project/output/
+examples/*_laya_project/.material_fit_browser_assets/
+examples/*_laya_project/.chat/
+examples/*_laya_project/local/
+examples/*_laya_project/library/*
+!examples/fish_laya_project/library/95/
+!examples/fish_laya_project/library/95/**
+!examples/turtle_laya_project/library/b3/
+!examples/turtle_laya_project/library/b3/**
 
 # Codex/Desktop local state.
 /.codex/

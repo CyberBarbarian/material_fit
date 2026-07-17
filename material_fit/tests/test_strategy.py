@@ -43,6 +43,7 @@ from tools.material_fit.optimizer.parameter_search import build_zero_searchable_
 from tools.material_fit.optimizer.strategy import (  # noqa: E402
     CmaesStrategy,
     CmaesStrategyConfig,
+    CrossEngineHybridStrategy,
     HeuristicStrategy,
     OptimizerUnavailableError,
     Pattern16Strategy,
@@ -220,6 +221,22 @@ def test_build_strategy_cma_cold():
     assert strategy.warm_started is False
 
 
+def test_build_strategy_cma_cold_respects_explicit_search_param_names():
+    policies = build_adjustment_policies(_shader_params())
+    strategy = build_strategy(
+        optimizer="cma_cold",
+        initial_params=_initial_params(),
+        shader_params=_shader_params(),
+        policies=policies,
+        unity_material_params={},
+        cma_es_config=CmaesStrategyConfig(seed=7),
+        search_param_names=["u_Gamma_Power"],
+    )
+
+    assert isinstance(strategy, CmaesStrategy)
+    assert strategy.trainable_dim == 1
+
+
 def test_build_strategy_cma_warm_falls_back_to_cold_when_no_history():
     policies = build_adjustment_policies(_shader_params())
     strategy = build_strategy(
@@ -321,6 +338,156 @@ def test_build_strategy_pattern16_mainline():
     assert isinstance(strategy, Pattern16Strategy)
     assert strategy.name == "pattern16"
     assert strategy.wants_global_no_improve_check() is False
+
+
+def test_build_strategy_cross_engine_hybrid_is_blackbox_mainline():
+    initial = _pattern16_params()
+    strategy = build_strategy(
+        optimizer="cross_engine_hybrid",
+        initial_params=initial,
+        shader_params=_pattern16_shader_params(),
+        policies=build_adjustment_policies(_pattern16_shader_params()),
+        unity_material_params={},
+    )
+
+    assert isinstance(strategy, CrossEngineHybridStrategy)
+    assert strategy.name == "cross_engine_hybrid"
+    assert strategy.wants_global_no_improve_check() is False
+    summary = strategy.research_summary()
+    assert summary["phase"] == "calibration"
+    assert summary["selected_params"] == list(PATTERN16_PARAM_ORDER)
+    assert "human_target" not in summary
+
+
+def test_cross_engine_hybrid_calibrates_then_runs_broad_pass_before_ranking():
+    initial = _pattern16_params()
+    strategy = build_strategy(
+        optimizer="cross_engine_hybrid",
+        initial_params=initial,
+        shader_params=_pattern16_shader_params(),
+        policies=build_adjustment_policies(_pattern16_shader_params()),
+        unity_material_params={},
+        search_param_names=["u_GammaPower", "u_Saturation"],
+    )
+    state = AdjustmentState(best_params=dict(initial))
+
+    first_params, first_decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=dict(initial),
+            analysis=_channel_analysis(),
+            diff_score=0.25,
+            fit_score=0.75,
+            state=state,
+        )
+    )
+    assert first_decision["cross_engine_hybrid"]["phase"] == "calibration"
+    assert first_decision["cross_engine_hybrid"]["param"] == "u_GammaPower"
+    assert first_decision["cross_engine_hybrid"]["direction"] == pytest.approx(-1.0)
+
+    second_params, second_decision = strategy.propose(
+        StrategyContext(
+            iteration=1,
+            current_params=first_params,
+            analysis=_channel_analysis(),
+            diff_score=0.27,
+            fit_score=0.73,
+            state=state,
+        )
+    )
+    assert second_decision["cross_engine_hybrid"]["param"] == "u_GammaPower"
+    assert second_decision["cross_engine_hybrid"]["direction"] == pytest.approx(1.0)
+
+    third_params, third_decision = strategy.propose(
+        StrategyContext(
+            iteration=2,
+            current_params=second_params,
+            analysis=_channel_analysis(),
+            diff_score=0.20,
+            fit_score=0.80,
+            state=state,
+        )
+    )
+    assert third_decision["cross_engine_hybrid"]["param"] == "u_Saturation"
+
+    fourth_params, fourth_decision = strategy.propose(
+        StrategyContext(
+            iteration=3,
+            current_params=third_params,
+            analysis=_channel_analysis(),
+            diff_score=0.19,
+            fit_score=0.81,
+            state=state,
+        )
+    )
+    assert fourth_decision["cross_engine_hybrid"]["param"] == "u_Saturation"
+
+    fifth_params, fifth_decision = strategy.propose(
+        StrategyContext(
+            iteration=4,
+            current_params=fourth_params,
+            analysis=_channel_analysis(),
+            diff_score=0.24,
+            fit_score=0.76,
+            state=state,
+        )
+    )
+    assert fifth_decision["cross_engine_hybrid"]["phase"] == "broad_pattern"
+    assert fifth_decision["cross_engine_hybrid"]["param"] == "u_GammaPower"
+    assert fifth_decision["cross_engine_hybrid"]["direction"] == pytest.approx(-1.0)
+    assert fifth_params["u_GammaPower"] != initial["u_GammaPower"]
+
+
+def test_cross_engine_hybrid_shrinks_stale_ranked_param_immediately():
+    initial = _pattern16_params()
+    strategy = CrossEngineHybridStrategy(
+        initial_params=initial,
+        shader_params=_pattern16_shader_params(),
+        search_param_names=["u_GammaPower"],
+        fixed_rounds_before_ranking=2,
+    )
+    state = AdjustmentState(best_params=dict(initial))
+
+    first_params, _ = strategy.propose(
+        StrategyContext(0, dict(initial), _channel_analysis(), 0.25, 0.75, state)
+    )
+    second_params, _ = strategy.propose(
+        StrategyContext(1, first_params, _channel_analysis(), 0.20, 0.80, state)
+    )
+    third_params, third_decision = strategy.propose(
+        StrategyContext(2, second_params, _channel_analysis(), 0.26, 0.74, state)
+    )
+    assert third_decision["cross_engine_hybrid"]["phase"] == "broad_pattern"
+
+    fourth_params, _ = strategy.propose(
+        StrategyContext(3, third_params, _channel_analysis(), 0.21, 0.79, state)
+    )
+    fifth_params, fifth_decision = strategy.propose(
+        StrategyContext(4, fourth_params, _channel_analysis(), 0.22, 0.78, state)
+    )
+    assert fifth_decision["cross_engine_hybrid"]["phase"] == "ranked_pattern"
+    sixth_params, _ = strategy.propose(
+        StrategyContext(5, fifth_params, _channel_analysis(), 0.21, 0.79, state)
+    )
+    strategy.propose(
+        StrategyContext(6, sixth_params, _channel_analysis(), 0.22, 0.78, state)
+    )
+
+    summary = strategy.research_summary()
+    assert summary["steps"]["u_GammaPower"] == pytest.approx(
+        summary["min_steps"]["u_GammaPower"] * 4.0
+    )
+
+
+def test_build_strategy_rejects_human_target_teacher_optimizer():
+    with pytest.raises(ValueError, match="unknown optimizer"):
+        build_strategy(
+            optimizer="human_target",
+            initial_params=_initial_params(),
+            shader_params=_shader_params(),
+            policies=build_adjustment_policies(_shader_params()),
+            unity_material_params={},
+        )
 
 
 def test_pattern16_search_param_names_excludes_material_validity_params():
@@ -2525,6 +2692,7 @@ def test_cmaes_strategy_config_dict_round_trip():
         "initial_design_method": "local_coordinate_probe",
         "initial_design_include_current": False,
         "initial_design_local_step_ratio": 0.025,
+        "allow_scene_lighting": False,
     }
     config = cmaes_strategy_config_from_dict(raw)
     assert config.mode == "warm"
@@ -2569,6 +2737,7 @@ def test_cmaes_strategy_config_dict_round_trip():
         "initial_design_method": "local_coordinate_probe",
         "initial_design_include_current": False,
         "initial_design_local_step_ratio": 0.025,
+        "allow_scene_lighting": False,
     }
 
 

@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.material_fit.laya import render_driver as render_driver_module  # noqa: E402
+from material_fit.laya import render_driver as render_driver_module  # noqa: E402
 
 
 RenderDriver = render_driver_module.RenderDriver
@@ -56,7 +56,91 @@ def _poll_runtime_bridge_and_post(base_url: str, *, expected_nonce: str, expecte
     raise AssertionError("runtime bridge command was not observed")
 
 
-def _serve_one_persistent_queue_request(state_dir: Path) -> None:
+def _poll_runtime_bridge_and_post_score(base_url: str, *, expected_nonce: str, expected_value: float) -> None:
+    deadline = time.monotonic() + 3.0
+    last_nonce = ""
+    while time.monotonic() < deadline:
+        with urllib.request.urlopen(
+            f"{base_url}/material-fit/capture-command?last_nonce={last_nonce}",
+            timeout=1.0,
+        ) as response:
+            command = json.loads(response.read().decode("utf-8"))
+        if command.get("enabled") is False or command.get("nonce") == last_nonce:
+            time.sleep(0.02)
+            continue
+
+        assert command["nonce"] == expected_nonce
+        assert command["return_images"] is False
+        assert command["material_patch"]["values"]["u_Metallic"] == expected_value
+        payload = {
+            "nonce": command["nonce"],
+            "browser_score": {"enabled": True, "fit_score": 0.87, "diff_score": 0.13},
+        }
+        request = urllib.request.Request(
+            f"{base_url}/material-fit/capture-score",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=1.0) as response:
+            assert response.status == 200
+        return
+    raise AssertionError("runtime bridge score command was not observed")
+
+
+def test_build_capture_request_merges_fixed_define_variant_with_candidate_values(tmp_path: Path) -> None:
+    params_path = tmp_path / "params.json"
+    request = render_driver_module._build_capture_request(
+        {
+            "target_name": "model",
+            "material_patch": {
+                "defines": {
+                    "managed": ["NORMALMAP", "NORMALMAP_Y_INVERT", "RIMSMOOTHNESS"],
+                    "enabled": ["NORMALMAP", "RIMSMOOTHNESS"],
+                }
+            },
+        },
+        params_path,
+        {"u_Metallic": 0.25},
+    )
+
+    assert request["material_patch"]["target_name"] == "model"
+    assert request["material_patch"]["values"] == {"u_Metallic": 0.25}
+    assert request["material_patch"]["defines"]["enabled"] == ["NORMALMAP", "RIMSMOOTHNESS"]
+
+
+def test_build_capture_request_applies_internal_browser_score_override(tmp_path: Path) -> None:
+    params_path = tmp_path / "params.json"
+    request = render_driver_module._build_capture_request(
+        {
+            "target_name": "model",
+            "browser_score": {
+                "enabled": True,
+                "metric": "cross_engine_foreground_components_v3",
+                "readback_width": 720,
+                "readback_height": 560,
+            },
+        },
+        params_path,
+        {
+            "u_Metallic": 0.25,
+            "__material_fit_browser_score_override__": {
+                "metric": "cross_engine_foreground_components_v4",
+                "readback_width": 544,
+                "readback_height": 423,
+                "unsupported": "ignored",
+            },
+        },
+    )
+
+    assert request["browser_score"]["metric"] == "cross_engine_foreground_components_v4"
+    assert request["browser_score"]["readback_width"] == 544
+    assert request["browser_score"]["readback_height"] == 423
+    assert "unsupported" not in request["browser_score"]
+    assert request["material_patch"]["values"] == {"u_Metallic": 0.25}
+
+
+def _serve_one_persistent_queue_request(state_dir: Path, *, fast_settle: bool = False) -> None:
     queue_dir = state_dir / "queue"
     result_dir = state_dir / "results"
     deadline = time.monotonic() + 3.0
@@ -77,7 +161,12 @@ def _serve_one_persistent_queue_request(state_dir: Path) -> None:
         assert command["restore_scene_scripts_after_capture"] is False
         assert command["preserve_target_base_rotation"] is False
         assert command["target_base_roll"] == 0.0
-        assert command["animation_freeze_settle_frames"] == 3
+        if fast_settle:
+            assert command["settle_frames"] == 0
+            assert command["animation_freeze_settle_frames"] == 0
+        else:
+            assert "settle_frames" not in command
+            assert command["animation_freeze_settle_frames"] == 3
         output_dir = Path(command["output_dir"])
         output_dir.mkdir(parents=True, exist_ok=True)
         if command.get("image_format") == "raw_rgba":
@@ -330,6 +419,135 @@ def test_render_driver_can_capture_via_embedded_runtime_bridge(tmp_path):
     assert screenshot.read_bytes() == b"runtime-capture"
 
 
+def test_runtime_bridge_port_zero_supports_concurrent_drivers(tmp_path: Path) -> None:
+    capture_config = {
+        "runtime_bridge": {
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": 0,
+            "auto_start_renderer": False,
+        }
+    }
+    first = RenderDriver(
+        output_dir=tmp_path / "first",
+        dry_run=False,
+        capture_config=capture_config,
+    )
+    second = RenderDriver(
+        output_dir=tmp_path / "second",
+        dry_run=False,
+        capture_config=capture_config,
+    )
+    try:
+        first_port = int(first.runtime_capture_base_url.rsplit(":", 1)[1])
+        second_port = int(second.runtime_capture_base_url.rsplit(":", 1)[1])
+        assert first_port > 0
+        assert second_port > 0
+        assert first_port != second_port
+    finally:
+        second.close()
+        first.close()
+
+
+def test_render_driver_algorithm_render_uses_embedded_runtime_score_path(tmp_path):
+    driver = RenderDriver(
+        output_dir=tmp_path / "root",
+        dry_run=False,
+        capture_config={
+            "runtime_bridge": {"enabled": True, "host": "127.0.0.1", "port": 0, "timeout_s": 3.0},
+            "target_name": "model",
+            "return_images": False,
+            "browser_score": {"enabled": True, "metric": "runtime_laya_canvas_mae"},
+            "views": [{"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0}],
+        },
+    )
+    try:
+        worker = threading.Thread(
+            target=_poll_runtime_bridge_and_post_score,
+            args=(driver.runtime_capture_base_url,),
+            kwargs={"expected_nonce": "capture-0004", "expected_value": 0.25},
+        )
+        worker.start()
+        result = driver.render_candidate(4, {"u_Metallic": 0.25})
+        worker.join(timeout=1.0)
+    finally:
+        driver.close()
+
+    assert result["status"] == "ok"
+    assert result["screenshots"] == []
+    assert result["browser_score"]["fit_score"] == pytest.approx(0.87)
+    assert not list((tmp_path / "root" / "iterations" / "iter_0004").rglob("*.png"))
+
+
+def test_render_driver_asset_profile_starts_one_owned_runtime_and_merges_defaults(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    scene = project / "assets" / "scene.lh"
+    scene.parent.mkdir(parents=True)
+    scene.write_text("{}", encoding="utf-8")
+    profile_path = tmp_path / "asset_profile.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "asset_id": "test_asset",
+                "project_root": str(project),
+                "scene": "assets/scene.lh",
+                "width": 800,
+                "height": 484,
+                "capture_defaults": {
+                    "target_name": "profile_target",
+                    "animation_mode": "disabled",
+                    "settle_frames": 0,
+                    "views": [{"view_id": "v000_yaw0_pitch0", "yaw": 0, "pitch": 0}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    events: list[tuple[str, dict | None]] = []
+
+    class FakeManagedRuntimeRenderer:
+        def __init__(self, **kwargs):
+            events.append(("init", kwargs))
+
+        def start(self):
+            events.append(("start", None))
+            return {"ok": True, "pid": 123}
+
+        def stop(self):
+            events.append(("stop", None))
+            return {"ok": True, "pid": 123}
+
+    monkeypatch.setattr(render_driver_module, "ManagedRuntimeRenderer", FakeManagedRuntimeRenderer)
+    driver = RenderDriver(
+        output_dir=tmp_path / "run",
+        dry_run=False,
+        capture_config={
+            "runtime_bridge": {
+                "enabled": True,
+                "host": "127.0.0.1",
+                "port": 0,
+                "asset_profile": str(profile_path),
+            },
+            "target_name": "explicit_target",
+        },
+    )
+    try:
+        assert driver.capture_config["target_name"] == "explicit_target"
+        assert driver.capture_config["animation_mode"] == "disabled"
+        assert driver.capture_config["settle_frames"] == 0
+        assert driver.capture_config["width"] == 800
+        assert driver.capture_config["height"] == 484
+        assert events[0][0] == "init"
+        assert events[1] == ("start", None)
+        assert events[0][1]["profile_path"] == str(profile_path.resolve())
+    finally:
+        driver.close()
+
+    assert events[-1] == ("stop", None)
+    assert [name for name, _payload in events].count("start") == 1
+
+
 def test_render_driver_can_render_via_persistent_queue(tmp_path):
     state_dir = tmp_path / "state"
     state_dir.mkdir()
@@ -345,6 +563,8 @@ def test_render_driver_can_render_via_persistent_queue(tmp_path):
                 "poll_s": 0.01,
                 "cap_port": 9999,
                 "alpha_source": "render_alpha",
+                "settle_frames": 0,
+                "animation_freeze_settle_frames": 0,
             },
             "image_format": "raw_rgba",
             "target_name": "model",
@@ -361,7 +581,11 @@ def test_render_driver_can_render_via_persistent_queue(tmp_path):
         },
     )
 
-    worker = threading.Thread(target=_serve_one_persistent_queue_request, args=(state_dir,))
+    worker = threading.Thread(
+        target=_serve_one_persistent_queue_request,
+        args=(state_dir,),
+        kwargs={"fast_settle": True},
+    )
     worker.start()
     result = driver.render_candidate(5, {"u_Metallic": 0.33})
     worker.join(timeout=1.0)

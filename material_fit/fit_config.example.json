@@ -5,9 +5,9 @@
     "The fish_core_experiment runner writes absolute paths into its generated fit_config.json.",
     "If you use this file manually, copy it to artifacts/<run>/fit_config.json or replace paths with absolute paths."
   ],
-  "case_name": "fish_1504_default_finetune_fast_path_example",
+  "case_name": "fish_1504_active_finetune_fast_path_example",
   "asset_set": {
-    "name": "fish_1504_default_finetune_from_original_zip_20260612",
+    "name": "fish_1504_finetune_from_1504_new_test_20260709",
     "source_archive_dir": "artifacts/source_archives/20260612_original_fish_inputs",
     "source_laya_project_dir": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal",
     "source_scene_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/game.ls",
@@ -15,13 +15,13 @@
     "source_scene_material_name": "fish_jxs_test.lmat",
     "laya_project_dir": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal",
     "scene_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/game.ls",
-    "baseline_material_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/model/1504/mat/fish_jxs_test.lmat",
-    "baseline_material_name": "fish_jxs_test.lmat",
+    "baseline_material_path": "material_fit/assets/material_starts/1504/active/1504_new_test.lmat",
+    "baseline_material_name": "1504_new_test.lmat",
     "unity_reference_dir": "artifacts/original_zip_probe_20260612/unity_references_zip/unity_references",
     "scene_material_uuid": "4adc3c2d-41bc-4cad-87df-77ecfb84a558"
   },
   "laya_shader_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/shader/Custom_low.shader",
-  "laya_material_path": "artifacts/original_zip_probe_20260612/laya_project_zip/laya_project_minimal/assets/resources/model/1504/mat/fish_jxs_test.lmat",
+  "laya_material_path": "material_fit/assets/material_starts/1504/active/1504_new_test.lmat",
   "unity_shader_path": "",
   "unity_material_params_path": "",
   "image_pairs": [],
@@ -48,8 +48,8 @@
     "always_keep_first_artifact": true
   },
   "optimizer": "pattern16",
-  "output_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/output",
-  "external_backup_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/external_backups",
+  "output_dir": "artifacts/manual_fish_1504_active_finetune_fast_path/output",
+  "external_backup_dir": "artifacts/manual_fish_1504_active_finetune_fast_path/external_backups",
   "dry_run": false,
   "render_command": [],
   "laya_window": {
@@ -63,7 +63,7 @@
   "laya_capture": {
     "persistent_queue": {
       "enabled": true,
-      "state_dir": "artifacts/manual_fish_1504_default_finetune_fast_path/persistent_queue",
+      "state_dir": "artifacts/manual_fish_1504_active_finetune_fast_path/persistent_queue",
       "timeout_s": 180,
       "poll_s": 0.02,
       "cap_port": 8787,

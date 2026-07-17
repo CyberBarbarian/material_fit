@@ -1,0 +1,14 @@
+{
+  "uuid": "37aebc16-cbad-45c2-9ee0-1ad89b6dd770",
+  "importer": {
+    "wrapMode": 0,
+    "platformAndroid": {
+      "format": "ASTC_6X6",
+      "quality": 1
+    },
+    "platformIOS": {
+      "format": "ASTC_6X6",
+      "quality": 1
+    }
+  }
+}

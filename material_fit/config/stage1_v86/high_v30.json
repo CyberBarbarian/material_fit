@@ -1,0 +1,138 @@
+{
+  "branch_jacobian": {
+    "acceptance_objective": "residual_merit",
+    "difference_mode": "forward",
+    "line_search_scales": [
+      1.0,
+      0.5,
+      0.25,
+      0.125
+    ],
+    "max_axis_update": 0.18,
+    "maximum_score_drop": 0.02,
+    "maximum_trust_radius": 0.24,
+    "minimum_probe_step": 0.006,
+    "probe_step": 0.025,
+    "ridge": 0.1,
+    "score_feature_weight": 20.0,
+    "shader_default_anchor_enabled": false,
+    "solve_mode": "full_least_squares",
+    "trust_radius": 0.12
+  },
+  "branch_strategy": "material_jacobian_trust_region",
+  "continuous": {
+    "jacobian": {
+      "acceptance_objective": "residual_merit",
+      "difference_mode": "forward",
+      "line_search_scales": [
+        1.0,
+        0.5,
+        0.25,
+        0.125
+      ],
+      "max_axis_update": 0.18,
+      "maximum_score_drop": 0.02,
+      "maximum_trust_radius": 0.24,
+      "minimum_probe_step": 0.006,
+      "probe_step": 0.025,
+      "ridge": 0.1,
+      "score_feature_weight": 20.0,
+      "shader_default_anchor_enabled": false,
+      "solve_mode": "full_least_squares",
+      "trust_radius": 0.12
+    },
+    "profile": "material_stage1_v29_joint_basin_jacobian",
+    "strategy": "material_jacobian_trust_region"
+  },
+  "diversity_rounds": 0,
+  "max_rescans": 2,
+  "max_scored_candidates": 1000,
+  "optimization_score_metric": "cross_engine_foreground_components_v4",
+  "planned_proposal_budget": {
+    "first_common_parameter_discrete_rescan": 16,
+    "initial_discrete_probes": 15,
+    "initial_round_shared_seed_and_probe": 2,
+    "joint_basin_jacobian_before_rescan": 300,
+    "joint_forward_jacobian_after_final_rescan": 298,
+    "joint_local_jacobian_between_rescans": 350,
+    "second_common_parameter_discrete_rescan": 16,
+    "total": 998,
+    "winner_local_probe": 1
+  },
+  "post_rescan_branch_race": {
+    "budget_per_candidate": 1,
+    "enabled": true,
+    "final_continuous": {
+      "frozen_param_names": [],
+      "jacobian": {
+        "acceptance_objective": "residual_merit",
+        "difference_mode": "forward",
+        "line_search_scales": [
+          1.0,
+          0.5,
+          0.25,
+          0.125
+        ],
+        "max_axis_update": 0.08,
+        "maximum_score_drop": 0.02,
+        "maximum_trust_radius": 0.1,
+        "minimum_probe_step": 0.001,
+        "probe_step": 0.006,
+        "ridge": 0.005,
+        "score_feature_weight": 20.0,
+        "shader_default_anchor_enabled": false,
+        "solve_mode": "full_least_squares",
+        "trust_radius": 0.04
+      },
+      "profile": "material_stage1_v29_joint_local_jacobian",
+      "strategy": "material_jacobian_trust_region"
+    },
+    "frozen_param_names": [],
+    "group_axes": [
+      "normal_mode",
+      "normal_y_invert",
+      "rim_smooth"
+    ],
+    "jacobian": {
+      "acceptance_objective": "residual_merit",
+      "difference_mode": "forward",
+      "line_search_scales": [
+        1.0,
+        0.5,
+        0.25,
+        0.125
+      ],
+      "max_axis_update": 0.08,
+      "maximum_score_drop": 0.02,
+      "maximum_trust_radius": 0.1,
+      "minimum_probe_step": 0.001,
+      "probe_step": 0.006,
+      "ridge": 0.005,
+      "score_feature_weight": 20.0,
+      "shader_default_anchor_enabled": false,
+      "solve_mode": "full_least_squares",
+      "trust_radius": 0.04
+    },
+    "strategy": "material_jacobian_trust_region",
+    "width": 1
+  },
+  "rescan_at": [
+    300,
+    650
+  ],
+  "rescan_interval": 0,
+  "restart_continuous_after_rescan": true,
+  "round_budgets": [
+    1
+  ],
+  "round_sigmas": [
+    0.12
+  ],
+  "round_widths": [
+    1
+  ],
+  "runtime_profile": "material_discrete_joint_v30_budget1000_v4_forward_double_rescan",
+  "score_height": 423,
+  "score_width": 544,
+  "winner_continuation_budget": 0
+}

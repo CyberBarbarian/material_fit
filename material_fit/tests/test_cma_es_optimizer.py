@@ -38,6 +38,7 @@ from tools.material_fit.optimizer.cma_es_optimizer import (
     ParameterEncoder,
     cmaes_from_heuristic_history,
 )
+from tools.material_fit.optimizer.semantic_graph import ParamSemantics
 from tools.material_fit.shared.models import ShaderParam
 
 
@@ -131,6 +132,42 @@ def test_encoder_excludes_textures_and_st_and_bools():
     for axis in base_color_axes:
         assert axis.low == 0.0
         assert axis.high == 1.0
+
+
+def test_encoder_allows_explicit_scene_rotation_search_only_when_enabled():
+    params = {"u_SkyRotateX": 0.0, "u_GammaPower": 1.0}
+    shader = [
+        ShaderParam("u_SkyRotateX", "Float", default=0.0),
+        ShaderParam("u_GammaPower", "Float", default=1.0),
+    ]
+
+    locked = ParameterEncoder(
+        params,
+        shader,
+        param_whitelist=["u_SkyRotateX"],
+    )
+    enabled = ParameterEncoder(
+        params,
+        shader,
+        param_whitelist=["u_SkyRotateX"],
+        semantics={
+            "u_SkyRotateX": ParamSemantics(
+                name="u_SkyRotateX",
+                param_type="Float",
+                group="scene",
+                role="orientation",
+                transform="linear",
+                searchable=False,
+                reason="scene lighting/environment orientation parameter",
+            )
+        },
+        allow_scene_lighting=True,
+    )
+
+    assert locked.dim == 0
+    assert [(axis.param_name, axis.low, axis.high) for axis in enabled.axes] == [
+        ("u_SkyRotateX", -180.0, 180.0)
+    ]
 
 def test_encoder_round_trip_preserves_values():
     initial = _initial_params()

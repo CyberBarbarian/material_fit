@@ -1,0 +1,168 @@
+{
+  "_$ver": 1,
+  "_$id": "egyqe0gy",
+  "_$type": "GWidget",
+  "name": "panel",
+  "x": 12,
+  "y": 12,
+  "width": 1136,
+  "height": 640,
+  "anchorX": 0.5,
+  "anchorY": 0.5,
+  "_$comp": [
+    {
+      "_$type": "c35ca088-0557-4d92-9c1f-2d9be6622030",
+      "scriptPath": "../src/Base/Node/FillParent.ts",
+      "fillParent": false,
+      "keepAspectRatio": false
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "xuygkzxm",
+      "_$type": "GImage",
+      "name": "circle",
+      "x": 568,
+      "y": 249,
+      "width": 74,
+      "height": 74,
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "relations": [
+        {
+          "_$type": "Relation",
+          "target": {
+            "_$ref": "egyqe0gy"
+          },
+          "data": [
+            6,
+            0,
+            13,
+            0
+          ]
+        }
+      ],
+      "src": "res://0cc09324-0803-4612-a9cb-9d2da6dff11f",
+      "autoSize": false,
+      "_$child": [
+        {
+          "_$id": "v5gqre7h",
+          "_$type": "Sprite",
+          "name": "counter",
+          "x": 38,
+          "y": 38,
+          "width": 41,
+          "height": 94,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "scaleX": 0.36,
+          "scaleY": 0.36,
+          "_$comp": [
+            {
+              "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b",
+              "scriptPath": "../src/Base/UI/SpriteFont.ts",
+              "fontConfig": "resources/fnt/fnt002_yellow.json",
+              "text": "1",
+              "letterSpacing": 0,
+              "charAlignX": "left",
+              "charAlignY": "bottom"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "su2tzksl",
+      "_$type": "GImage",
+      "name": "logo",
+      "x": 568,
+      "y": 472,
+      "width": 286,
+      "height": 180,
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "relations": [
+        {
+          "_$type": "Relation",
+          "target": {
+            "_$ref": "egyqe0gy"
+          },
+          "data": [
+            6,
+            0,
+            16,
+            0
+          ]
+        }
+      ],
+      "src": "res://3ccd513f-fb07-44c0-80ca-e3c944925c31",
+      "_$child": [
+        {
+          "_$id": "ruy9eq6s",
+          "_$type": "GWidget",
+          "name": "gold",
+          "x": 143,
+          "y": 116,
+          "width": 0,
+          "height": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "scaleX": 0.8,
+          "scaleY": 0.8,
+          "relations": [
+            {
+              "_$type": "Relation",
+              "target": {
+                "_$ref": "su2tzksl"
+              },
+              "data": [
+                6,
+                0
+              ]
+            }
+          ],
+          "_$comp": [
+            {
+              "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b",
+              "scriptPath": "../src/Base/UI/SpriteFont.ts",
+              "fontConfig": "resources/fnt/fnt_turntable.json",
+              "text": "",
+              "letterSpacing": -11,
+              "charAlignX": "left",
+              "charAlignY": "bottom"
+            },
+            {
+              "_$type": "2e59bbd1-1176-4833-af36-8468957e7823",
+              "scriptPath": "../src/Base/UI/NumberRoll.ts",
+              "textFont": {
+                "_$ref": "ruy9eq6s",
+                "_$type": "05e47252-26f1-4398-8c39-eb6be70d580b"
+              },
+              "autoPlay": false,
+              "autoPlayValue": 0,
+              "autoPlayFrom": 0,
+              "autoPlayUseFrom": true,
+              "duration": 1.5,
+              "delayTime": 0,
+              "endScale": 2,
+              "endScaleTime": 0.5,
+              "isJump": true,
+              "jumpScale": 1,
+              "isRecovery": false,
+              "recoveryDelay": 1,
+              "recoveryScale": 0,
+              "recoveryX": 0,
+              "recoveryY": 0,
+              "recoveryDuration": 0.4,
+              "recoveryDestroy": false,
+              "prefix": "",
+              "sign": "x",
+              "isMultiplier": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "drawCallOptimize": true
+}

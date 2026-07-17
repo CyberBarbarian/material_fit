@@ -1,0 +1,701 @@
+{
+  "_$ver": 1,
+  "_$id": "af6ciy0x",
+  "_$type": "Sprite3D",
+  "name": "1503",
+  "_$comp": [
+    {
+      "_$type": "bdd19034-f104-4c6f-ad7f-e5091f806b77",
+      "scriptPath": "../src/Play/Fish/View/FishNode.ts",
+      "thickness": 4,
+      "animators": [
+        {
+          "_$ref": "ezlm3y2t",
+          "_$type": "Animator"
+        }
+      ],
+      "spriteRenderer": null,
+      "colliders": [
+        {
+          "_$ref": "ugrh7qwu",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "3k7gne1p",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "sy28cud4",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "qiidsri1",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "lkgd9ma4",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        },
+        {
+          "_$ref": "q8w7d5hq",
+          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a"
+        }
+      ]
+    }
+  ],
+  "_$child": [
+    {
+      "_$id": "iagacasm",
+      "_$type": "Sprite3D",
+      "name": "Adapter",
+      "_$comp": [
+        {
+          "_$type": "7f33604f-06b9-41ab-8697-f8a7fbb797eb",
+          "scriptPath": "../src/Play/Fish/View/FishAdapter.ts",
+          "flipEulerAngles": {
+            "_$type": "Vector3"
+          },
+          "flipScale": {
+            "_$type": "Vector3",
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "zgcr29jw",
+          "_$type": "Sprite3D",
+          "name": "FishView",
+          "_$child": [
+            {
+              "_$id": "ezlm3y2t",
+              "_$type": "Sprite3D",
+              "name": "model",
+              "transform": {
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": 0.7071067811865475,
+                  "w": 0.7071067811865476
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 0.6,
+                  "y": 0.6,
+                  "z": 0.6
+                }
+              },
+              "_$comp": [
+                {
+                  "_$type": "Animator",
+                  "controller": {
+                    "_$uuid": "15312394-466f-4bab-adea-c23b893c1369",
+                    "_$type": "AnimationController"
+                  },
+                  "controllerLayers": [
+                    {
+                      "_$type": "AnimatorControllerLayer",
+                      "name": "Base Layer",
+                      "states": [
+                        {
+                          "_$type": "AnimatorState",
+                          "name": "swim",
+                          "clipStart": 0,
+                          "clip": {
+                            "_$uuid": "194bc663-a7b9-4553-8ea9-ce390332b03c",
+                            "_$type": "AnimationClip"
+                          },
+                          "soloTransitions": []
+                        }
+                      ],
+                      "defaultStateName": "swim"
+                    }
+                  ]
+                }
+              ],
+              "_$child": [
+                {
+                  "_$id": "jbkdk2io",
+                  "_$type": "Sprite3D",
+                  "name": "fish_eyu_001",
+                  "transform": {
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": 0.7071067811865476,
+                      "w": -0.7071067811865476
+                    }
+                  },
+                  "_$comp": [
+                    {
+                      "_$type": "MeshFilter",
+                      "sharedMesh": {
+                        "_$uuid": "281b0766-40a8-4a2b-b661-d7ed74bf65c8",
+                        "_$type": "Mesh"
+                      }
+                    },
+                    {
+                      "_$type": "SkinnedMeshRenderer",
+                      "receiveShadow": true,
+                      "castShadow": true,
+                      "lightmapScaleOffset": {
+                        "_$type": "Vector4"
+                      },
+                      "sharedMaterials": [
+                        {
+                          "_$uuid": "51f84454-e1a8-4e4b-8bef-dba3db2ed0f1",
+                          "_$type": "Material"
+                        }
+                      ],
+                      "_bones": [
+                        {
+                          "_$ref": "ugrh7qwu"
+                        },
+                        {
+                          "_$ref": "sy28cud4"
+                        },
+                        {
+                          "_$ref": "qiidsri1"
+                        },
+                        {
+                          "_$ref": "lkgd9ma4"
+                        },
+                        {
+                          "_$ref": "6p9rmb2o"
+                        },
+                        {
+                          "_$ref": "3k7gne1p"
+                        },
+                        {
+                          "_$ref": "1mxeftlu"
+                        },
+                        {
+                          "_$ref": "q8w7d5hq"
+                        },
+                        {
+                          "_$ref": "14egqvk7"
+                        },
+                        {
+                          "_$ref": "32axif50"
+                        },
+                        {
+                          "_$ref": "ss8xdnns"
+                        },
+                        {
+                          "_$ref": "uxlhmarw"
+                        },
+                        {
+                          "_$ref": "3d8vm46i"
+                        },
+                        {
+                          "_$ref": "sa1qezp6"
+                        },
+                        {
+                          "_$ref": "hljh8yrl"
+                        },
+                        {
+                          "_$ref": "z9lq5qn9"
+                        },
+                        {
+                          "_$ref": "xnl8myjp"
+                        }
+                      ],
+                      "rootBone": {
+                        "_$ref": "ugrh7qwu"
+                      },
+                      "localBounds": {
+                        "_$type": "Bounds",
+                        "min": {
+                          "_$type": "Vector3",
+                          "x": -3.693979,
+                          "y": -1.377654,
+                          "z": -2.532676
+                        },
+                        "max": {
+                          "_$type": "Vector3",
+                          "x": 12.15485,
+                          "y": 2.155997,
+                          "z": 2.425934
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "0wu8kko6",
+                  "_$type": "Sprite3D",
+                  "name": "Dummy001",
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.6908679008483887,
+                      "y": 1.339118242263794,
+                      "z": 5.960464477539063e-8
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": 8.093402215081344e-8,
+                      "w": 0.9999999999999967
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 1,
+                      "y": 1.000000000000013,
+                      "z": 1.000000000000013
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "ugrh7qwu",
+                      "_$type": "Sprite3D",
+                      "name": "Bone006",
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": -0.3039657,
+                          "y": 0.004756927,
+                          "z": -1.525879e-7
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": -0.9999487407683131,
+                          "y": -0.010125010412800754,
+                          "z": -7.644167311655782e-10,
+                          "w": -7.549403307792215e-8
+                        }
+                      },
+                      "_$comp": [
+                        {
+                          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                          "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                          "radius": 1
+                        }
+                      ],
+                      "_$child": [
+                        {
+                          "_$id": "1mxeftlu",
+                          "_$type": "Sprite3D",
+                          "name": "Bone003",
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": -1.102089,
+                              "y": -0.2523515,
+                              "z": -1.525879e-7
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -1.536428921491996e-8,
+                              "y": 1.7815259089681002e-7,
+                              "z": 0.996301749091259,
+                              "w": -0.08592336560951251
+                            }
+                          }
+                        },
+                        {
+                          "_$id": "3k7gne1p",
+                          "_$type": "Sprite3D",
+                          "name": "Bone005",
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": -1.406771,
+                              "y": 0.2627212,
+                              "z": -7.629394e-8
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -4.419124055602101e-8,
+                              "y": 1.1905460149796339e-7,
+                              "z": 0.9999938125820766,
+                              "w": -0.00351778304426129
+                            }
+                          },
+                          "_$comp": [
+                            {
+                              "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                              "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                              "radius": 1
+                            }
+                          ]
+                        },
+                        {
+                          "_$id": "sy28cud4",
+                          "_$type": "Sprite3D",
+                          "name": "Bone008",
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 2.615823,
+                              "y": -0.006442108,
+                              "z": -3.051758e-7
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": 6.72190191028833e-15,
+                              "y": -4.3343709421527325e-16,
+                              "z": -0.08439725887361953,
+                              "w": -0.996432186701443
+                            }
+                          },
+                          "_$comp": [
+                            {
+                              "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                              "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                              "radius": 1
+                            }
+                          ],
+                          "_$child": [
+                            {
+                              "_$id": "qiidsri1",
+                              "_$type": "Sprite3D",
+                              "name": "Bone010",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 2.466043,
+                                  "y": -0.002964172
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": 4.471170939307553e-16,
+                                  "y": -2.158823970695751e-16,
+                                  "z": -0.013828159812294172,
+                                  "w": -0.9999043864271253
+                                }
+                              },
+                              "_$comp": [
+                                {
+                                  "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                  "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                  "radius": 1
+                                }
+                              ],
+                              "_$child": [
+                                {
+                                  "_$id": "lkgd9ma4",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bone012",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": 1.681182,
+                                      "y": 0.00002151489,
+                                      "z": -5.857862e-8
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "z": 0.03329296785094048,
+                                      "w": -0.9994456354858309
+                                    }
+                                  },
+                                  "_$comp": [
+                                    {
+                                      "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                      "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                      "radius": 1
+                                    }
+                                  ],
+                                  "_$child": [
+                                    {
+                                      "_$id": "q8w7d5hq",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bone013",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 2.421043,
+                                          "y": -0.000002441406,
+                                          "z": -2.946763e-12
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": 4.458932639400065e-16,
+                                          "y": 1.1301559086027574e-17,
+                                          "z": 0.06808360449398648,
+                                          "w": -0.9976796193162947
+                                        }
+                                      },
+                                      "_$comp": [
+                                        {
+                                          "_$type": "ed3900e7-62fc-4f1e-b8f2-4ed6b237106a",
+                                          "scriptPath": "../src/Play/Fish/View/FishColliderOrthographic.ts",
+                                          "radius": 1
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "_$id": "14egqvk7",
+                              "_$type": "Sprite3D",
+                              "name": "Bone024",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 1.951857,
+                                  "y": -0.02884201,
+                                  "z": -0.8968439
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.5222746030024178,
+                                  "y": -0.05049511029028295,
+                                  "z": 0.8379425048171085,
+                                  "w": 0.15010610086292003
+                                }
+                              },
+                              "_$child": [
+                                {
+                                  "_$id": "ss8xdnns",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bone025",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": 0.7823846,
+                                      "z": -3.051758e-7
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": -0.060131479515083804,
+                                      "y": 0.06454048947952838,
+                                      "z": 0.6059318951136045,
+                                      "w": -0.7906106936243057
+                                    }
+                                  },
+                                  "_$child": [
+                                    {
+                                      "_$id": "uxlhmarw",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bone026",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 0.5910121,
+                                          "y": -6.67572e-8,
+                                          "z": -6.103515e-7
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": -0.2937130671559464,
+                                          "y": 0.16050808205140785,
+                                          "z": -0.6179337309004234,
+                                          "w": -0.7114265204457227
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "_$id": "sa1qezp6",
+                              "_$type": "Sprite3D",
+                              "name": "Bone028",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 1.847727,
+                                  "y": 0.0205339,
+                                  "z": 0.8568981
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": 0.1115256977118772,
+                                  "y": 0.807583983431161,
+                                  "z": 0.0021820819552312016,
+                                  "w": -0.5791073881187131
+                                }
+                              },
+                              "_$child": [
+                                {
+                                  "_$id": "z9lq5qn9",
+                                  "_$type": "Sprite3D",
+                                  "name": "Bone029",
+                                  "transform": {
+                                    "localPosition": {
+                                      "_$type": "Vector3",
+                                      "x": 0.6847776,
+                                      "y": -1.525879e-7,
+                                      "z": -3.051758e-7
+                                    },
+                                    "localRotation": {
+                                      "_$type": "Quaternion",
+                                      "x": 0.20341880808804386,
+                                      "y": 0.20419370811885432,
+                                      "z": -0.5855364232812507,
+                                      "w": -0.7576759301256123
+                                    }
+                                  },
+                                  "_$child": [
+                                    {
+                                      "_$id": "xnl8myjp",
+                                      "_$type": "Sprite3D",
+                                      "name": "Bone030",
+                                      "transform": {
+                                        "localPosition": {
+                                          "_$type": "Vector3",
+                                          "x": 0.6901609,
+                                          "y": -0.000001144409,
+                                          "z": 6.103515e-7
+                                        },
+                                        "localRotation": {
+                                          "_$type": "Quaternion",
+                                          "x": -0.5096017799313957,
+                                          "y": 0.5076032800100986,
+                                          "z": 0.3765416851714292,
+                                          "w": -0.5838332770080885
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "_$id": "3d8vm46i",
+                          "_$type": "Sprite3D",
+                          "name": "Bone016",
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 0.4734736,
+                              "y": 0.3361805,
+                              "z": 0.7825323
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -0.41035412053853,
+                              "y": 0.40453882024746984,
+                              "z": -0.5738345287208465,
+                              "w": -0.5819551291272885
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "hljh8yrl",
+                              "_$type": "Sprite3D",
+                              "name": "Bone017",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 0.7958295,
+                                  "y": -4.577637e-7,
+                                  "z": -2.288818e-7
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": 0.0969198587055098,
+                                  "y": -0.2985547960124142,
+                                  "z": -0.5365067928342572,
+                                  "w": -0.7833466895373907
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "_$id": "6p9rmb2o",
+                          "_$type": "Sprite3D",
+                          "name": "Bone020",
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 0.4037828,
+                              "y": 0.334769,
+                              "z": -0.7830003
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -0.6118393234313816,
+                              "y": -0.5309045203318518,
+                              "z": 0.3828324146611897,
+                              "w": -0.4441085170078577
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "32axif50",
+                              "_$type": "Sprite3D",
+                              "name": "Bone021",
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 0.7985047,
+                                  "z": -1.525879e-7
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.08782918459421679,
+                                  "y": -0.28242118261730775,
+                                  "z": 0.5980739631892497,
+                                  "w": -0.7448703541541042
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "_$id": "u9c804pf",
+                  "_$prefab": "381aa043-0cae-4a0f-83aa-343c4a8492e6",
+                  "name": "深渊巨鳄_游场_霜鳞",
+                  "active": false,
+                  "layer": 0,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "y": 4,
+                      "z": 2.434283705182189e-23
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion"
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "drawCallOptimize": false
+                },
+                {
+                  "_$id": "ppi471dr",
+                  "_$prefab": "2aacfda1-0ef7-4874-869d-b5b849e7aa3c",
+                  "name": "深渊巨鳄_游场_蓝雾",
+                  "active": false,
+                  "layer": 0,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": 4
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion"
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "drawCallOptimize": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

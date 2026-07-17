@@ -95,6 +95,7 @@ def build_param_policy_audit(
     shader_params: list[ShaderParam],
     *,
     search_param_names: set[str] | list[str] | tuple[str, ...] | None = None,
+    allow_scene_lighting_search: bool = False,
 ) -> dict[str, Any]:
     """Describe which params are searchable and which are locked for a run."""
 
@@ -105,7 +106,11 @@ def build_param_policy_audit(
     for name in ordered_param_names(params, shader_params):
         param = param_by_name.get(name)
         value = params.get(name)
-        reason = fixed_optimizer_param_reason(name, param)
+        reason = fixed_optimizer_param_reason(
+            name,
+            param,
+            allow_scene_lighting=allow_scene_lighting_search,
+        )
         if reason is None and search_names is not None and name not in search_names:
             reason = "not active in semantic search graph"
         if reason is None and not is_numeric_search_value(value):
@@ -119,6 +124,7 @@ def build_param_policy_audit(
     return {
         "searchable_param_count": len(searchable),
         "locked_param_count": len(locked),
+        "allow_scene_lighting_search": bool(allow_scene_lighting_search),
         "searchable_params": searchable,
         "locked_params": locked,
     }

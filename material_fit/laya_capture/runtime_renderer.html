@@ -14,12 +14,21 @@
   const engineRoot = params.get("engineRoot") || "";
   const projectRoot = params.get("projectRoot") || "";
   const sceneUrl = params.get("scene") || "";
+  const environmentSceneUrl = params.get("environmentScene") || "";
   const assetManifestUrl = params.get("assetManifest") || "";
+  const assetProfileUrl = params.get("assetProfile") || "";
   const serverBaseUrl = params.get("server") || "http://127.0.0.1:8787";
   const width = Number(params.get("width") || "320");
   const height = Number(params.get("height") || "240");
   const startupDebugMaterial = params.get("debugMaterial") === "1" || params.get("debugMaterial") === "true";
   const allowFallbackScene = params.get("allowFallbackScene") === "1" || params.get("allowFallbackScene") === "true";
+  const assetProfile = await loadAssetProfile();
+  const runtimeProfile = assetProfile && assetProfile.runtime && typeof assetProfile.runtime === "object"
+    ? assetProfile.runtime
+    : {};
+  const captureDefaults = assetProfile && assetProfile.capture_defaults && typeof assetProfile.capture_defaults === "object"
+    ? assetProfile.capture_defaults
+    : {};
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -34,6 +43,17 @@
   function joinUrl(root, path) {
     if (!root) return path;
     return root.replace(/\/$/, "") + "/" + path.replace(/^\//, "");
+  }
+
+  async function loadAssetProfile() {
+    if (!assetProfileUrl) return {};
+    const response = await fetch(assetProfileUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error("asset profile load failed: " + response.status);
+    const profile = await response.json();
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+      throw new Error("asset profile must be a JSON object");
+    }
+    return profile;
   }
 
   await loadScript(joinUrl(engineRoot, "laya.core.js"));
@@ -52,7 +72,7 @@
   if (initResult && typeof initResult.then === "function") {
     await initResult;
   }
-  Laya.stage.bgColor = "#000000";
+  Laya.stage.bgColor = colorToCss(runtimeProfile.background_color, "#000000");
   if (Laya.stage.scaleMode !== undefined) {
     Laya.stage.scaleMode = "noscale";
   }
@@ -60,6 +80,14 @@
   let lastNonce = "";
   let busy = false;
   let lastColor = [0.2, 0.6, 1.0, 1.0];
+  const referencePixelCache = new Map();
+  const referenceV2FeatureCache = new WeakMap();
+  const referenceV4FeatureCache = new WeakMap();
+  const silhouetteAlphaCache = new Map();
+  let scoreReadbackCanvas = null;
+  let scoreReadbackContext = null;
+  let animatorDiscoveryLogged = false;
+  const FIXED_ANIMATION_SAMPLE_SPEED = 1e-6;
 
   await loadProjectBundles();
   await installAssetManifest();
@@ -127,17 +155,25 @@
         }
         const scene = await Laya.Scene.open(sceneUrl, false);
         const sceneRoot = scene.scene3D || scene;
+        // Disable serialized animators as soon as the hierarchy is available.
+        // Waiting through startup settle frames first makes the captured
+        // "startup" pose depend on browser/frame timing.
+        prepareStartupAnimators(sceneRoot);
         ensureRuntimeMaterialCompatibility(sceneRoot);
         await waitFrames(4);
         ensureRuntimeMaterialCompatibility(sceneRoot);
         const camera = findFirstCamera(sceneRoot) || findNodeByName(sceneRoot, "Capture Camera");
-        const target = findNodeByName(sceneRoot, "model");
+        const target = findNodeByName(sceneRoot, runtimeProfile.target_name || "model");
         if (!camera || !target) {
           throw new Error(`scene loaded but camera/target missing camera=${!!camera} target=${!!target}`);
         }
         console.log("[material-fit] loaded scene: " + sceneUrl);
-        const frame = frameCamera(camera, target);
-        return { mode: "scene", scene: sceneRoot, camera, target, fallbackMaterial: null, frame };
+        applySceneProfile(sceneRoot, camera);
+        // Catch animators introduced by startup scripts while retaining the
+        // already-frozen serialized pose.
+        prepareStartupAnimators(target);
+        const frame = frameCamera(camera, target, runtimeProfile.camera);
+        return buildRuntimeState("scene", sceneRoot, camera, target, null, frame);
       } catch (error) {
         const message = "[material-fit] scene load failed: " + (error && error.stack || error);
         console.error(message);
@@ -162,16 +198,14 @@
     fallbackMaterial.albedoColor = new Laya.Color(lastColor[0], lastColor[1], lastColor[2], lastColor[3]);
     target.meshRenderer.material = fallbackMaterial;
     console.log("[material-fit] using fallback cube renderer");
-    const frame = frameCamera(camera, target);
-    return { mode: "fallback_cube", scene, camera, target, fallbackMaterial, frame };
+    const frame = frameCamera(camera, target, runtimeProfile.camera);
+    return buildRuntimeState("fallback_cube", scene, camera, target, fallbackMaterial, frame);
   }
 
   async function createPrefabRuntimeScene(prefabUrl) {
-    const scene = new Laya.Scene3D();
-    Laya.stage.addChild(scene);
-    const camera = new Laya.Camera(0, 0.1, 100);
-    camera.name = "Capture Camera";
-    scene.addChild(camera);
+    const environment = await createRuntimeEnvironment();
+    const scene = environment.scene;
+    const camera = environment.camera;
     let prefab = await Laya.loader.load(prefabUrl);
     prefab = normalizeLoadedResource(prefabUrl, prefab);
     if (!prefab) {
@@ -179,15 +213,61 @@
     }
     console.log("[material-fit] prefab resource type: " + resourceTypeName(prefab));
     scene.addChild(prefab);
+    prepareStartupAnimators(prefab);
     ensureRuntimeMaterialCompatibility(prefab);
     if (startupDebugMaterial) {
       applyDebugMaterials(prefab);
     }
-    await waitFrames(8);
-    const target = findNodeByName(prefab, "model") || prefab;
-    const frame = frameCamera(camera, target);
+    await waitFrames(runtimeProfile.startup_settle_frames == null ? 8 : runtimeProfile.startup_settle_frames);
+    const target = findNodeByName(prefab, runtimeProfile.target_name || "model") || prefab;
+    applySceneProfile(scene, camera);
+    const frame = frameCamera(camera, target, runtimeProfile.camera);
     console.log("[material-fit] loaded prefab: " + prefabUrl);
-    return { mode: "prefab", scene, camera, target, fallbackMaterial: null, frame };
+    return buildRuntimeState("prefab", scene, camera, target, null, frame);
+  }
+
+  async function createRuntimeEnvironment() {
+    if (environmentSceneUrl) {
+      const opened = await Laya.Scene.open(environmentSceneUrl, false);
+      const scene = opened && (opened.scene3D || findFirstScene3D(opened) || opened);
+      const camera = findFirstCamera(scene) || findNodeByName(scene, "Main Camera");
+      if (!scene || !camera) {
+        throw new Error(`environment scene missing Scene3D/camera: ${environmentSceneUrl}`);
+      }
+      console.log("[material-fit] loaded runtime environment: " + environmentSceneUrl);
+      return { scene, camera };
+    }
+    const scene = new Laya.Scene3D();
+    Laya.stage.addChild(scene);
+    const camera = new Laya.Camera(0, 0.1, 100);
+    camera.name = "Capture Camera";
+    scene.addChild(camera);
+    addProfileLights(scene);
+    return { scene, camera };
+  }
+
+  function findFirstScene3D(root) {
+    if (!root) return null;
+    if (root instanceof Laya.Scene3D) return root;
+    for (const child of childNodes(root)) {
+      const found = findFirstScene3D(child);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function buildRuntimeState(mode, scene, camera, target, fallbackMaterial, frame) {
+    const materialTarget = findNodeByName(target, runtimeProfile.material_target_name || "") || target;
+    const initialTargetEuler = cloneVector3(target && target.transform && target.transform.localRotationEuler);
+    return { mode, scene, camera, target, materialTarget, fallbackMaterial, frame, initialTargetEuler };
+  }
+
+  function cloneVector3(value) {
+    return new Laya.Vector3(
+      numberOr(value && value.x, 0),
+      numberOr(value && value.y, 0),
+      numberOr(value && value.z, 0),
+    );
   }
 
   function normalizeLoadedResource(url, resource) {
@@ -208,8 +288,12 @@
     return ctor + " keys=" + Object.keys(value).slice(0, 8).join(",");
   }
 
-  function frameCamera(camera, target) {
-    const center = new Laya.Vector3(0, 0, 0);
+  function frameCamera(camera, target, cameraProfile) {
+    const profile = cameraProfile && typeof cameraProfile === "object" ? cameraProfile : {};
+    const configuredCenter = profile.center;
+    const center = Array.isArray(configuredCenter) && configuredCenter.length >= 3
+      ? new Laya.Vector3(numberOr(configuredCenter[0], 0), numberOr(configuredCenter[1], 0), numberOr(configuredCenter[2], 0))
+      : new Laya.Vector3(0, 0, 0);
     const extent = new Laya.Vector3(2, 2, 2);
     const bounds = aggregateBounds(target);
     if (bounds) {
@@ -220,13 +304,24 @@
       extent.y = bounds.extent.y;
       extent.z = bounds.extent.z;
     }
-    const radius = Math.max(1, extent.x, extent.y, extent.z) * 2.4;
-    camera.transform.position = new Laya.Vector3(center.x, center.y + radius * 0.15, center.z + radius);
+    const radius = numberOr(profile.distance, Math.max(1, extent.x, extent.y, extent.z) * 2.4);
+    const yawRad = numberOr(profile.yaw, 0) * Math.PI / 180;
+    const pitchRad = numberOr(profile.pitch, 0) * Math.PI / 180;
+    const cosPitch = Math.cos(pitchRad);
+    camera.transform.position = new Laya.Vector3(
+      center.x + Math.sin(yawRad) * cosPitch * radius,
+      center.y + Math.sin(pitchRad) * radius + numberOr(profile.height_offset, radius * 0.15),
+      center.z + Math.cos(yawRad) * cosPitch * radius,
+    );
     camera.transform.lookAt(center, new Laya.Vector3(0, 1, 0));
     if ("orthographic" in camera) {
-      camera.orthographic = true;
-      camera.orthographicVerticalSize = Math.max(2, Math.max(extent.x, extent.y) * 3.1);
+      camera.orthographic = profile.orthographic == null ? true : profile.orthographic === true;
+      camera.orthographicVerticalSize = numberOr(
+        profile.orthographic_vertical_size,
+        Math.max(2, Math.max(extent.x, extent.y) * 3.1),
+      );
     }
+    if (Number.isFinite(Number(profile.field_of_view))) camera.fieldOfView = Number(profile.field_of_view);
     return { center, extent, radius };
   }
 
@@ -239,10 +334,14 @@
     let maxZ = -Infinity;
     walk(root, (node) => {
       const renderer = node.meshRenderer || node.skinnedMeshRenderer || node.renderer || node._renderNode;
-      const bounds = renderer && renderer.bounds;
-      const center = bounds && (bounds.center || (typeof bounds.getCenter === "function" ? bounds.getCenter() : null));
-      const extent = bounds && (bounds.extents || bounds.extent || (typeof bounds.getExtent === "function" ? bounds.getExtent() : null));
-      if (!center || !extent) return;
+      if (!renderer) return;
+      let parts = boundsCenterExtent(renderer.bounds || renderer._bounds);
+      if (!parts) {
+        parts = boundsCenterExtent(renderer.localBounds || renderer._localBounds);
+        if (parts) parts = transformLocalBounds(parts, node.transform);
+      }
+      if (!parts) return;
+      const { center, extent } = parts;
       minX = Math.min(minX, center.x - extent.x);
       minY = Math.min(minY, center.y - extent.y);
       minZ = Math.min(minZ, center.z - extent.z);
@@ -254,6 +353,39 @@
     return {
       center: new Laya.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2),
       extent: new Laya.Vector3((maxX - minX) / 2, (maxY - minY) / 2, (maxZ - minZ) / 2),
+    };
+  }
+
+  function boundsCenterExtent(bounds) {
+    if (!bounds) return null;
+    let center = bounds.center || (typeof bounds.getCenter === "function" ? bounds.getCenter() : null);
+    let extent = bounds.extents || bounds.extent || (typeof bounds.getExtent === "function" ? bounds.getExtent() : null);
+    if (center && extent) return { center, extent };
+    const min = bounds.min || (typeof bounds.getMin === "function" ? bounds.getMin() : null);
+    const max = bounds.max || (typeof bounds.getMax === "function" ? bounds.getMax() : null);
+    if (!min || !max) return null;
+    center = new Laya.Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+    extent = new Laya.Vector3((max.x - min.x) / 2, (max.y - min.y) / 2, (max.z - min.z) / 2);
+    return { center, extent };
+  }
+
+  function transformLocalBounds(parts, transform) {
+    const matrix = transform && (transform.worldMatrix || transform._worldMatrix);
+    const elements = matrix && matrix.elements;
+    if (!elements || elements.length < 16) return parts;
+    const center = parts.center;
+    const extent = parts.extent;
+    return {
+      center: new Laya.Vector3(
+        elements[0] * center.x + elements[4] * center.y + elements[8] * center.z + elements[12],
+        elements[1] * center.x + elements[5] * center.y + elements[9] * center.z + elements[13],
+        elements[2] * center.x + elements[6] * center.y + elements[10] * center.z + elements[14],
+      ),
+      extent: new Laya.Vector3(
+        Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z,
+        Math.abs(elements[1]) * extent.x + Math.abs(elements[5]) * extent.y + Math.abs(elements[9]) * extent.z,
+        Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z,
+      ),
     };
   }
 
@@ -307,13 +439,302 @@
         }
         requestAnimationFrame(() => step(remaining - 1));
       }
-      step(Math.max(1, count || 1));
+      const frameCount = Number.isFinite(Number(count))
+        ? Math.max(0, Math.floor(Number(count)))
+        : 1;
+      step(frameCount);
     });
+  }
+
+  function resolveSettleFrames(command) {
+    const value = Number(command && command.settle_frames);
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 2;
+  }
+
+  function resolveAnimationFreezeSettleFrames(command) {
+    const value = Number(command && command.animation_freeze_settle_frames);
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 3;
   }
 
   function numberOr(value, fallback) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function normalizedColor(value, fallback) {
+    const raw = Array.isArray(value) && value.length >= 3 ? value : fallback;
+    const scale = raw.some((item) => Number(item) > 1) ? 255 : 1;
+    return new Laya.Color(
+      numberOr(raw[0], 0) / scale,
+      numberOr(raw[1], 0) / scale,
+      numberOr(raw[2], 0) / scale,
+      raw.length >= 4 ? numberOr(raw[3], scale) / scale : 1,
+    );
+  }
+
+  function colorToCss(value, fallback) {
+    if (!Array.isArray(value) || value.length < 3) return fallback;
+    const scale = value.some((item) => Number(item) > 1) ? 1 : 255;
+    const bytes = value.slice(0, 3).map((item) => Math.max(0, Math.min(255, Math.round(numberOr(item, 0) * scale))));
+    return "#" + bytes.map((item) => item.toString(16).padStart(2, "0")).join("");
+  }
+
+  function applySceneProfile(scene, camera) {
+    if (scene && runtimeProfile.ambient_color) {
+      scene.ambientColor = normalizedColor(runtimeProfile.ambient_color, [0.42, 0.46, 0.53, 1]);
+    }
+    if (camera && runtimeProfile.background_color) {
+      camera.clearFlag = Laya.CameraClearFlags && Laya.CameraClearFlags.SolidColor != null
+        ? Laya.CameraClearFlags.SolidColor
+        : camera.clearFlag;
+      camera.clearColor = normalizedColor(runtimeProfile.background_color, [0, 0, 0, 1]);
+    }
+  }
+
+  function addProfileLights(scene) {
+    const lights = Array.isArray(runtimeProfile.directional_lights) ? runtimeProfile.directional_lights : [];
+    for (const config of lights) {
+      try {
+        const node = new Laya.Sprite3D();
+        node.name = String(config.name || "Material Fit Direction Light");
+        scene.addChild(node);
+        const euler = Array.isArray(config.rotation_euler) ? config.rotation_euler : [-50, 30, 0];
+        node.transform.localRotationEuler = new Laya.Vector3(
+          numberOr(euler[0], -50),
+          numberOr(euler[1], 30),
+          numberOr(euler[2], 0),
+        );
+        const LightType = Laya.DirectionLightCom || Laya.DirectionLight;
+        if (!LightType || typeof node.addComponent !== "function") continue;
+        const light = node.addComponent(LightType);
+        light.color = normalizedColor(config.color, [0.6, 0.6, 0.6, 1]);
+        if (Number.isFinite(Number(config.intensity))) light.intensity = Number(config.intensity);
+      } catch (error) {
+        console.warn("[material-fit] profile light creation failed: " + error);
+      }
+    }
+  }
+
+  function configuredAnimationMode(command) {
+    return String(command && command.animation_mode || captureDefaults.animation_mode || runtimeProfile.animation_mode || "legacy");
+  }
+
+  function prepareStartupAnimators(root) {
+    if (configuredAnimationMode(null) !== "disabled" || !root || !Laya.Animator) return;
+    const animators = collectComponents(root, Laya.Animator);
+    const command = commandWithProfileDefaults({ animation_mode: "disabled" });
+    for (const animator of animators) {
+      applyFixedAnimation(command, animator);
+    }
+    const defaultStates = animators.map((animator) => defaultAnimationStateName(animator, 0));
+    console.log(
+      "[material-fit] startup animators sampled-at-zero count=" + animators.length
+      + " default_states=" + defaultStates.join(","),
+    );
+  }
+
+  function commandWithProfileDefaults(command) {
+    return Object.assign({}, captureDefaults, command || {});
+  }
+
+  function collectComponents(root, componentType) {
+    const out = [];
+    if (!root || !componentType) return out;
+    walk(root, (node) => {
+      if (!node) return;
+      try {
+        if (typeof node.getComponents === "function") {
+          const found = node.getComponents(componentType);
+          if (found && typeof found.length === "number") {
+            for (let i = 0; i < found.length; i += 1) addUniqueComponent(found[i], out);
+          }
+        } else if (typeof node.getComponent === "function") {
+          addUniqueComponent(node.getComponent(componentType), out);
+        }
+      } catch {
+        // Some Laya builds throw for components that are registered in the scene but not in this runtime.
+      }
+      for (const list of [node._components, node._component, node.components]) {
+        if (!list || typeof list.length !== "number") continue;
+        for (let i = 0; i < list.length; i += 1) {
+          const component = list[i];
+          const constructorName = component && component.constructor && component.constructor.name || "";
+          const expectedName = componentType && componentType.name || "";
+          if (component instanceof componentType || (expectedName && constructorName === expectedName)) {
+            addUniqueComponent(component, out);
+          }
+        }
+      }
+    });
+    return out;
+  }
+
+  function addUniqueComponent(component, out) {
+    if (component && out.indexOf(component) < 0) out.push(component);
+  }
+
+  function freezeSceneScripts(command, root) {
+    if (command && command.freeze_scene_scripts === false) return [];
+    const scriptType = Laya.Script3D;
+    if (!root || !scriptType) return [];
+    const scripts = collectComponents(root, scriptType);
+    const states = [];
+    for (const script of scripts) {
+      if (!script) continue;
+      const state = {
+        source: script,
+        enabled: typeof script.enabled === "boolean" ? script.enabled : null,
+        privateEnabled: typeof script._enabled === "boolean" ? script._enabled : null,
+        rotate: isVector3Like(script.rotate) ? script.rotate.clone() : null,
+      };
+      if (state.enabled === null && state.privateEnabled === null && state.rotate === null) continue;
+      states.push(state);
+      try {
+        if (state.enabled !== null) script.enabled = false;
+        if (state.privateEnabled !== null) script._enabled = false;
+        if (state.rotate !== null) script.rotate = new Laya.Vector3(0, 0, 0);
+      } catch (error) {
+        console.warn("[material-fit] scene script freeze failed: " + error);
+      }
+    }
+    return states;
+  }
+
+  function restoreSceneScripts(states) {
+    for (const state of states || []) {
+      try {
+        if (state.enabled !== null) state.source.enabled = state.enabled;
+        if (state.privateEnabled !== null) state.source._enabled = state.privateEnabled;
+        if (state.rotate !== null) state.source.rotate = state.rotate;
+      } catch (error) {
+        console.warn("[material-fit] scene script restore failed: " + error);
+      }
+    }
+  }
+
+  function freezeAnimators(command, root) {
+    if (command && command.freeze_animators === false) return [];
+    const animatorType = Laya.Animator;
+    if (!root || !animatorType) return [];
+    const animators = collectComponents(root, animatorType);
+    if (!animatorDiscoveryLogged) {
+      animatorDiscoveryLogged = true;
+      console.log(
+        "[material-fit] animator discovery type=" + Boolean(animatorType)
+        + " count=" + animators.length
+        + " state=" + (command && command.fixed_animation_state || "")
+        + " time=" + numberOr(command && command.fixed_animation_time, 0),
+      );
+    }
+    const states = [];
+    for (const animator of animators) {
+      const state = {
+        source: animator,
+        speed: typeof animator.speed === "number" ? animator.speed : null,
+        enabled: typeof animator.enabled === "boolean" ? animator.enabled : null,
+        sleep: typeof animator.sleep === "boolean" ? animator.sleep : null,
+      };
+      states.push(state);
+      applyFixedAnimation(command, animator);
+    }
+    return states;
+  }
+
+  function restoreAnimators(states) {
+    for (const state of states || []) {
+      const animator = state.source;
+      try {
+        if (state.speed !== null) animator.speed = state.speed;
+        if (state.sleep !== null) animator.sleep = state.sleep;
+        if (state.enabled !== null) animator.enabled = state.enabled;
+      } catch (error) {
+        console.warn("[material-fit] animator restore failed: " + error);
+      }
+    }
+  }
+
+  function applyFixedAnimation(command, animator) {
+    if (!animator) return;
+    const animationMode = configuredAnimationMode(command);
+    const layerIndex = Number.isFinite(Number(command && command.fixed_animation_layer))
+      ? Math.max(0, Math.floor(Number(command.fixed_animation_layer)))
+      : 0;
+    const configuredStateName = command && typeof command.fixed_animation_state === "string"
+      ? command.fixed_animation_state
+      : "";
+    const stateName = configuredStateName || (
+      animationMode === "disabled" ? defaultAnimationStateName(animator, layerIndex) : ""
+    );
+    if (animationMode === "disabled") {
+      try {
+        if (stateName && typeof animator.play === "function") {
+          if (typeof animator.enabled === "boolean") animator.enabled = true;
+          if (typeof animator.sleep === "boolean") animator.sleep = false;
+          animator.speed = FIXED_ANIMATION_SAMPLE_SPEED;
+          animator.play(stateName, layerIndex, 0);
+        } else {
+          animator.speed = 0;
+          if (typeof animator.sleep === "boolean") animator.sleep = true;
+          if (typeof animator.enabled === "boolean") animator.enabled = false;
+        }
+      } catch (error) {
+        console.warn("[material-fit] animator disable failed: " + error);
+      }
+      return;
+    }
+    const normalizedTime = Number.isFinite(Number(command && command.fixed_animation_time))
+      ? Math.max(0, Math.min(1, Number(command.fixed_animation_time)))
+      : 0;
+    try {
+      if (typeof animator.enabled === "boolean") animator.enabled = true;
+      if (typeof animator.sleep === "boolean") animator.sleep = false;
+      if (stateName && typeof animator.play === "function") {
+        // Laya skips sampling at speed 0. A tiny nonzero speed evaluates the
+        // requested pose without adding frame-time-dependent visible motion.
+        animator.speed = FIXED_ANIMATION_SAMPLE_SPEED;
+        animator.play(stateName, layerIndex, normalizedTime);
+      }
+    } catch (error) {
+      console.warn("[material-fit] animator freeze failed: " + error);
+    }
+  }
+
+  function defaultAnimationStateName(animator, layerIndex) {
+    if (!animator) return "";
+    try {
+      const layer = typeof animator.getControllerLayer === "function"
+        ? animator.getControllerLayer(layerIndex)
+        : animator._controllerLayers && animator._controllerLayers[layerIndex];
+      if (!layer) return "";
+      const state = layer.defaultState || layer._defaultState
+        || layer.states && layer.states[0]
+        || layer._states && layer._states[0];
+      return state && typeof state.name === "string" ? state.name : "";
+    } catch (error) {
+      console.warn("[material-fit] default animator state lookup failed: " + error);
+      return "";
+    }
+  }
+
+  function applyFixedAnimations(command, states) {
+    for (const state of states || []) {
+      applyFixedAnimation(command, state.source);
+    }
+  }
+
+  function pauseAnimators(states) {
+    for (const state of states || []) {
+      if (state && state.source && typeof state.source.speed === "number") {
+        state.source.speed = 0;
+      }
+    }
+  }
+
+  function isVector3Like(value) {
+    return value
+      && typeof value.x === "number"
+      && typeof value.y === "number"
+      && typeof value.z === "number";
   }
 
   function collectMaterials(root) {
@@ -333,27 +754,48 @@
 
   function ensureRuntimeMaterialCompatibility(root) {
     const materials = collectMaterials(root);
-    const directionLightDefine = Laya.Shader3D && typeof Laya.Shader3D.getDefineByName === "function"
-      ? Laya.Shader3D.getDefineByName("DIRECTIONLIGHT")
-      : null;
-    if (!directionLightDefine) return;
-
     let patched = 0;
     for (const material of materials) {
-      if (!looksLikeFishStandardMaterial(material)) continue;
-      try {
-        const hasDefine = typeof material.hasDefine === "function" && material.hasDefine(directionLightDefine);
-        if (!hasDefine && typeof material.addDefine === "function") {
-          material.addDefine(directionLightDefine);
-          patched += 1;
+      const rules = Array.isArray(runtimeProfile.material_compatibility)
+        ? runtimeProfile.material_compatibility
+        : [{ legacy_fish_standard: true, enable_defines: ["DIRECTIONLIGHT"] }];
+      for (const rule of rules) {
+        if (!materialMatchesCompatibilityRule(material, rule)) continue;
+        for (const defineName of Array.isArray(rule.enable_defines) ? rule.enable_defines : []) {
+          try {
+            const define = Laya.Shader3D && typeof Laya.Shader3D.getDefineByName === "function"
+              ? Laya.Shader3D.getDefineByName(String(defineName))
+              : null;
+            if (!define) continue;
+            const hasDefine = typeof material.hasDefine === "function" && material.hasDefine(define);
+            if (!hasDefine && typeof material.addDefine === "function") {
+              material.addDefine(define);
+              patched += 1;
+            }
+          } catch (error) {
+            console.warn("[material-fit] material compatibility patch failed: " + error);
+          }
         }
-      } catch (error) {
-        console.warn("[material-fit] material compatibility patch failed: " + error);
       }
     }
     if (patched > 0) {
-      console.log("[material-fit] patched FishStandar_Low DIRECTIONLIGHT materials=" + patched);
+      console.log("[material-fit] applied material compatibility defines=" + patched);
     }
+  }
+
+  function materialMatchesCompatibilityRule(material, rule) {
+    if (!material || !rule || typeof rule !== "object") return false;
+    if (rule.legacy_fish_standard === true) return looksLikeFishStandardMaterial(material);
+    const shaderName = String(
+      material.shaderName
+      || material._shaderName
+      || material._shader && material._shader.name
+      || material.shader && material.shader.name
+      || "",
+    );
+    if (rule.shader_name && shaderName !== String(rule.shader_name)) return false;
+    if (rule.shader_name_contains && shaderName.indexOf(String(rule.shader_name_contains)) < 0) return false;
+    return Boolean(rule.shader_name || rule.shader_name_contains);
   }
 
   function looksLikeFishStandardMaterial(material) {
@@ -443,6 +885,44 @@
       }
     }
     console.log("[material-fit] applied debug materials renderables=" + sources.length);
+  }
+
+  function replaceMaterialsForSilhouette(root) {
+    const entries = [];
+    const material = new Laya.UnlitMaterial();
+    material.albedoColor = new Laya.Color(1, 1, 1, 1);
+    for (const source of collectRenderableSources(root)) {
+      try {
+        if (source.sharedMaterials && source.sharedMaterials.length) {
+          const previous = Array.from(source.sharedMaterials);
+          entries.push({ source, property: "sharedMaterials", previous });
+          source.sharedMaterials = previous.map(() => material);
+        } else if (source.materials && source.materials.length) {
+          const previous = Array.from(source.materials);
+          entries.push({ source, property: "materials", previous });
+          source.materials = previous.map(() => material);
+        } else if (source.sharedMaterial) {
+          entries.push({ source, property: "sharedMaterial", previous: source.sharedMaterial });
+          source.sharedMaterial = material;
+        } else if (source.material) {
+          entries.push({ source, property: "material", previous: source.material });
+          source.material = material;
+        }
+      } catch (error) {
+        console.warn("[material-fit] silhouette material assignment failed: " + error);
+      }
+    }
+    return entries;
+  }
+
+  function restoreSilhouetteMaterials(entries) {
+    for (const entry of entries) {
+      try {
+        entry.source[entry.property] = entry.previous;
+      } catch (error) {
+        console.warn("[material-fit] silhouette material restore failed: " + error);
+      }
+    }
   }
 
   const COLOR_PARAM_NAMES = new Set([
@@ -553,17 +1033,106 @@
     }
   }
 
+  const MATERIAL_DEFINE_ALLOWLIST = new Set([
+    "NORMALMAP",
+    "NORMALMAP_Y_INVERT",
+    "RIMSMOOTHNESS",
+  ]);
+  const MATERIAL_RENDER_STATE_PROPERTIES = Object.freeze({
+    renderQueue: "renderQueue",
+    s_Cull: "cull",
+    s_Blend: "blend",
+    s_BlendSrc: "blendSrc",
+    s_BlendDst: "blendDst",
+    s_BlendSrcRGB: "blendSrcRGB",
+    s_BlendDstRGB: "blendDstRGB",
+    s_BlendSrcAlpha: "blendSrcAlpha",
+    s_BlendDstAlpha: "blendDstAlpha",
+    s_BlendEquation: "blendEquation",
+    s_BlendEquationRGB: "blendEquationRGB",
+    s_BlendEquationAlpha: "blendEquationAlpha",
+    s_DepthTest: "depthTest",
+    s_DepthWrite: "depthWrite",
+  });
+
+  function normalizeMaterialDefinePatch(patch) {
+    if (!patch || typeof patch !== "object") return null;
+    const managed = Array.isArray(patch.managed) ? patch.managed.map(String) : [];
+    const enabled = Array.isArray(patch.enabled) ? patch.enabled.map(String) : [];
+    for (const name of [...managed, ...enabled]) {
+      if (!MATERIAL_DEFINE_ALLOWLIST.has(name)) {
+        throw new Error("material define is not allowed: " + name);
+      }
+    }
+    const managedSet = new Set(managed);
+    for (const name of enabled) {
+      if (!managedSet.has(name)) {
+        throw new Error("enabled material define is not managed: " + name);
+      }
+    }
+    // The shader reads NORMALMAP_Y_INVERT only inside its NORMALMAP block, so
+    // the standalone source-material state is a valid no-op and must round-trip.
+    return { managed: [...managedSet], enabled: [...new Set(enabled)] };
+  }
+
+  function applyMaterialDefines(material, definePatch) {
+    if (!definePatch) return 0;
+    if (!Laya.Shader3D || typeof Laya.Shader3D.getDefineByName !== "function") {
+      throw new Error("Laya.Shader3D.getDefineByName is unavailable");
+    }
+    const enabled = new Set(definePatch.enabled);
+    let count = 0;
+    for (const name of definePatch.managed) {
+      const define = Laya.Shader3D.getDefineByName(name);
+      if (!define) throw new Error("material define is unknown to Laya: " + name);
+      const shouldEnable = enabled.has(name);
+      const isEnabled = typeof material.hasDefine === "function" ? material.hasDefine(define) : null;
+      if (isEnabled === shouldEnable) continue;
+      if (shouldEnable) {
+        if (typeof material.addDefine !== "function") throw new Error("material.addDefine is unavailable");
+        material.addDefine(define);
+      } else {
+        if (typeof material.removeDefine !== "function") throw new Error("material.removeDefine is unavailable");
+        material.removeDefine(define);
+      }
+      count += 1;
+    }
+    return count;
+  }
+
+  function applyMaterialRenderStates(material, renderStates) {
+    if (!renderStates || typeof renderStates !== "object") return 0;
+    let count = 0;
+    for (const [name, value] of Object.entries(renderStates)) {
+      const propertyName = MATERIAL_RENDER_STATE_PROPERTIES[name];
+      if (!propertyName) throw new Error("material render state is not allowed: " + name);
+      if (!(propertyName in material)) throw new Error("material render state is unavailable: " + propertyName);
+      material[propertyName] = value;
+      count += 1;
+    }
+    return count;
+  }
+
   function applyMaterialPatch(command) {
     if (command && (command.debug_material || command.force_debug_material)) {
       applyDebugMaterials(runtime.target);
-      return;
+      return { applied: true, material_count: 0, value_count: 0, define_count: 0, render_state_count: 0, applied_render_states: {}, debug_material: true };
     }
 
-    const values = command && command.material_patch && command.material_patch.values;
-    if (!values || typeof values !== "object") return;
+    const patch = command && command.material_patch;
+    const values = patch && patch.values;
+    const definePatch = normalizeMaterialDefinePatch(patch && patch.defines);
+    const renderStates = patch && patch.render_states;
+    const hasValues = values && typeof values === "object";
+    const hasRenderStates = renderStates && typeof renderStates === "object";
+    if (!hasValues && !definePatch && !hasRenderStates) {
+      return { applied: false, material_count: 0, value_count: 0, define_count: 0, render_state_count: 0, enabled_defines: [], applied_render_states: {} };
+    }
 
-    const vector = [values.u_BaseColor, values.u_Color, values.albedoColor, values.color]
-      .find((item) => Array.isArray(item) && item.length >= 3);
+    const vector = hasValues
+      ? [values.u_BaseColor, values.u_Color, values.albedoColor, values.color]
+        .find((item) => Array.isArray(item) && item.length >= 3)
+      : null;
     if (vector) {
       lastColor = [
         Math.max(0, Math.min(1, numberOr(vector[0], lastColor[0]))),
@@ -573,7 +1142,7 @@
       ];
     }
 
-    const scalar = numberOr(values.u_Metallic ?? values.u_Roughness ?? values.value, NaN);
+    const scalar = hasValues ? numberOr(values.u_Metallic ?? values.u_Roughness ?? values.value, NaN) : NaN;
     if (Number.isFinite(scalar) && !vector) {
       lastColor = [
         Math.max(0, Math.min(1, scalar)),
@@ -583,16 +1152,31 @@
       ];
     }
 
-    const materials = collectMaterials(runtime.target);
+    const materials = collectMaterials(runtime.materialTarget || runtime.target);
+    let defineCount = 0;
+    let valueCount = 0;
+    let renderStateCount = 0;
     for (const material of materials) {
-      for (const [name, value] of Object.entries(values)) {
+      defineCount += applyMaterialDefines(material, definePatch);
+      renderStateCount += applyMaterialRenderStates(material, renderStates);
+      for (const [name, value] of Object.entries(hasValues ? values : {})) {
         try {
           setMaterialValue(material, name, value);
+          valueCount += 1;
         } catch (error) {
           console.warn("[material-fit] material patch skipped " + name + ": " + error);
         }
       }
     }
+    return {
+      applied: materials.length > 0,
+      material_count: materials.length,
+      value_count: valueCount,
+      define_count: defineCount,
+      render_state_count: renderStateCount,
+      enabled_defines: definePatch ? definePatch.enabled : [],
+      applied_render_states: hasRenderStates ? { ...renderStates } : {},
+    };
   }
 
   function drawView(command, view) {
@@ -602,22 +1186,25 @@
       runtime.camera.orthographic = true;
       runtime.camera.orthographicVerticalSize = Number(command.orthographic_vertical_size);
     }
-    const baseYaw = numberOr(command.target_base_yaw, 0);
-    const basePitch = numberOr(command.target_base_pitch, 0);
+    const preserveTarget = command && command.preserve_target_transform === true;
+    const initialEuler = runtime.initialTargetEuler || new Laya.Vector3(0, 0, 0);
+    const baseYaw = numberOr(command.target_base_yaw, preserveTarget ? initialEuler.y : 0);
+    const basePitch = numberOr(command.target_base_pitch, preserveTarget ? initialEuler.x : 0);
+    const baseRoll = numberOr(command.target_base_roll, preserveTarget ? initialEuler.z : 0);
     const yawSign = numberOr(command.target_yaw_sign, -1);
     const pitchSign = numberOr(command.target_pitch_sign, -1);
     if (command && command.capture_mode === "orbit_camera") {
       runtime.target.transform.localRotationEuler = new Laya.Vector3(
         basePitch,
         baseYaw,
-        numberOr(command.target_base_roll, 0),
+        baseRoll,
       );
       orbitCamera(runtime.camera, runtime.frame, yaw, pitch, command);
     } else {
       runtime.target.transform.localRotationEuler = new Laya.Vector3(
         basePitch + pitchSign * pitch,
         baseYaw + yawSign * yaw,
-        numberOr(command.target_base_roll, 0),
+        baseRoll,
       );
     }
     if (runtime.fallbackMaterial) {
@@ -626,29 +1213,118 @@
   }
 
   function orbitCamera(camera, frame, yaw, pitch, command) {
-    const center = frame && frame.center || new Laya.Vector3(0, 0, 0);
+    const configuredCenter = command && command.camera_center;
+    const center = Array.isArray(configuredCenter) && configuredCenter.length >= 3
+      ? new Laya.Vector3(numberOr(configuredCenter[0], 0), numberOr(configuredCenter[1], 0), numberOr(configuredCenter[2], 0))
+      : frame && frame.center || new Laya.Vector3(0, 0, 0);
     const radius = numberOr(command && command.camera_distance, frame && frame.radius || 4);
     const yawRad = (numberOr(command && command.yaw_offset, 0) + yaw) * Math.PI / 180;
     const pitchRad = (numberOr(command && command.pitch_offset, 0) + pitch) * Math.PI / 180;
     const cosPitch = Math.cos(pitchRad);
     const position = new Laya.Vector3(
       center.x + Math.sin(yawRad) * cosPitch * radius,
-      center.y + Math.sin(pitchRad) * radius + radius * 0.12,
+      center.y + Math.sin(pitchRad) * radius + radius * numberOr(command && command.camera_height_factor, 0.12),
       center.z + Math.cos(yawRad) * cosPitch * radius,
     );
     camera.transform.position = position;
     camera.transform.lookAt(center, new Laya.Vector3(0, 1, 0));
   }
 
-  function stageCanvas() {
+  function scoreReadbackDimensions(command) {
+    const browserScore = command && command.browser_score && typeof command.browser_score === "object"
+      ? command.browser_score
+      : {};
+    return {
+      width: Math.max(64, Math.min(width, Math.floor(numberOr(browserScore.readback_width, width)))),
+      height: Math.max(64, Math.min(height, Math.floor(numberOr(browserScore.readback_height, height)))),
+    };
+  }
+
+  function stageCanvas(command) {
     const canvas = document.querySelector("canvas");
     if (!canvas) throw new Error("Laya canvas not found");
-    const out = document.createElement("canvas");
-    out.width = width;
-    out.height = height;
-    const ctx = out.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(canvas, 0, 0, width, height);
-    return { canvas: out, pixels: ctx.getImageData(0, 0, width, height).data };
+    const dimensions = scoreReadbackDimensions(command);
+    if (
+      !scoreReadbackCanvas
+      || scoreReadbackCanvas.width !== dimensions.width
+      || scoreReadbackCanvas.height !== dimensions.height
+    ) {
+      scoreReadbackCanvas = document.createElement("canvas");
+      scoreReadbackCanvas.width = dimensions.width;
+      scoreReadbackCanvas.height = dimensions.height;
+      scoreReadbackContext = scoreReadbackCanvas.getContext("2d", { willReadFrequently: true });
+    }
+    scoreReadbackContext.clearRect(0, 0, dimensions.width, dimensions.height);
+    scoreReadbackContext.drawImage(canvas, 0, 0, dimensions.width, dimensions.height);
+    return {
+      canvas,
+      pixels: scoreReadbackContext.getImageData(0, 0, dimensions.width, dimensions.height).data,
+      width: dimensions.width,
+      height: dimensions.height,
+    };
+  }
+
+  function canvasFromPixels(pixels, pixelWidth = width, pixelHeight = height) {
+    const canvas = document.createElement("canvas");
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+    const context = canvas.getContext("2d");
+    const imageData = context.createImageData(pixelWidth, pixelHeight);
+    imageData.data.set(pixels);
+    context.putImageData(imageData, 0, 0);
+    return canvas;
+  }
+
+  function silhouetteCacheKey(command, view) {
+    const dimensions = scoreReadbackDimensions(command);
+    return [
+      dimensions.width,
+      dimensions.height,
+      numberOr(view && view.yaw, 0),
+      numberOr(view && view.pitch, 0),
+      numberOr(command && command.target_base_yaw, 0),
+      numberOr(command && command.target_base_pitch, 0),
+      numberOr(command && command.target_base_roll, 0),
+      numberOr(command && command.target_yaw_sign, -1),
+      numberOr(command && command.target_pitch_sign, -1),
+      numberOr(command && command.orthographic_vertical_size, 0),
+      command && command.capture_mode || "rotate_target",
+      configuredAnimationMode(command),
+      command && command.fixed_animation_state || "",
+      numberOr(command && command.fixed_animation_layer, 0),
+      numberOr(command && command.fixed_animation_time, 0),
+    ].join("|");
+  }
+
+  async function cachedSilhouetteAlpha(command, view) {
+    const key = silhouetteCacheKey(command, view);
+    const cached = silhouetteAlphaCache.get(key);
+    if (cached) return cached;
+    const entries = replaceMaterialsForSilhouette(runtime.target);
+    try {
+      drawView(command, view);
+      await waitFrames(1);
+      const maskPixels = stageCanvas(command).pixels;
+      const alpha = new Uint8ClampedArray(maskPixels.length / 4);
+      for (let pixel = 0, i = 0; i < maskPixels.length; pixel += 1, i += 4) {
+        alpha[pixel] = Math.max(maskPixels[i], maskPixels[i + 1], maskPixels[i + 2]) > 1 ? 255 : 0;
+      }
+      silhouetteAlphaCache.set(key, alpha);
+      return alpha;
+    } finally {
+      restoreSilhouetteMaterials(entries);
+    }
+  }
+
+  function applySilhouetteAlpha(pixels, alpha) {
+    for (let pixel = 0, i = 0; pixel < alpha.length; pixel += 1, i += 4) {
+      pixels[i + 3] = alpha[pixel];
+      if (alpha[pixel] === 0) {
+        pixels[i] = 0;
+        pixels[i + 1] = 0;
+        pixels[i + 2] = 0;
+      }
+    }
   }
 
   function visualBackgroundColor(command) {
@@ -678,23 +1354,19 @@
     return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
   }
 
+  function canvasPixels(canvas) {
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  }
+
   function canvasOnBackground(canvas, color) {
     const out = document.createElement("canvas");
     out.width = canvas.width;
     out.height = canvas.height;
     const ctx = out.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+    ctx.fillRect(0, 0, out.width, out.height);
     ctx.drawImage(canvas, 0, 0);
-    const image = ctx.getImageData(0, 0, out.width, out.height);
-    const data = image.data;
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] === 0 || (data[i] <= 1 && data[i + 1] <= 1 && data[i + 2] <= 1)) {
-        data[i] = color.r;
-        data[i + 1] = color.g;
-        data[i + 2] = color.b;
-        data[i + 3] = 255;
-      }
-    }
-    ctx.putImageData(image, 0, 0);
     return out;
   }
 
@@ -737,79 +1409,1018 @@
     }
   }
 
-  async function loadReferencePixels(reference) {
+  function shouldEmitCaptureArtifacts(command) {
+    const browserScore = command && command.browser_score;
+    return !browserScore || browserScore.enabled === false || browserScore.emit_artifacts === "always";
+  }
+
+  async function loadReferencePixels(reference, command) {
     if (!reference || !reference.url) return null;
+    const dimensions = scoreReadbackDimensions(command);
+    const cacheKey = `${reference.url}|${dimensions.width}x${dimensions.height}`;
+    const cached = referencePixelCache.get(cacheKey);
+    if (cached) return cached;
     const response = await fetch(reference.url);
     if (!response.ok) throw new Error("reference fetch failed: " + response.status);
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    const pixels = ctx.getImageData(0, 0, width, height).data;
+    ctx.drawImage(bitmap, 0, 0, dimensions.width, dimensions.height);
+    const pixels = ctx.getImageData(0, 0, dimensions.width, dimensions.height).data;
     if (bitmap.close) bitmap.close();
+    referencePixelCache.set(cacheKey, pixels);
     return pixels;
   }
 
-  function scorePixels(candidate, reference) {
-    let diff = 0;
-    const n = Math.min(candidate.length, reference.length);
-    for (let i = 0; i < n; i += 4) {
-      diff += Math.abs(candidate[i] - reference[i]);
-      diff += Math.abs(candidate[i + 1] - reference[i + 1]);
-      diff += Math.abs(candidate[i + 2] - reference[i + 2]);
-      diff += Math.abs(candidate[i + 3] - reference[i + 3]);
+  function scorePixels(candidate, reference, command, background, scoreWidth, scoreHeight) {
+    void background;
+    const rgbWeight = numberOr(command && command.browser_score && command.browser_score.rgb_weight, 0.85);
+    const alphaWeight = numberOr(command && command.browser_score && command.browser_score.alpha_weight, 0.15);
+    const metric = command && command.browser_score && command.browser_score.metric || "browser_fast_rgba_mae_v1";
+    const useMaterialComponentsV5Strict = metric === "cross_engine_foreground_components_v5_strict_core";
+    const useMaterialComponentsV4 = useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
+    const useMaterialComponentsV3 = useMaterialComponentsV4 || metric === "cross_engine_foreground_components_v3";
+    const useMaterialComponents = useMaterialComponentsV3 || metric === "cross_engine_foreground_components_v2";
+    if (useMaterialComponentsV4) {
+      const residualGridSize = Math.max(1, Math.min(32, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_grid_size, 4))));
+      const residualSketchSize = Math.max(16, Math.min(256, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_sketch_size, 128))));
+      return scoreMaterialComponentsV4(
+        candidate,
+        reference,
+        scoreWidth,
+        scoreHeight,
+        residualGridSize,
+        residualSketchSize,
+        useMaterialComponentsV5Strict,
+      );
     }
-    const mae = diff / Math.max(1, (n / 4) * 4) / 255;
-    const fitScore = Math.max(0, Math.min(1, 1 - mae));
-    return { diff_score: mae, fit_score: fitScore, rgb_mae: mae, alpha_mae: mae };
+    const n = Math.min(candidate.length, reference.length);
+    const preparedReference = useMaterialComponents ? prepareMaterialReference(reference) : null;
+    let weightedDiff = 0;
+    let weightSum = 0;
+    let rgbMaeSum = 0;
+    let alphaMaeSum = 0;
+    let foregroundCount = 0;
+    let unionCount = 0;
+    let intersectionCount = 0;
+    let overlapWeightSum = 0;
+    let overlapRgbDiffSum = 0;
+    let overlapLumaDiffSum = 0;
+    let detailDiffSum = 0;
+    let detailWeightSum = 0;
+    let candidateForegroundWeight = 0;
+    let referenceForegroundWeight = preparedReference ? preparedReference.foregroundWeight : 0;
+    let candidateHighlightWeight = 0;
+    let referenceHighlightWeight = preparedReference ? preparedReference.highlightWeight : 0;
+    const candidateRgbSums = [0, 0, 0];
+    const referenceRgbSums = preparedReference ? [...preparedReference.rgbSums] : [0, 0, 0];
+    const candidateChromaOpponentSums = [0, 0, 0];
+    const referenceChromaOpponentSums = preparedReference ? [...preparedReference.chromaOpponentSums] : [0, 0, 0];
+    const residualGridSize = Math.max(1, Math.min(32, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_grid_size, 4))));
+    const residualSums = new Array(residualGridSize * residualGridSize * 3).fill(0);
+    const residualWeights = new Array(residualGridSize * residualGridSize).fill(0);
+    const residualSketchSize = Math.max(16, Math.min(256, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_sketch_size, 128))));
+    const residualSketchSums = new Array(residualSketchSize * 3).fill(0);
+    const residualSketchWeights = new Array(residualSketchSize).fill(0);
+    const candidateUsesAlpha = useMaterialComponents ? false : hasForegroundAlpha(candidate);
+    const referenceUsesAlpha = useMaterialComponents ? false : hasForegroundAlpha(reference);
+    for (let i = 0; i < n; i += 4) {
+      const pixelIndex = i / 4;
+      let candidateR = candidate[i];
+      let candidateG = candidate[i + 1];
+      let candidateB = candidate[i + 2];
+      let candidateAlpha = candidate[i + 3];
+      let referenceR = reference[i];
+      let referenceG = reference[i + 1];
+      let referenceB = reference[i + 2];
+      let referenceAlpha = reference[i + 3];
+      if (useMaterialComponents) {
+        candidateR = compositeChannelOnWhite(candidateR, candidateAlpha);
+        candidateG = compositeChannelOnWhite(candidateG, candidateAlpha);
+        candidateB = compositeChannelOnWhite(candidateB, candidateAlpha);
+        const referenceRgbIndex = pixelIndex * 3;
+        referenceR = preparedReference.rgb[referenceRgbIndex];
+        referenceG = preparedReference.rgb[referenceRgbIndex + 1];
+        referenceB = preparedReference.rgb[referenceRgbIndex + 2];
+        candidateAlpha = 255;
+        referenceAlpha = 255;
+      }
+      const candidateForeground = useMaterialComponents
+        ? foregroundWeightFromWhite(candidateR, candidateG, candidateB)
+        : foregroundWeightAt(candidate, i, candidateUsesAlpha);
+      const referenceForeground = useMaterialComponents
+        ? preparedReference.foreground[pixelIndex]
+        : foregroundWeightAt(reference, i, referenceUsesAlpha);
+      const foregroundWeight = Math.max(candidateForeground, referenceForeground);
+      const overlapWeight = Math.min(candidateForeground, referenceForeground);
+      if (foregroundWeight <= 0) continue;
+      const rgbDiff = (
+        Math.abs(candidateR - referenceR)
+        + Math.abs(candidateG - referenceG)
+        + Math.abs(candidateB - referenceB)
+      ) / (3.0 * 255.0);
+      const alphaDiff = Math.abs(candidateAlpha - referenceAlpha) / 255.0;
+      weightedDiff += (rgbWeight * rgbDiff + alphaWeight * alphaDiff) * foregroundWeight;
+      weightSum += foregroundWeight;
+      rgbMaeSum += rgbDiff;
+      alphaMaeSum += alphaDiff;
+      foregroundCount += 1;
+      const candidateLuma = (0.2126 * candidateR + 0.7152 * candidateG + 0.0722 * candidateB) / 255.0;
+      const referenceLuma = preparedReference
+        ? preparedReference.luma[pixelIndex]
+        : (0.2126 * referenceR + 0.7152 * referenceG + 0.0722 * referenceB) / 255.0;
+      if (!useMaterialComponentsV4 && candidateForeground > 0) {
+        candidateForegroundWeight += candidateForeground;
+        candidateRgbSums[0] += candidateR / 255.0 * candidateForeground;
+        candidateRgbSums[1] += candidateG / 255.0 * candidateForeground;
+        candidateRgbSums[2] += candidateB / 255.0 * candidateForeground;
+        const candidateRed = candidateR / 255.0;
+        const candidateGreen = candidateG / 255.0;
+        const candidateBlue = candidateB / 255.0;
+        candidateChromaOpponentSums[0] += (
+          Math.max(candidateRed, candidateGreen, candidateBlue)
+          - Math.min(candidateRed, candidateGreen, candidateBlue)
+        ) * candidateForeground;
+        candidateChromaOpponentSums[1] += (
+          (2 * candidateRed - candidateGreen - candidateBlue) / 2
+        ) * candidateForeground;
+        candidateChromaOpponentSums[2] += (candidateGreen - candidateBlue) * candidateForeground;
+        candidateHighlightWeight += Math.max(0, candidateLuma - 0.65) * candidateForeground;
+      }
+      if (!useMaterialComponentsV4 && !preparedReference && referenceForeground > 0) {
+        referenceForegroundWeight += referenceForeground;
+        referenceRgbSums[0] += referenceR / 255.0 * referenceForeground;
+        referenceRgbSums[1] += referenceG / 255.0 * referenceForeground;
+        referenceRgbSums[2] += referenceB / 255.0 * referenceForeground;
+        const referenceRed = referenceR / 255.0;
+        const referenceGreen = referenceG / 255.0;
+        const referenceBlue = referenceB / 255.0;
+        referenceChromaOpponentSums[0] += (
+          Math.max(referenceRed, referenceGreen, referenceBlue)
+          - Math.min(referenceRed, referenceGreen, referenceBlue)
+        ) * referenceForeground;
+        referenceChromaOpponentSums[1] += (
+          (2 * referenceRed - referenceGreen - referenceBlue) / 2
+        ) * referenceForeground;
+        referenceChromaOpponentSums[2] += (referenceGreen - referenceBlue) * referenceForeground;
+        referenceHighlightWeight += Math.max(0, referenceLuma - 0.65) * referenceForeground;
+      }
+      if (overlapWeight > 0) {
+        overlapWeightSum += overlapWeight;
+        if (!useMaterialComponentsV4) {
+          overlapRgbDiffSum += rgbDiff * overlapWeight;
+          overlapLumaDiffSum += Math.abs(candidateLuma - referenceLuma) * overlapWeight;
+        }
+      }
+      const pixelX = pixelIndex % scoreWidth;
+      const pixelY = Math.floor(pixelIndex / scoreWidth);
+      const gridX = Math.min(residualGridSize - 1, Math.floor(pixelX * residualGridSize / scoreWidth));
+      const gridY = Math.min(residualGridSize - 1, Math.floor(pixelY * residualGridSize / scoreHeight));
+      const cellIndex = gridY * residualGridSize + gridX;
+      const featureIndex = cellIndex * 3;
+      const residualWeight = useMaterialComponents ? overlapWeight : foregroundWeight;
+      residualWeights[cellIndex] += residualWeight;
+      residualSums[featureIndex] += (candidateR - referenceR) / 255.0 * residualWeight;
+      residualSums[featureIndex + 1] += (candidateG - referenceG) / 255.0 * residualWeight;
+      residualSums[featureIndex + 2] += (candidateB - referenceB) / 255.0 * residualWeight;
+      const residualHash = Math.imul((pixelIndex ^ 2654435769) >>> 0, 2246822519) >>> 0;
+      const sketchCellIndex = residualHash % residualSketchSize;
+      const sketchFeatureIndex = sketchCellIndex * 3;
+      const sketchSign = (residualHash & 2147483648) !== 0 ? 1 : -1;
+      residualSketchWeights[sketchCellIndex] += residualWeight;
+      residualSketchSums[sketchFeatureIndex] += (candidateR - referenceR) / 255.0 * residualWeight * sketchSign;
+      residualSketchSums[sketchFeatureIndex + 1] += (candidateG - referenceG) / 255.0 * residualWeight * sketchSign;
+      residualSketchSums[sketchFeatureIndex + 2] += (candidateB - referenceB) / 255.0 * residualWeight * sketchSign;
+      if (useMaterialComponents && !useMaterialComponentsV4 && overlapWeight > 0 && pixelX > 0) {
+        const previous = i - 4;
+        const candidatePreviousAlpha = candidate[previous + 3];
+        const candidatePreviousR = useMaterialComponents ? compositeChannelOnWhite(candidate[previous], candidatePreviousAlpha) : candidate[previous];
+        const candidatePreviousG = useMaterialComponents ? compositeChannelOnWhite(candidate[previous + 1], candidatePreviousAlpha) : candidate[previous + 1];
+        const candidatePreviousB = useMaterialComponents ? compositeChannelOnWhite(candidate[previous + 2], candidatePreviousAlpha) : candidate[previous + 2];
+        const previousPixelIndex = pixelIndex - 1;
+        const previousOverlap = Math.min(
+          useMaterialComponents
+            ? foregroundWeightFromWhite(candidatePreviousR, candidatePreviousG, candidatePreviousB)
+            : foregroundWeightAt(candidate, previous, candidateUsesAlpha),
+          preparedReference.foreground[previousPixelIndex],
+        );
+        if (previousOverlap > 0) {
+          const candidatePreviousLuma = (
+            0.2126 * candidatePreviousR
+            + 0.7152 * candidatePreviousG
+            + 0.0722 * candidatePreviousB
+          ) / 255.0;
+          const referencePreviousLuma = preparedReference.luma[previousPixelIndex];
+          const detailWeight = Math.min(overlapWeight, previousOverlap);
+          detailDiffSum += Math.abs(
+            Math.abs(candidateLuma - candidatePreviousLuma)
+            - Math.abs(referenceLuma - referencePreviousLuma),
+          ) * detailWeight;
+          detailWeightSum += detailWeight;
+        }
+      }
+      if (candidateForeground > 0 || referenceForeground > 0) {
+        unionCount += 1;
+        if (candidateForeground > 0 && referenceForeground > 0) {
+          intersectionCount += 1;
+        }
+      }
+    }
+    let diffScore = weightSum > 0 ? weightedDiff / weightSum : 1.0;
+    let fitScore = Math.max(0, Math.min(1, 1 - diffScore));
+    let materialComponents = null;
+    const overlapCoefficient = overlapWeightSum / Math.max(1, Math.min(candidateForegroundWeight, referenceForegroundWeight));
+    let chromaOpponentResiduals = [];
+    let exactMaterialDiagnostics = null;
+    if (useMaterialComponents) {
+      const foregroundRgbScore = 1 - (overlapWeightSum > 0 ? overlapRgbDiffSum / overlapWeightSum : 1);
+      const colorDistributionError = [0, 1, 2].reduce((sum, channel) => {
+        const candidateMean = candidateRgbSums[channel] / Math.max(candidateForegroundWeight, 1);
+        const referenceMean = referenceRgbSums[channel] / Math.max(referenceForegroundWeight, 1);
+        return sum + Math.abs(candidateMean - referenceMean);
+      }, 0) / 3.0;
+      const colorDistributionScore = 1 - colorDistributionError;
+      const luminanceStructureScore = 1 - (overlapWeightSum > 0 ? overlapLumaDiffSum / overlapWeightSum : 1);
+      const detailTextureScore = 1 - Math.min(1, 2 * (detailWeightSum > 0 ? detailDiffSum / detailWeightSum : 1));
+      const candidateHighlightRatio = candidateHighlightWeight / Math.max(candidateForegroundWeight, 1);
+      const referenceHighlightRatio = referenceHighlightWeight / Math.max(referenceForegroundWeight, 1);
+      const highlightEmissionScore = 1 - Math.min(
+        1,
+        Math.abs(candidateHighlightRatio - referenceHighlightRatio) / 0.15,
+      );
+      materialComponents = {
+        foreground_rgb: Math.max(0, Math.min(1, foregroundRgbScore)),
+        color_distribution: Math.max(0, Math.min(1, colorDistributionScore)),
+        luminance_structure: Math.max(0, Math.min(1, luminanceStructureScore)),
+        detail_texture: Math.max(0, Math.min(1, detailTextureScore)),
+        highlight_emission: Math.max(0, Math.min(1, highlightEmissionScore)),
+      };
+      if (useMaterialComponentsV3) {
+        const candidateChromaOpponentMeans = candidateChromaOpponentSums.map(
+          (value) => value / Math.max(candidateForegroundWeight, 1),
+        );
+        const referenceChromaOpponentMeans = referenceChromaOpponentSums.map(
+          (value) => value / Math.max(referenceForegroundWeight, 1),
+        );
+        chromaOpponentResiduals = candidateChromaOpponentMeans.map(
+          (value, index) => value - referenceChromaOpponentMeans[index],
+        );
+        const chromaHueError = Math.min(
+          1,
+          2 * (
+            0.50 * Math.abs(chromaOpponentResiduals[0])
+            + 0.25 * Math.abs(chromaOpponentResiduals[1])
+            + 0.25 * Math.abs(chromaOpponentResiduals[2])
+          ),
+        );
+        materialComponents.chroma_hue = 1 - chromaHueError;
+        fitScore = (
+          0.30 * materialComponents.foreground_rgb
+          + 0.15 * materialComponents.color_distribution
+          + 0.25 * materialComponents.chroma_hue
+          + 0.12 * materialComponents.luminance_structure
+          + 0.08 * materialComponents.detail_texture
+          + 0.10 * materialComponents.highlight_emission
+        );
+      } else {
+        fitScore = (
+          0.40 * materialComponents.foreground_rgb
+          + 0.22 * materialComponents.color_distribution
+          + 0.16 * materialComponents.luminance_structure
+          + 0.12 * materialComponents.detail_texture
+          + 0.10 * materialComponents.highlight_emission
+        );
+      }
+      if (overlapCoefficient < 0.75) fitScore = Math.min(fitScore, overlapCoefficient / 0.75);
+      fitScore = Math.max(0, Math.min(1, fitScore));
+      diffScore = 1 - fitScore;
+    }
+    if (useMaterialComponentsV4) {
+      const exact = scoreMaterialComponentsV4(candidate, reference, scoreWidth, scoreHeight);
+      fitScore = exact.fit_score;
+      diffScore = exact.diff_score;
+      materialComponents = exact.material_components;
+      chromaOpponentResiduals = exact.chroma_opponent_residuals;
+      exactMaterialDiagnostics = exact;
+    }
+    const residualFeatures = residualSums.map((value, index) => {
+      const weight = residualWeights[Math.floor(index / 3)];
+      return weight > 0 ? value / weight : 0;
+    });
+    const residualSketchFeatures = residualSketchSums.map((value, index) => {
+      const weight = residualSketchWeights[Math.floor(index / 3)];
+      return weight > 0 ? value / weight : 0;
+    });
+    return {
+      diff_score: diffScore,
+      fit_score: fitScore,
+      rgb_mae: foregroundCount > 0 ? rgbMaeSum / foregroundCount : 1.0,
+      alpha_mae: foregroundCount > 0 ? alphaMaeSum / foregroundCount : 1.0,
+      mask_iou: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.mask_iou
+        : (unionCount > 0 ? intersectionCount / unionCount : 1.0),
+      foreground_overlap_coefficient: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.foreground_overlap_coefficient
+        : overlapCoefficient,
+      geometry_valid: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.geometry_valid
+        : overlapCoefficient >= 0.75,
+      trusted_core_pixels: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.trusted_core_pixels
+        : null,
+      reference_foreground_pixels: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.reference_foreground_pixels
+        : null,
+      candidate_foreground_pixels: exactMaterialDiagnostics
+        ? exactMaterialDiagnostics.candidate_foreground_pixels
+        : null,
+      material_components: materialComponents,
+      foreground_weight_sum: useMaterialComponents ? overlapWeightSum : weightSum,
+      residual_grid_size: residualGridSize,
+      residual_sketch_size: residualSketchSize,
+      residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals),
+    };
+  }
+
+  function hasForegroundAlpha(pixels) {
+    let hasTransparent = false;
+    let hasOpaque = false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      const alpha = pixels[i];
+      hasTransparent = hasTransparent || alpha < 250;
+      hasOpaque = hasOpaque || alpha > 5;
+      if (hasTransparent && hasOpaque) return true;
+    }
+    return false;
+  }
+
+  function foregroundWeightAt(pixels, index, useAlpha) {
+    const alpha = pixels[index + 3];
+    if (useAlpha) {
+      return alpha / 255.0;
+    }
+    const distanceFromWhite = Math.max(
+      Math.abs(pixels[index] - 255),
+      Math.abs(pixels[index + 1] - 255),
+      Math.abs(pixels[index + 2] - 255),
+    );
+    return distanceFromWhite > 8 ? 1.0 : 0.0;
+  }
+
+  function compositeChannelOnWhite(channel, alpha) {
+    const weight = alpha / 255.0;
+    return Math.round(channel * weight + 255 * (1 - weight));
+  }
+
+  function foregroundWeightFromWhite(red, green, blue) {
+    const distanceFromWhite = Math.max(
+      Math.abs(red - 255),
+      Math.abs(green - 255),
+      Math.abs(blue - 255),
+    );
+    return distanceFromWhite > 8 ? 1.0 : 0.0;
+  }
+
+  function prepareMaterialReference(reference) {
+    const cached = referenceV2FeatureCache.get(reference);
+    if (cached) return cached;
+    const pixelCount = Math.floor(reference.length / 4);
+    const rgb = new Uint8ClampedArray(pixelCount * 3);
+    const foreground = new Float64Array(pixelCount);
+    const luma = new Float64Array(pixelCount);
+    const rgbSums = [0, 0, 0];
+    const chromaOpponentSums = [0, 0, 0];
+    let foregroundWeight = 0;
+    let highlightWeight = 0;
+    for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
+      const sourceIndex = pixelIndex * 4;
+      const rgbIndex = pixelIndex * 3;
+      const alpha = reference[sourceIndex + 3];
+      const red = compositeChannelOnWhite(reference[sourceIndex], alpha);
+      const green = compositeChannelOnWhite(reference[sourceIndex + 1], alpha);
+      const blue = compositeChannelOnWhite(reference[sourceIndex + 2], alpha);
+      const weight = foregroundWeightFromWhite(red, green, blue);
+      const pixelLuma = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255.0;
+      rgb[rgbIndex] = red;
+      rgb[rgbIndex + 1] = green;
+      rgb[rgbIndex + 2] = blue;
+      foreground[pixelIndex] = weight;
+      luma[pixelIndex] = pixelLuma;
+      if (weight <= 0) continue;
+      foregroundWeight += weight;
+      rgbSums[0] += red / 255.0 * weight;
+      rgbSums[1] += green / 255.0 * weight;
+      rgbSums[2] += blue / 255.0 * weight;
+      const normalizedRed = red / 255.0;
+      const normalizedGreen = green / 255.0;
+      const normalizedBlue = blue / 255.0;
+      chromaOpponentSums[0] += (
+        Math.max(normalizedRed, normalizedGreen, normalizedBlue)
+        - Math.min(normalizedRed, normalizedGreen, normalizedBlue)
+      ) * weight;
+      chromaOpponentSums[1] += (
+        (2 * normalizedRed - normalizedGreen - normalizedBlue) / 2
+      ) * weight;
+      chromaOpponentSums[2] += (normalizedGreen - normalizedBlue) * weight;
+      highlightWeight += Math.max(0, pixelLuma - 0.65) * weight;
+    }
+    const prepared = {
+      rgb,
+      foreground,
+      luma,
+      rgbSums,
+      chromaOpponentSums,
+      foregroundWeight,
+      highlightWeight,
+    };
+    referenceV2FeatureCache.set(reference, prepared);
+    return prepared;
+  }
+
+  function scoreMaterialComponentsV4(
+    candidate,
+    reference,
+    width,
+    height,
+    residualGridSize = 4,
+    residualSketchSize = 128,
+    strictCanvasCore = false,
+  ) {
+    const referencePrepared = prepareExactMaterialPixels(reference, width, height, true);
+    const candidatePrepared = prepareExactMaterialPixels(candidate, width, height, false);
+    const pixelCount = Math.min(referencePrepared.pixelCount, candidatePrepared.pixelCount);
+    const intersection = new Uint8Array(pixelCount);
+    let intersectionCount = 0;
+    let unionCount = 0;
+    for (let index = 0; index < pixelCount; index += 1) {
+      const referenceForeground = referencePrepared.foreground[index] !== 0;
+      const candidateForeground = candidatePrepared.foreground[index] !== 0;
+      if (referenceForeground || candidateForeground) unionCount += 1;
+      if (referenceForeground && candidateForeground) {
+        intersection[index] = 1;
+        intersectionCount += 1;
+      }
+    }
+    const overlapCoefficient = intersectionCount / Math.max(
+      1,
+      Math.min(referencePrepared.foregroundCount, candidatePrepared.foregroundCount),
+    );
+    const core = erodeBinaryMask(intersection, width, height, 2);
+    let coreCount = 0;
+    let rgbErrorSum = 0;
+    const referenceChromaOpponentSums = [0, 0, 0];
+    const candidateChromaOpponentSums = [0, 0, 0];
+    const residualSums = new Float64Array(residualGridSize * residualGridSize * 3);
+    const residualWeights = new Uint32Array(residualGridSize * residualGridSize);
+    const residualSketchSums = new Float64Array(residualSketchSize * 3);
+    const residualSketchWeights = new Uint32Array(residualSketchSize);
+    for (let index = 0; index < pixelCount; index += 1) {
+      if (core[index] === 0) continue;
+      coreCount += 1;
+      const rgbIndex = index * 3;
+      const referenceRed = referencePrepared.rgb[rgbIndex];
+      const referenceGreen = referencePrepared.rgb[rgbIndex + 1];
+      const referenceBlue = referencePrepared.rgb[rgbIndex + 2];
+      const candidateRed = candidatePrepared.rgb[rgbIndex];
+      const candidateGreen = candidatePrepared.rgb[rgbIndex + 1];
+      const candidateBlue = candidatePrepared.rgb[rgbIndex + 2];
+      const residualRed = candidateRed - referenceRed;
+      const residualGreen = candidateGreen - referenceGreen;
+      const residualBlue = candidateBlue - referenceBlue;
+      rgbErrorSum += (
+        Math.abs(residualRed)
+        + Math.abs(residualGreen)
+        + Math.abs(residualBlue)
+      ) / 3.0;
+      accumulateChromaOpponent(referenceChromaOpponentSums, referenceRed, referenceGreen, referenceBlue);
+      accumulateChromaOpponent(candidateChromaOpponentSums, candidateRed, candidateGreen, candidateBlue);
+      const pixelX = index % width;
+      const pixelY = Math.floor(index / width);
+      const gridX = Math.min(residualGridSize - 1, Math.floor(pixelX * residualGridSize / width));
+      const gridY = Math.min(residualGridSize - 1, Math.floor(pixelY * residualGridSize / height));
+      const cellIndex = gridY * residualGridSize + gridX;
+      const featureIndex = cellIndex * 3;
+      residualWeights[cellIndex] += 1;
+      residualSums[featureIndex] += residualRed;
+      residualSums[featureIndex + 1] += residualGreen;
+      residualSums[featureIndex + 2] += residualBlue;
+      const residualHash = Math.imul((index ^ 2654435769) >>> 0, 2246822519) >>> 0;
+      const sketchCellIndex = residualHash % residualSketchSize;
+      const sketchFeatureIndex = sketchCellIndex * 3;
+      const sketchSign = (residualHash & 2147483648) !== 0 ? 1 : -1;
+      residualSketchWeights[sketchCellIndex] += 1;
+      residualSketchSums[sketchFeatureIndex] += residualRed * sketchSign;
+      residualSketchSums[sketchFeatureIndex + 1] += residualGreen * sketchSign;
+      residualSketchSums[sketchFeatureIndex + 2] += residualBlue * sketchSign;
+    }
+    const minimumForegroundPixels = Math.min(
+      referencePrepared.foregroundCount,
+      candidatePrepared.foregroundCount,
+    );
+    const minimumCoreBasisPixels = strictCanvasCore
+      ? pixelCount
+      : minimumForegroundPixels;
+    const minimumCorePixels = Math.max(
+      256,
+      Math.floor(0.02 * minimumCoreBasisPixels),
+    );
+    if (coreCount < minimumCorePixels || overlapCoefficient < 0.75) {
+      return {
+        fit_score: 0,
+        diff_score: 1,
+        material_components: null,
+        chroma_opponent_residuals: [],
+        geometry_valid: false,
+        foreground_overlap_coefficient: overlapCoefficient,
+        mask_iou: intersectionCount / Math.max(1, unionCount),
+        trusted_core_pixels: coreCount,
+        minimum_trusted_core_pixels: minimumCorePixels,
+        minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground",
+        minimum_core_basis_pixels: minimumCoreBasisPixels,
+        minimum_foreground_pixels: minimumForegroundPixels,
+        reference_foreground_pixels: referencePrepared.foregroundCount,
+        candidate_foreground_pixels: candidatePrepared.foregroundCount,
+      };
+    }
+    const foregroundRgbError = rgbErrorSum / coreCount;
+    const colorDistributionError = exactColorDistributionError(referencePrepared, candidatePrepared);
+    const luminanceStructureError = exactMultiscaleLuminanceError(
+      referencePrepared.maskedLuma,
+      candidatePrepared.maskedLuma,
+      core,
+      width,
+      height,
+    );
+    const detailTextureError = exactDetailError(
+      referencePrepared.maskedLuma,
+      candidatePrepared.maskedLuma,
+      core,
+      width,
+      height,
+    );
+    const highlightEmissionError = exactHighlightError(
+      referencePrepared.foregroundLuma,
+      candidatePrepared.foregroundLuma,
+      referencePrepared.foregroundLumaSorted,
+    );
+    const referenceChromaOpponentMeans = referenceChromaOpponentSums.map((value) => value / coreCount);
+    const candidateChromaOpponentMeans = candidateChromaOpponentSums.map((value) => value / coreCount);
+    const chromaOpponentResiduals = candidateChromaOpponentMeans.map(
+      (value, index) => value - referenceChromaOpponentMeans[index],
+    );
+    const chromaHueError = clamp01(
+      2 * (
+        0.50 * Math.abs(chromaOpponentResiduals[0])
+        + 0.25 * Math.abs(chromaOpponentResiduals[1])
+        + 0.25 * Math.abs(chromaOpponentResiduals[2])
+      ),
+    );
+    const materialComponents = {
+      foreground_rgb: clamp01(1 - foregroundRgbError),
+      color_distribution: clamp01(1 - colorDistributionError),
+      chroma_hue: clamp01(1 - chromaHueError),
+      luminance_structure: clamp01(1 - luminanceStructureError),
+      detail_texture: clamp01(1 - detailTextureError),
+      highlight_emission: clamp01(1 - highlightEmissionError),
+    };
+    const fitScore = clamp01(
+      0.30 * materialComponents.foreground_rgb
+      + 0.15 * materialComponents.color_distribution
+      + 0.25 * materialComponents.chroma_hue
+      + 0.12 * materialComponents.luminance_structure
+      + 0.08 * materialComponents.detail_texture
+      + 0.10 * materialComponents.highlight_emission,
+    );
+    const residualFeatures = Array.from(residualSums, (value, index) => {
+      const weight = residualWeights[Math.floor(index / 3)];
+      return weight > 0 ? value / weight : 0;
+    });
+    const residualSketchFeatures = Array.from(residualSketchSums, (value, index) => {
+      const weight = residualSketchWeights[Math.floor(index / 3)];
+      return weight > 0 ? value / weight : 0;
+    });
+    return {
+      fit_score: fitScore,
+      diff_score: 1 - fitScore,
+      rgb_mae: foregroundRgbError,
+      alpha_mae: 0,
+      material_components: materialComponents,
+      chroma_opponent_residuals: chromaOpponentResiduals,
+      geometry_valid: true,
+      foreground_overlap_coefficient: overlapCoefficient,
+      mask_iou: intersectionCount / Math.max(1, unionCount),
+      trusted_core_pixels: coreCount,
+      minimum_trusted_core_pixels: minimumCorePixels,
+      minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground",
+      minimum_core_basis_pixels: minimumCoreBasisPixels,
+      minimum_foreground_pixels: minimumForegroundPixels,
+      reference_foreground_pixels: referencePrepared.foregroundCount,
+      candidate_foreground_pixels: candidatePrepared.foregroundCount,
+      foreground_weight_sum: coreCount,
+      residual_grid_size: residualGridSize,
+      residual_sketch_size: residualSketchSize,
+      residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals),
+    };
+  }
+
+  function prepareExactMaterialPixels(pixels, width, height, cacheReference) {
+    if (cacheReference) {
+      const cached = referenceV4FeatureCache.get(pixels);
+      if (cached && cached.width === width && cached.height === height) return cached;
+    }
+    const pixelCount = Math.min(width * height, Math.floor(pixels.length / 4));
+    const rgb = new Float32Array(pixelCount * 3);
+    const foreground = new Uint8Array(pixelCount);
+    const maskedLuma = new Float32Array(pixelCount);
+    const foregroundRgbHistograms = [
+      new Uint32Array(256),
+      new Uint32Array(256),
+      new Uint32Array(256),
+    ];
+    const foregroundRgbSums = [0, 0, 0];
+    const foregroundLuma = [];
+    let foregroundCount = 0;
+    for (let index = 0; index < pixelCount; index += 1) {
+      const sourceIndex = index * 4;
+      const alpha = pixels[sourceIndex + 3];
+      const redByte = compositeChannelOnWhite(pixels[sourceIndex], alpha);
+      const greenByte = compositeChannelOnWhite(pixels[sourceIndex + 1], alpha);
+      const blueByte = compositeChannelOnWhite(pixels[sourceIndex + 2], alpha);
+      const red = redByte / 255.0;
+      const green = greenByte / 255.0;
+      const blue = blueByte / 255.0;
+      const rgbIndex = index * 3;
+      rgb[rgbIndex] = red;
+      rgb[rgbIndex + 1] = green;
+      rgb[rgbIndex + 2] = blue;
+      const isForeground = Math.max(
+        Math.abs(red - 1),
+        Math.abs(green - 1),
+        Math.abs(blue - 1),
+      ) > (8 / 255.0);
+      if (!isForeground) continue;
+      foreground[index] = 1;
+      foregroundCount += 1;
+      const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      maskedLuma[index] = luma;
+      foregroundRgbHistograms[0][redByte] += 1;
+      foregroundRgbHistograms[1][greenByte] += 1;
+      foregroundRgbHistograms[2][blueByte] += 1;
+      foregroundRgbSums[0] += red;
+      foregroundRgbSums[1] += green;
+      foregroundRgbSums[2] += blue;
+      foregroundLuma.push(luma);
+    }
+    const prepared = {
+      width,
+      height,
+      pixelCount,
+      rgb,
+      foreground,
+      foregroundCount,
+      foregroundRgbHistograms,
+      foregroundRgbSums,
+      foregroundLuma,
+      maskedLuma,
+    };
+    if (cacheReference) {
+      prepared.foregroundLumaSorted = [...foregroundLuma].sort((a, b) => a - b);
+      referenceV4FeatureCache.set(pixels, prepared);
+    }
+    return prepared;
+  }
+
+  function erodeBinaryMask(mask, width, height, iterations) {
+    let current = mask;
+    for (let round = 0; round < iterations; round += 1) {
+      const next = new Uint8Array(mask.length);
+      for (let y = 1; y < height - 1; y += 1) {
+        const row = y * width;
+        for (let x = 1; x < width - 1; x += 1) {
+          const index = row + x;
+          let keep = 1;
+          for (let dy = -1; dy <= 1 && keep; dy += 1) {
+            const neighborRow = index + dy * width;
+            for (let dx = -1; dx <= 1; dx += 1) {
+              if (current[neighborRow + dx] === 0) {
+                keep = 0;
+                break;
+              }
+            }
+          }
+          next[index] = keep;
+        }
+      }
+      current = next;
+    }
+    return current;
+  }
+
+  function exactColorDistributionError(referencePrepared, candidatePrepared) {
+    const quantiles = [0.10, 0.25, 0.50, 0.75, 0.90];
+    let quantileError = 0;
+    let meanError = 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      for (const q of quantiles) {
+        quantileError += Math.abs(
+          histogramLinearQuantile(
+            candidatePrepared.foregroundRgbHistograms[channel],
+            candidatePrepared.foregroundCount,
+            q,
+          )
+          - histogramLinearQuantile(
+            referencePrepared.foregroundRgbHistograms[channel],
+            referencePrepared.foregroundCount,
+            q,
+          ),
+        );
+      }
+      meanError += Math.abs(
+        candidatePrepared.foregroundRgbSums[channel] / Math.max(1, candidatePrepared.foregroundCount)
+        - referencePrepared.foregroundRgbSums[channel] / Math.max(1, referencePrepared.foregroundCount)
+      );
+    }
+    quantileError /= quantiles.length * 3;
+    meanError /= 3;
+    return clamp01(0.70 * quantileError + 0.30 * meanError);
+  }
+
+  function exactMultiscaleLuminanceError(reference, candidate, core, width, height) {
+    const scales = [[1, 0.50], [2, 0.25], [4, 0.15], [8, 0.10]];
+    let weightedError = 0;
+    let weightSum = 0;
+    for (const [block, weight] of scales) {
+      let errorSum = 0;
+      let count = 0;
+      const pooledWidth = Math.floor(width / block);
+      const pooledHeight = Math.floor(height / block);
+      for (let by = 0; by < pooledHeight; by += 1) {
+        for (let bx = 0; bx < pooledWidth; bx += 1) {
+          let maskSum = 0;
+          let referenceSum = 0;
+          let candidateSum = 0;
+          for (let dy = 0; dy < block; dy += 1) {
+            const row = (by * block + dy) * width + bx * block;
+            for (let dx = 0; dx < block; dx += 1) {
+              const index = row + dx;
+              maskSum += core[index];
+              referenceSum += reference[index];
+              candidateSum += candidate[index];
+            }
+          }
+          const area = block * block;
+          if (maskSum / area < 0.75) continue;
+          errorSum += Math.abs(candidateSum - referenceSum) / area;
+          count += 1;
+        }
+      }
+      if (count <= 0) continue;
+      weightedError += weight * errorSum / count;
+      weightSum += weight;
+    }
+    return clamp01(weightedError / Math.max(weightSum, 1e-8));
+  }
+
+  function exactDetailError(reference, candidate, core, width, height) {
+    const interior = erodeBinaryMask(core, width, height, 1);
+    let errorSum = 0;
+    let count = 0;
+    for (let y = 1; y < height - 1; y += 1) {
+      const row = y * width;
+      for (let x = 1; x < width - 1; x += 1) {
+        const index = row + x;
+        if (interior[index] === 0) continue;
+        const referenceX = 0.5 * (reference[index + 1] - reference[index - 1]);
+        const referenceY = 0.5 * (reference[index + width] - reference[index - width]);
+        const candidateX = 0.5 * (candidate[index + 1] - candidate[index - 1]);
+        const candidateY = 0.5 * (candidate[index + width] - candidate[index - width]);
+        errorSum += Math.abs(
+          Math.hypot(candidateX, candidateY) - Math.hypot(referenceX, referenceY),
+        );
+        count += 1;
+      }
+    }
+    return clamp01(2 * errorSum / Math.max(count, 1));
+  }
+
+  function exactHighlightError(referenceValues, candidateValues, preparedReferenceSorted) {
+    const referenceSorted = preparedReferenceSorted || [...referenceValues].sort((a, b) => a - b);
+    const candidateSorted = [...candidateValues].sort((a, b) => a - b);
+    const referenceThreshold = Math.max(0.65, linearQuantile(referenceSorted, 0.90));
+    const candidateThreshold = Math.max(0.65, linearQuantile(candidateSorted, 0.90));
+    const referenceArea = fractionAtLeast(referenceValues, referenceThreshold);
+    const candidateArea = fractionAtLeast(candidateValues, candidateThreshold);
+    const areaError = Math.abs(candidateArea - referenceArea) / Math.max(referenceArea, 0.02);
+    const peakError = Math.abs(
+      linearQuantile(candidateSorted, 0.99) - linearQuantile(referenceSorted, 0.99),
+    );
+    return clamp01(0.60 * areaError + 0.40 * peakError);
+  }
+
+  function accumulateChromaOpponent(sums, red, green, blue) {
+    sums[0] += Math.max(red, green, blue) - Math.min(red, green, blue);
+    sums[1] += (2 * red - green - blue) / 2;
+    sums[2] += green - blue;
+  }
+
+  function linearQuantile(sorted, q) {
+    if (sorted.length === 0) return 0;
+    const index = (sorted.length - 1) * q;
+    const low = Math.floor(index);
+    const high = Math.ceil(index);
+    if (low === high) return sorted[low];
+    const fraction = index - low;
+    return sorted[low] * (1 - fraction) + sorted[high] * fraction;
+  }
+
+  function histogramLinearQuantile(histogram, count, q) {
+    if (count <= 0) return 0;
+    const index = (count - 1) * q;
+    const lowRank = Math.floor(index);
+    const highRank = Math.ceil(index);
+    let cumulative = 0;
+    let lowValue = 0;
+    let highValue = 0;
+    let foundLow = false;
+    for (let value = 0; value < histogram.length; value += 1) {
+      cumulative += histogram[value];
+      if (!foundLow && cumulative > lowRank) {
+        lowValue = value / 255.0;
+        foundLow = true;
+      }
+      if (cumulative > highRank) {
+        highValue = value / 255.0;
+        break;
+      }
+    }
+    if (lowRank === highRank) return lowValue;
+    const fraction = index - lowRank;
+    return lowValue * (1 - fraction) + highValue * fraction;
+  }
+
+  function fractionAtLeast(values, threshold) {
+    if (values.length === 0) return 0;
+    let count = 0;
+    for (const value of values) {
+      if (value >= threshold) count += 1;
+    }
+    return count / values.length;
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, Number(value) || 0));
   }
 
   async function renderAndScore(command) {
-    applyMaterialPatch(command);
-    const refs = command.browser_score && Array.isArray(command.browser_score.reference_images)
-      ? command.browser_score.reference_images
-      : [];
-    const views = command.views && command.views.length ? command.views : [{ view_id: "v000_yaw0_pitch0", yaw: 0, pitch: 0 }];
-    const scoredViews = [];
-    for (let i = 0; i < views.length; i += 1) {
-      const view = views[i];
-      drawView(command, view);
-      await waitFrames(Number(command.settle_frames || 2));
-      const staged = stageCanvas();
-      const reference = refs.find((item) => item.view_id === view.view_id) || refs[i];
-      const referencePixels = await loadReferencePixels(reference);
-      const score = referencePixels
-        ? scorePixels(staged.pixels, referencePixels)
-        : { diff_score: 1, fit_score: 0, rgb_mae: 1, alpha_mae: 1 };
-      await postCaptureResult(command, view, canvasOnBackground(staged.canvas, visualBackgroundColor(command)), score);
-      scoredViews.push({ view_id: view.view_id || `v${i}`, ...score });
+    const frozenScripts = freezeSceneScripts(command, runtime.target || runtime.scene);
+    const frozenAnimators = freezeAnimators(command, runtime.target || runtime.scene);
+    try {
+      if (frozenAnimators.length > 0) {
+        const startupFrames = configuredAnimationMode(command) === "disabled"
+          ? 0
+          : Math.max(1, resolveAnimationFreezeSettleFrames(command));
+        await waitFrames(startupFrames);
+        pauseAnimators(frozenAnimators);
+      }
+      const materialPatch = applyMaterialPatch(command);
+      const refs = command.browser_score && Array.isArray(command.browser_score.reference_images)
+        ? command.browser_score.reference_images
+        : [];
+      const metric = command.browser_score && command.browser_score.metric || "runtime_laya_canvas_mae";
+      const useMaterialComponentsV5Strict = metric === "cross_engine_foreground_components_v5_strict_core";
+      const useMaterialComponentsV4 = useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
+      const useMaterialComponentsV3 = useMaterialComponentsV4 || metric === "cross_engine_foreground_components_v3";
+      const useWhiteArtifactScore = useMaterialComponentsV3 || metric === "cross_engine_foreground_components_v2";
+      const views = command.views && command.views.length ? command.views : [{ view_id: "v000_yaw0_pitch0", yaw: 0, pitch: 0 }];
+      const scoredViews = [];
+      for (let i = 0; i < views.length; i += 1) {
+        const view = views[i];
+        drawView(command, view);
+        applyFixedAnimations(command, frozenAnimators);
+        await waitFrames(frozenAnimators.length > 0 ? resolveAnimationFreezeSettleFrames(command) : resolveSettleFrames(command));
+        drawView(command, view);
+        applyFixedAnimations(command, frozenAnimators);
+        await waitFrames(1);
+        pauseAnimators(frozenAnimators);
+        const staged = stageCanvas(command);
+        if (command && command.alpha_source === "silhouette_mask") {
+          applySilhouetteAlpha(staged.pixels, await cachedSilhouetteAlpha(command, view));
+        }
+        const background = visualBackgroundColor(command);
+        const scoreCandidatePixels = staged.pixels;
+        const reference = refs.find((item) => item.view_id === view.view_id) || refs[i];
+        const referencePixels = await loadReferencePixels(reference, command);
+        const score = referencePixels
+          ? scorePixels(
+              scoreCandidatePixels,
+              referencePixels,
+              command,
+              background,
+              staged.width,
+              staged.height,
+            )
+          : { diff_score: 1, fit_score: 0, rgb_mae: 1, alpha_mae: 1 };
+        if (shouldEmitCaptureArtifacts(command)) {
+          const artifactCanvas = command && command.preserve_artifact_alpha === true
+            ? canvasFromPixels(staged.pixels, staged.width, staged.height)
+            : canvasOnBackground(
+                canvasFromPixels(staged.pixels, staged.width, staged.height),
+                background,
+              );
+          await postCaptureResult(command, view, artifactCanvas, score);
+        }
+        scoredViews.push({
+          view_id: view.view_id || `v${i}`,
+          score_implementation: useWhiteArtifactScore
+            ? (useMaterialComponentsV5Strict
+              ? "cross_engine_components_v5_strict_canvas_core_v1"
+              : useMaterialComponentsV4
+              ? "cross_engine_components_v4_python_parity_v1"
+              : useMaterialComponentsV3
+              ? "cross_engine_components_v3_raw_rgba_white_composite_v3"
+              : "cross_engine_components_v2_raw_rgba_white_composite_v2")
+            : "legacy_raw_capture_pixels",
+          ...score,
+        });
+      }
+      const meanFitScore = scoredViews.reduce((sum, item) => sum + item.fit_score, 0) / Math.max(1, scoredViews.length);
+      let fitScore = meanFitScore;
+      if (useWhiteArtifactScore && scoredViews.length > 0) {
+        const orderedScores = scoredViews.map((item) => item.fit_score).sort((a, b) => a - b);
+        const p10Score = linearQuantile(orderedScores, 0.10);
+        fitScore = 0.70 * meanFitScore + 0.20 * p10Score + 0.10 * orderedScores[0];
+      }
+      const diffScore = 1 - fitScore;
+      const residualFeatures = [];
+      for (const view of scoredViews) {
+        if (Array.isArray(view.residual_features)) residualFeatures.push(...view.residual_features);
+      }
+      return {
+        enabled: true,
+        metric,
+        fit_score: fitScore,
+        score: fitScore,
+        diff_score: diffScore,
+        renderer: {
+          mode: runtime.mode,
+          scene_url: sceneUrl,
+          project_root: projectRoot,
+        },
+        score_implementation: useWhiteArtifactScore
+          ? (useMaterialComponentsV5Strict
+            ? "cross_engine_components_v5_strict_canvas_core_v1"
+            : useMaterialComponentsV4
+            ? "cross_engine_components_v4_python_parity_v1"
+            : useMaterialComponentsV3
+            ? "cross_engine_components_v3_raw_rgba_white_composite_v3"
+            : "cross_engine_components_v2_raw_rgba_white_composite_v2")
+          : "legacy_raw_capture_pixels",
+        material_patch: materialPatch,
+        views: scoredViews,
+        structured_residual_features: {
+          profile: useMaterialComponentsV3
+            ? (useMaterialComponentsV5Strict
+              ? "signed_rgb_grid_sketch_chroma_v5_strict_canvas_core"
+              : useMaterialComponentsV4
+              ? "signed_rgb_grid_sketch_chroma_v4_python_parity"
+              : "signed_rgb_grid_sketch_chroma_v3")
+            : "signed_rgb_grid_sketch_v2",
+          grid_size: scoredViews.length > 0 ? Number(scoredViews[0].residual_grid_size || 4) : 4,
+          sketch_size: scoredViews.length > 0 ? Number(scoredViews[0].residual_sketch_size || 128) : 128,
+          feature_count: residualFeatures.length,
+          features: residualFeatures,
+        },
+        summary: {
+          fit_score: fitScore,
+          diff_score: diffScore,
+          mean_fit_score: meanFitScore,
+          aggregation: useWhiteArtifactScore
+            ? "0.70*mean + 0.20*p10 + 0.10*min"
+            : "mean",
+          render_width: width,
+          render_height: height,
+          readback_width: scoreReadbackDimensions(command).width,
+          readback_height: scoreReadbackDimensions(command).height,
+        },
+      };
+    } finally {
+      if (command.restore_animators_after_capture !== false) {
+        restoreAnimators(frozenAnimators);
+      }
+      if (command.restore_scene_scripts_after_capture !== false) {
+        restoreSceneScripts(frozenScripts);
+      }
     }
-    const fitScore = scoredViews.reduce((sum, item) => sum + item.fit_score, 0) / Math.max(1, scoredViews.length);
-    const diffScore = scoredViews.reduce((sum, item) => sum + item.diff_score, 0) / Math.max(1, scoredViews.length);
-    return {
-      enabled: true,
-      metric: command.browser_score && command.browser_score.metric || "runtime_laya_canvas_mae",
-      fit_score: fitScore,
-      score: fitScore,
-      diff_score: diffScore,
-      renderer: {
-        mode: runtime.mode,
-        scene_url: sceneUrl,
-        project_root: projectRoot,
-      },
-      views: scoredViews,
-      summary: { fit_score: fitScore, diff_score: diffScore },
-    };
   }
 
   async function pollOnce() {
     if (busy) return;
     const response = await fetch(`${serverBaseUrl}/material-fit/capture-command?last_nonce=${encodeURIComponent(lastNonce)}`);
     if (!response.ok) return;
-    const command = await response.json();
+    const command = commandWithProfileDefaults(await response.json());
     if (!command || command.enabled === false || !command.nonce || command.nonce === lastNonce) return;
     busy = true;
     try {
@@ -836,10 +2447,19 @@
     mode: runtime.mode,
     sceneUrl,
     projectRoot,
+    assetId: assetProfile.asset_id || "",
+    profileUrl: assetProfileUrl,
+    animationMode: configuredAnimationMode(null),
     targetName: runtime.target && runtime.target.name,
+    materialTargetName: runtime.materialTarget && runtime.materialTarget.name,
     cameraName: runtime.camera && runtime.camera.name,
+    frame: runtime.frame ? {
+      center: [runtime.frame.center.x, runtime.frame.center.y, runtime.frame.center.z],
+      extent: [runtime.frame.extent.x, runtime.frame.extent.y, runtime.frame.extent.z],
+      radius: runtime.frame.radius,
+    } : null,
   };
-  setInterval(() => { pollOnce().catch(() => {}); }, 50);
+  setInterval(() => { pollOnce().catch(() => {}); }, 10);
 })();
 </script>
 </body>

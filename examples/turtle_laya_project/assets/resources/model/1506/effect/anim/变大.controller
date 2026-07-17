@@ -1,0 +1,59 @@
+{
+  "_$type": "Animator",
+  "enabled": true,
+  "cullingMode": 2,
+  "controllerLayers": [
+    {
+      "name": "Base Layer",
+      "defaultStateName": "ani_cylg_01",
+      "playOnWake": true,
+      "blendingMode": 0,
+      "states": [
+        {
+          "name": "ani_cylg_01",
+          "clip": {
+            "_$uuid": "8dd937c4-aa50-46e1-88a0-d5e35990c193"
+          },
+          "loop": -1,
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 599.949984194048,
+          "y": 318.8894458053832,
+          "id": "0",
+          "loopState": 0
+        },
+        {
+          "x": 10,
+          "y": 100,
+          "loopState": 0,
+          "_isLooping": 0,
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "soloTransitions": [
+            {
+              "id": "0"
+            }
+          ]
+        },
+        {
+          "x": 550,
+          "y": 100,
+          "loopState": 0,
+          "_isLooping": 0,
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1
+        }
+      ],
+      "defaultWeight": 1,
+      "stageX": 52.40633265989664,
+      "stageY": 115.7673101334765,
+      "stageScale": 0.7593667340103362
+    }
+  ],
+  "sleep": false,
+  "layerW": 150
+}

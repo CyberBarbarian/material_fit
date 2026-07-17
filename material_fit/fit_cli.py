@@ -65,6 +65,17 @@ def parse_fit_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "semantic_group",
             "adaptive_response_search",
             "pattern16",
+            "cross_engine_hybrid",
+            "structured_fish",
+            "fish_spsa",
+            "material_block_hybrid",
+            "material_stage1_hybrid",
+            "material_discrete_joint",
+            "material_jacobian_trust_region",
+            "material_block_trust_region",
+            "material_coordinate_pattern",
+            "material_secant_trust_region",
+            "material_inverse_surrogate",
             "semantic_group_legacy_081",
             "subspace_cma_es",
             "cold_start_hybrid",
@@ -77,6 +88,14 @@ def parse_fit_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "iterations; 'semantic_group' is the current response scheduler; "
             "'adaptive_response_search' is a global-best response evidence scheduler; "
             "'pattern16' is the validated 16D coordinate pattern-search mainline; "
+            "'cross_engine_hybrid' ranks pattern probes from online render response; "
+            "'structured_fish' separates global scene calibration from scalar, color, and offset material search; "
+            "'fish_spsa' estimates coupled black-box gradients with antithetic probes and Adam; "
+            "'material_block_hybrid' runs semantic-block CMA followed by joint material refinement; "
+            "'material_stage1_hybrid' runs structured warmup, semantic CMA blocks, then material-only refinement; "
+            "'material_discrete_joint' uses successive halving across legal hard states before continuous refinement; "
+            "'material_jacobian_trust_region' builds a full signed-residual Jacobian and applies trust-region updates; "
+            "'material_block_trust_region' runs semantic-block Jacobians before a full trust-region refinement; "
             "'semantic_group_legacy_081' preserves the old pattern-search baseline; "
             "'subspace_cma_es' runs expensive CMA-ES in a small active subspace; "
             "'cold_start_hybrid' runs semantic anchors plus local search from zero. "

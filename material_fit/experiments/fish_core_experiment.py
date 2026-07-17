@@ -7,8 +7,10 @@ import copy
 import json
 import os
 import platform
+import signal
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -34,6 +36,8 @@ FISH_VIEWS = [
     {"view_id": "v006_yaw270_pitch0", "yaw": 270.0, "pitch": 0.0, "file_name": "laya_v006_yaw270_pitch0.png"},
     {"view_id": "v007_yaw315_pitch0", "yaw": 315.0, "pitch": 0.0, "file_name": "laya_v007_yaw315_pitch0.png"},
 ]
+
+CANONICAL_ANIMATION_MODE = "disabled"
 
 REQUIRED_LAYA_ENGINE_FILES = (
     "laya.core.js",
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     material_name = f"{material_stem}_{material_suffix}_working.lmat"
     working_material = run_dir / material_name
     shutil.copy2(selected["baseline_material_path"], working_material)
+    working_material.chmod(working_material.stat().st_mode | stat.S_IWRITE)
 
     config = _build_config(
         repo_root=repo_root,
@@ -107,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
-    env["NODE_PATH"] = str((repo_root / "artifacts/real_laya_run/node_modules").resolve())
+    env["NODE_PATH"] = str((repo_root / "node_modules").resolve())
 
     queue_proc: subprocess.Popen[str] | None = None
     renderer_proc: subprocess.Popen[str] | None = None
@@ -144,6 +149,13 @@ def main(argv: list[str] | None = None) -> int:
             env=env,
         )
         if fit_returncode == 0 and render_backend == "runtime":
+            initial_params_render_dir = _render_runtime_params(
+                run_dir=run_dir,
+                config=config,
+                params_path=run_dir / "output/initial_params.json",
+                output_dir=run_dir / "output/initial_render_preview",
+                request_label="initial_render",
+            )
             best_params_render_dir = _render_best_params(run_dir=run_dir, config=config)
         elif fit_returncode == 0 and render_backend == "oracle":
             initial_params_render_dir = _render_oracle_params(
@@ -161,8 +173,8 @@ def main(argv: list[str] | None = None) -> int:
                     output_dir=run_dir / "output/best_render",
                 )
     finally:
-        _terminate_process(renderer_proc)
-        _terminate_process(queue_proc)
+        _terminate_process(renderer_proc, pid_file=run_dir / "renderer.pid")
+        _terminate_process(queue_proc, pid_file=run_dir / "queue.pid")
 
     elapsed_s = time.perf_counter() - started
     summary = _write_summary(
@@ -181,6 +193,14 @@ def main(argv: list[str] | None = None) -> int:
         http_port=http_port,
         oracle_base=oracle_base,
     )
+    alignment_report_path = _write_eight_view_alignment_report(run_dir=run_dir, summary=summary)
+    if alignment_report_path is not None:
+        summary["eight_view_alignment_report"] = str(alignment_report_path)
+        _write_json(run_dir / "summary.json", summary)
+    score_report_path = _write_cross_engine_score_report(run_dir=run_dir, summary=summary)
+    if score_report_path is not None:
+        summary["cross_engine_score_report"] = str(score_report_path)
+        _write_json(run_dir / "summary.json", summary)
     sheet_path = _write_contact_sheet(run_dir=run_dir, repo_root=repo_root, summary=summary)
     if sheet_path:
         summary["contact_sheet"] = str(sheet_path)
@@ -235,10 +255,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--headed", action="store_true", help="Open a visible Chromium window for renderer debugging.")
     parser.add_argument(
         "--baseline",
-        choices=("auto", "source"),
+        choices=("auto", "active", "source"),
         default="auto",
         help=(
-            "Baseline material/scene selection. auto/source use the original scene-bound fish_jxs_test material."
+            "Baseline material selection. auto uses the active finetune start for finetune "
+            "and the original scene-bound source material for zero-start."
         ),
     )
     return parser.parse_args(argv)
@@ -265,16 +286,13 @@ def _resolve_engine_root(raw: str) -> Path:
     env_root = os.environ.get("LAYA_ENGINE_LIBS")
     if env_root:
         return Path(env_root).expanduser().resolve()
-    if os.name == "nt":
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
-        if local_app_data:
-            return Path(local_app_data, "Programs", "LayaAirIDE", "resources", "engine", "libs").resolve()
-    volcano_engine = Path(
-        "/vepfs-mlp2/c20250508/lizikang/material_fit_render_oracle/tools/layaair/3.4.0/Resources/engine/libs"
+    vendored = Path(__file__).resolve().parents[2] / "vendor/layaair-3.4.0/libs"
+    if vendored.is_dir():
+        return vendored
+    raise FileNotFoundError(
+        "vendored LayaAir runtime is missing; run from a complete checkout or "
+        "pass --engine-root"
     )
-    if volcano_engine.exists():
-        return volcano_engine.resolve()
-    return Path("/opt/LayaAirIDE/resources/engine/libs").resolve()
 
 
 def _resolve_oracle_base(raw: str) -> Path | None:
@@ -284,7 +302,6 @@ def _resolve_oracle_base(raw: str) -> Path | None:
     env_base = os.environ.get("MATERIAL_FIT_REMOTE_BASE")
     if env_base:
         candidates.append(Path(env_base).expanduser())
-    candidates.append(Path("/vepfs-mlp2/c20250508/lizikang/material_fit_render_oracle"))
     for candidate in candidates:
         base = candidate.resolve()
         if (base / "bin/ensure_persistent_multiview_daemon.sh").exists():
@@ -314,18 +331,31 @@ def _require_laya_engine(engine_root: Path) -> None:
 
 
 def _ensure_playwright_chromium(repo_root: Path) -> None:
-    work_dir = repo_root / "artifacts/real_laya_run"
-    node_modules = work_dir / "node_modules/playwright-chromium"
-    if node_modules.exists():
+    package = repo_root / "node_modules/playwright/package.json"
+    if package.is_file():
         return
-    node = shutil.which("node")
-    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm") or shutil.which("npm")
-    if not node or not npm:
-        raise RuntimeError("Node.js 18+ and npm are required to install playwright-chromium.")
-    work_dir.mkdir(parents=True, exist_ok=True)
-    if not (work_dir / "package.json").exists():
-        subprocess.run([npm, "init", "-y"], cwd=work_dir, check=True)
-    subprocess.run([npm, "install", "playwright-chromium", "--no-save"], cwd=work_dir, check=True)
+    raise RuntimeError(
+        "Playwright is not installed in the repository. Run scripts/bootstrap.ps1 "
+        "or scripts/bootstrap.sh first."
+    )
+
+
+def _resolve_node_executable() -> str:
+    explicit = os.environ.get("MATERIAL_FIT_NODE") or os.environ.get("NODE_BINARY")
+    if explicit:
+        path = Path(explicit).expanduser().resolve()
+        if path.is_file():
+            return str(path)
+        raise FileNotFoundError(f"configured Node executable does not exist: {path}")
+    discovered = shutil.which("node")
+    if discovered:
+        return discovered
+    local_node = Path(__file__).resolve().parents[2] / ".runtime/node/bin/node"
+    if local_node.is_file():
+        return str(local_node)
+    raise FileNotFoundError(
+        "Node.js 18+ is required. Install node, add it to PATH, or set MATERIAL_FIT_NODE/NODE_BINARY."
+    )
 
 
 def _find_free_port(*, exclude: set[int] | None = None) -> int:
@@ -340,15 +370,21 @@ def _find_free_port(*, exclude: set[int] | None = None) -> int:
 
 
 def _select_assets_for_mode(assets: FishSceneAssets, mode: str, baseline: str = "auto") -> dict[str, Any]:
-    if baseline not in {"auto", "source"}:
+    if baseline not in {"auto", "active", "source"}:
         raise ValueError(f"unsupported baseline: {baseline}")
+    use_active = baseline == "active" or (baseline == "auto" and mode == "material")
+    baseline_material_path = assets.baseline_material_path if use_active else assets.source_material_path
+    baseline_material_name = assets.baseline_material_name if use_active else assets.source_scene_material_name
+    asset_set_name = FINETUNE_ASSET_SET_NAME if mode == "material" and use_active else (
+        "fish_1504_finetune_from_original_zip_20260612" if mode == "material" else ZERO_ASSET_SET_NAME
+    )
     return {
-        "asset_set_name": FINETUNE_ASSET_SET_NAME if mode == "material" else ZERO_ASSET_SET_NAME,
+        "asset_set_name": asset_set_name,
         "laya_project_dir": assets.source_laya_project_dir,
         "scene_path": assets.source_scene_path,
-        "baseline_material_path": assets.source_material_path,
+        "baseline_material_path": baseline_material_path,
         "scene_material_uuid": assets.source_scene_material_uuid,
-        "baseline_material_name": assets.source_scene_material_name,
+        "baseline_material_name": baseline_material_name,
     }
 
 
@@ -374,10 +410,10 @@ def _persistent_queue_config(
         "width": width,
         "height": height,
         "alpha_source": alpha_source,
+        "animation_mode": CANONICAL_ANIMATION_MODE,
         "freeze_animators": True,
-        "fixed_animation_state": "idle1",
-        "fixed_animation_layer": 0,
-        "fixed_animation_time": 0.0,
+        "settle_frames": 0,
+        "animation_freeze_settle_frames": 0,
         "restore_animators_after_capture": False,
         "freeze_scene_scripts": True,
         "visual_quality_guard": {"enabled": False},
@@ -447,7 +483,7 @@ def _build_config(
         {"view_id": view["view_id"], "path": str(refs_root / view["file_name"])}
         for view in FISH_VIEWS
     ]
-    alpha_source = "silhouette_mask" if mode == "zero_searchable" else "render_alpha"
+    alpha_source = "silhouette_mask"
     browser_score_objective = (
         {"mode": "reference_foreground_mae", "foreground_threshold": 3.0}
         if mode == "zero_searchable"
@@ -472,6 +508,8 @@ def _build_config(
             "scene_path": str(selected["scene_path"]),
             "baseline_material_path": str(selected["baseline_material_path"]),
             "unity_reference_dir": str(assets.unity_reference_dir),
+            "reference_contract_id": assets.reference_contract_id,
+            "reference_contract_path": str(assets.reference_contract_path),
             "scene_material_uuid": selected["scene_material_uuid"],
             "source_laya_project_dir": str(assets.source_laya_project_dir),
             "source_scene_path": str(assets.source_scene_path),
@@ -518,7 +556,7 @@ def _build_config(
             "persistent_queue": persistent_queue,
             "browser_score": {
                 "enabled": True,
-                "metric": "browser_fast_rgba_mae_v1",
+                "metric": "cross_engine_foreground_components_v2",
                 "reference_images": reference_images,
                 "rgb_weight": 0.85,
                 "alpha_weight": 0.15,
@@ -537,6 +575,7 @@ def _build_config(
             "target_yaw_sign": -1.0,
             "target_pitch_sign": -1.0,
             "transparent_background": True,
+            "preserve_artifact_alpha": True,
             "zero_transparent_rgb": True,
             "alpha_from_rgb": True,
             "alpha_from_rgb_threshold": 1.0,
@@ -545,11 +584,8 @@ def _build_config(
             "mask_alpha_threshold": 1.0,
             "flip_y": False,
             "render_texture_srgb": True,
+            "animation_mode": CANONICAL_ANIMATION_MODE,
             "freeze_animators": True,
-            "fixed_animation_state": "idle1",
-            "fixed_animation_layer": 0,
-            "fixed_animation_time": 0.0,
-            "restore_animators_after_capture": False,
             "views": FISH_VIEWS,
         },
     }
@@ -585,8 +621,15 @@ def _start_queue(*, repo_root: Path, run_dir: Path, cap_port: int, env: dict[str
         stdout=stdout,
         stderr=stderr,
         text=True,
+        **_process_group_popen_kwargs(),
     )
-    _wait_for_file(state_dir / "ready.json", proc=proc, timeout_s=15, label="persistent queue")
+    pid_file = run_dir / "queue.pid"
+    pid_file.write_text(f"{proc.pid}\n", encoding="ascii")
+    try:
+        _wait_for_file(state_dir / "ready.json", proc=proc, timeout_s=15, label="persistent queue")
+    except BaseException:
+        _terminate_process(proc, pid_file=pid_file)
+        raise
     return proc
 
 
@@ -608,7 +651,7 @@ def _start_renderer(
     stdout = (log_dir / "runtime_renderer_stdout.log").open("w", encoding="utf-8")
     stderr = (log_dir / "runtime_renderer_stderr.log").open("w", encoding="utf-8")
     args = [
-        shutil.which("node") or "node",
+        _resolve_node_executable(),
         str(repo_root / "material_fit/laya_capture/run_runtime_renderer.js"),
         "--server",
         f"http://127.0.0.1:{cap_port}",
@@ -629,8 +672,38 @@ def _start_renderer(
     ]
     if headed:
         args.extend(["--headed", "true"])
-    proc = subprocess.Popen(args, cwd=repo_root, env=env, stdout=stdout, stderr=stderr, text=True)
-    _wait_for_file(ready_file, proc=proc, timeout_s=60, label="runtime renderer")
+    renderer_env = env.copy()
+    renderer_tmp = str(run_dir / "renderer_tmp")
+    if sys.platform.startswith("linux"):
+        # Chromium's SingletonSocket has a strict Unix-domain path limit. Deep
+        # artifact paths can exceed it before the renderer reaches readiness.
+        renderer_tmp = renderer_env.get("MATERIAL_FIT_LINUX_TMPDIR") or "/tmp"
+    Path(renderer_tmp).mkdir(parents=True, exist_ok=True)
+    renderer_env["TMPDIR"] = renderer_tmp
+    renderer_env["TMP"] = renderer_tmp
+    renderer_env["TEMP"] = renderer_tmp
+    if sys.platform.startswith("linux"):
+        renderer_env.setdefault(
+            "MATERIAL_FIT_CHROMIUM_ARGS",
+            "--ignore-gpu-blocklist --enable-webgl --enable-gpu-rasterization --use-gl=egl --disable-gpu-sandbox",
+        )
+        renderer_env.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    proc = subprocess.Popen(
+        args,
+        cwd=repo_root,
+        env=renderer_env,
+        stdout=stdout,
+        stderr=stderr,
+        text=True,
+        **_process_group_popen_kwargs(),
+    )
+    pid_file = run_dir / "renderer.pid"
+    pid_file.write_text(f"{proc.pid}\n", encoding="ascii")
+    try:
+        _wait_for_file(ready_file, proc=proc, timeout_s=60, label="runtime renderer")
+    except BaseException:
+        _terminate_process(proc, pid_file=pid_file)
+        raise
     return proc
 
 
@@ -716,8 +789,25 @@ def _render_raw_scene(*, run_dir: Path, config: dict[str, Any]) -> Path | None:
 
 def _render_best_params(*, run_dir: Path, config: dict[str, Any]) -> Path | None:
     best_params_path = run_dir / "output" / "auto_adjust" / "best" / "params.json"
-    best_params = _read_json_or_empty(best_params_path)
-    if not best_params:
+    return _render_runtime_params(
+        run_dir=run_dir,
+        config=config,
+        params_path=best_params_path,
+        output_dir=run_dir / "output" / "best_render",
+        request_label="best_render",
+    )
+
+
+def _render_runtime_params(
+    *,
+    run_dir: Path,
+    config: dict[str, Any],
+    params_path: Path,
+    output_dir: Path,
+    request_label: str,
+) -> Path | None:
+    params = _read_json_or_empty(params_path)
+    if not params:
         return None
 
     capture_cfg = config.get("laya_capture") if isinstance(config.get("laya_capture"), dict) else {}
@@ -725,21 +815,20 @@ def _render_best_params(*, run_dir: Path, config: dict[str, Any]) -> Path | None
     state_dir = Path(str(queue_cfg.get("state_dir") or run_dir / "persistent_queue"))
     queue_dir = state_dir / "queue"
     result_dir = state_dir / "results"
-    output_dir = run_dir / "output" / "best_render"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    params_path = output_dir / "params.json"
-    _write_json(params_path, best_params)
-    request_id = f"best_render_{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns()}"
+    staged_params_path = output_dir / "params.json"
+    _write_json(staged_params_path, params)
+    request_id = f"{request_label}_{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns()}"
     result_path = result_dir / f"{request_id}.result.json"
     command = _build_raw_scene_command(capture_cfg=capture_cfg, queue_cfg=queue_cfg, output_dir=output_dir)
-    command["paramsPath"] = str(params_path)
+    command["paramsPath"] = str(staged_params_path)
     command["material_patch"] = {
         "target_name": str(capture_cfg.get("target_name") or "model"),
-        "values": copy.deepcopy(best_params),
+        "values": copy.deepcopy(params),
     }
     command["nonce"] = request_id
-    request = {"request_id": request_id, "params_path": str(params_path), "command": command}
+    request = {"request_id": request_id, "params_path": str(staged_params_path), "command": command}
     queue_dir.mkdir(parents=True, exist_ok=True)
     result_dir.mkdir(parents=True, exist_ok=True)
     request_path = queue_dir / f"{request_id}.request.json"
@@ -759,9 +848,9 @@ def _render_best_params(*, run_dir: Path, config: dict[str, Any]) -> Path | None
             png_count = sum(1 for view in FISH_VIEWS if (output_dir / view["file_name"]).exists())
             if result.get("ok") and png_count == expected:
                 return output_dir
-            raise RuntimeError(f"best params render failed: {result.get('error') or result}")
+            raise RuntimeError(f"{request_label} params render failed: {result.get('error') or result}")
         time.sleep(float(queue_cfg.get("poll_s", 0.02) or 0.02))
-    raise TimeoutError(f"timed out waiting for best params render: {result_path}")
+    raise TimeoutError(f"timed out waiting for {request_label} params render: {result_path}")
 
 
 def _render_oracle_params(
@@ -878,15 +967,56 @@ def _wait_for_file(path: Path, *, proc: subprocess.Popen[str], timeout_s: float,
     raise TimeoutError(f"timed out waiting for {label}: {path}")
 
 
-def _terminate_process(proc: subprocess.Popen[str] | None) -> None:
-    if proc is None or proc.poll() is not None:
-        return
-    proc.terminate()
+def _process_group_popen_kwargs() -> dict[str, Any]:
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _terminate_process(proc: subprocess.Popen[str] | None, *, pid_file: Path | None = None) -> None:
     try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait(timeout=5)
+        if proc is None or proc.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+            return
+
+        process_group: int | None = None
+        try:
+            candidate_group = os.getpgid(proc.pid)
+            if candidate_group != os.getpgrp():
+                process_group = candidate_group
+        except (OSError, ProcessLookupError):
+            process_group = None
+        if process_group is not None:
+            os.killpg(process_group, signal.SIGTERM)
+        else:
+            proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            if process_group is not None:
+                try:
+                    os.killpg(process_group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                proc.kill()
+            proc.wait(timeout=5)
+    finally:
+        if pid_file is not None:
+            pid_file.unlink(missing_ok=True)
 
 
 def _write_summary(
@@ -1065,6 +1195,134 @@ def _write_contact_sheet(*, run_dir: Path, repo_root: Path, summary: dict[str, A
     out = run_dir / "fish_contact_sheet.png"
     sheet.save(out)
     return out
+
+
+def _write_eight_view_alignment_report(*, run_dir: Path, summary: dict[str, Any]) -> Path | None:
+    try:
+        from PIL import Image
+        import numpy as np
+    except ImportError:
+        return None
+
+    unity_reference_dir = Path(str(summary.get("unity_reference_dir") or ""))
+    render_dirs = {
+        "raw_scene_render": summary.get("raw_scene_render_dir"),
+        "initial_render": summary.get("initial_render_dir"),
+        "best_render": summary.get("best_render_dir"),
+    }
+    config = _read_json_or_empty(run_dir / "fit_config.json")
+    capture_config = config.get("laya_capture") if isinstance(config.get("laya_capture"), dict) else {}
+    queue_config = capture_config.get("persistent_queue") if isinstance(capture_config.get("persistent_queue"), dict) else {}
+    report: dict[str, Any] = {
+        "version": "cross_engine_alignment_report_v2",
+        "unity_reference_dir": str(unity_reference_dir),
+        "asset_set": summary.get("asset_set"),
+        "scene_path": summary.get("scene_path"),
+        "baseline_material_path": summary.get("baseline_material_path"),
+        "capture_contract": {
+            "capture_mode": capture_config.get("capture_mode"),
+            "animation_mode": capture_config.get("animation_mode"),
+            "fixed_animation_state": capture_config.get("fixed_animation_state"),
+            "fixed_animation_time": capture_config.get("fixed_animation_time"),
+            "alpha_source": capture_config.get("alpha_source") or queue_config.get("alpha_source"),
+            "preserve_artifact_alpha": capture_config.get("preserve_artifact_alpha"),
+            "orthographic_vertical_size": capture_config.get("orthographic_vertical_size"),
+            "target_yaw_sign": capture_config.get("target_yaw_sign"),
+        },
+        "render_sets": {},
+    }
+    for label, raw_dir in render_dirs.items():
+        if not raw_dir:
+            continue
+        render_dir = Path(str(raw_dir))
+        scored = _score_eight_view_alignment(
+            unity_reference_dir=unity_reference_dir,
+            render_dir=render_dir,
+            image_module=Image,
+            np_module=np,
+        )
+        if scored is not None:
+            report["render_sets"][label] = scored
+            report[label] = scored
+    if not report["render_sets"]:
+        return None
+
+    report_path = run_dir / "eight_view_alignment_report.json"
+    _write_json(report_path, report)
+    return report_path
+
+
+def _write_cross_engine_score_report(*, run_dir: Path, summary: dict[str, Any]) -> Path | None:
+    from material_fit.vision.cross_engine_score import score_cross_engine_views
+
+    reference_dir = Path(str(summary.get("unity_reference_dir") or ""))
+    render_dirs = {
+        "raw_scene_render": summary.get("raw_scene_render_dir"),
+        "initial_render": summary.get("initial_render_dir"),
+        "best_render": summary.get("best_render_dir"),
+    }
+    report: dict[str, Any] = {
+        "version": "cross_engine_material_score_report_v2",
+        "reference_dir": str(reference_dir),
+        "scorer": "unregistered_eroded_intersection_multicomponent_v2",
+        "render_sets": {},
+    }
+    for label, raw_dir in render_dirs.items():
+        if not raw_dir:
+            continue
+        scored = score_cross_engine_views(
+            reference_dir=reference_dir,
+            candidate_dir=Path(str(raw_dir)),
+            views=FISH_VIEWS,
+        )
+        if scored is not None:
+            report["render_sets"][label] = scored
+    if not report["render_sets"]:
+        return None
+    path = run_dir / "cross_engine_score_report.json"
+    _write_json(path, report)
+    return path
+
+
+def _score_eight_view_alignment(
+    *,
+    unity_reference_dir: Path,
+    render_dir: Path,
+    image_module: Any,
+    np_module: Any,
+) -> dict[str, Any] | None:
+    del image_module, np_module
+    from material_fit.vision.cross_engine_alignment import score_eight_view_alignment
+
+    return score_eight_view_alignment(
+        reference_dir=unity_reference_dir,
+        candidate_dir=render_dir,
+        views=FISH_VIEWS,
+    )
+
+
+def _foreground_mask(image: Any, np_module: Any) -> Any:
+    rgba = np_module.asarray(image.convert("RGBA"))
+    alpha = rgba[:, :, 3]
+    if int(alpha.max()) > int(alpha.min()):
+        return alpha > 5
+    rgb = rgba[:, :, :3].astype("int16")
+    return np_module.abs(rgb - 255).max(axis=2) > 8
+
+
+def _mask_bbox(mask: Any, np_module: Any) -> dict[str, Any] | None:
+    ys, xs = np_module.nonzero(mask)
+    if len(xs) == 0:
+        return None
+    return {
+        "x0": int(xs.min()),
+        "y0": int(ys.min()),
+        "x1": int(xs.max()) + 1,
+        "y1": int(ys.max()) + 1,
+        "cx": float(xs.mean()),
+        "cy": float(ys.mean()),
+        "area": int(mask.sum()),
+    }
 
 
 def _image_on_background(image: Any, color: tuple[int, int, int]) -> Any:

@@ -16,6 +16,13 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _append_jsonl(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+        stream.write("\n")
+
+
 def _number_or_default(value: Any, default: float) -> float:
     try:
         numeric = float(value)
@@ -351,8 +358,8 @@ def _record_iteration_outputs(
     if is_snapshot:
         snapshot_iterations.add(iteration)
         _write_json(auto_dir / f"iter_{iteration:04d}" / "decision.json", iteration_payload)
-    _write_json(auto_dir / "iteration_series.json", iteration_series)
-    _write_snapshot_index(auto_dir, iteration_series, snapshot_iterations)
+        _write_snapshot_index(auto_dir, iteration_series, snapshot_iterations)
+    _append_jsonl(auto_dir / "iteration_series.jsonl", summary)
 
 
 def _iteration_series_entry(
@@ -611,6 +618,10 @@ def _prune_iteration_artifacts(
     full_payloads: dict[int, dict[str, Any]] | None = None,
     final_cleanup: bool = False,
 ) -> None:
+    if not final_cleanup:
+        cadence = max(1, min(snapshot_interval if snapshot_interval > 0 else 25, 25))
+        if current_iteration % cadence != 0:
+            return
     if keep_last_n < 0:
         keep_last_n = 0
     protected: set[int] = set(range(max(0, current_iteration - keep_last_n + 1), current_iteration + 1))

@@ -23,6 +23,7 @@ type BrowserScoreConfig = {
     reference_images?: BrowserScoreReference[];
     rgb_weight?: number;
     alpha_weight?: number;
+    residual_grid_size?: number;
 };
 
 type BrowserScoreView = {
@@ -33,6 +34,8 @@ type BrowserScoreView = {
     alpha_mae: number;
     mask_iou: number;
     foreground_weight_sum: number;
+    residual_grid_size?: number;
+    residual_features?: number[];
 };
 
 type CaptureCommand = {
@@ -70,6 +73,7 @@ type CaptureCommand = {
     fixed_animation_layer?: number;
     fixed_animation_time?: number;
     restore_animators_after_capture?: boolean;
+    preserve_artifact_alpha?: boolean;
     mask_alpha_mode?: "binary" | "soft";
     mask_alpha_threshold?: number;
     flip_y?: boolean;
@@ -82,12 +86,21 @@ type CaptureCommand = {
 type MaterialPatch = {
     target_name?: string;
     values?: { [name: string]: number | number[] | boolean };
+    render_states?: { [name: string]: number | boolean };
+    defines?: {
+        managed?: string[];
+        enabled?: string[];
+    };
 };
 
 type MaterialPatchResult = {
     applied: boolean;
     materialCount: number;
     valueCount: number;
+    defineCount: number;
+    renderStateCount: number;
+    enabledDefines: string[];
+    appliedRenderStates: { [name: string]: number | boolean };
     fallback?: string;
     error?: string;
 };
@@ -201,6 +214,7 @@ export class MaterialFitCapture extends Laya.Script3D {
             const frozenAnimators = this.freezeAnimators(command, target || this.sceneRoot());
             if (frozenAnimators.length > 0) {
                 await this.waitFrames(1);
+                this.pauseAnimators(frozenAnimators);
             }
             const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : preFreezeTargetEuler;
             const previousTarget = camera.renderTarget;
@@ -275,7 +289,8 @@ export class MaterialFitCapture extends Laya.Script3D {
                     }
                     const outputPixels = this.copyPixelsForOutput(pixels, width, height, command.flip_y === true);
                     if (browserScoreEnabled) {
-                        browserScoreViews.push(await this.scoreBrowserView(command, view, index, outputPixels, width, height));
+                        const scorePixels = this.copyPixelsForBrowserScore(outputPixels, command);
+                        browserScoreViews.push(await this.scoreBrowserView(command, view, index, scorePixels, width, height));
                     }
                     if (!emitArtifacts) {
                         continue;
@@ -501,7 +516,7 @@ export class MaterialFitCapture extends Laya.Script3D {
             return [];
         }
         const animators = this.collectComponents(root, layaAny.Animator);
-        const stateName = typeof command.fixed_animation_state === "string" && command.fixed_animation_state.length > 0
+        const configuredStateName = typeof command.fixed_animation_state === "string" && command.fixed_animation_state.length > 0
             ? command.fixed_animation_state
             : "";
         const layerIndex = Number.isFinite(command.fixed_animation_layer as number)
@@ -512,6 +527,7 @@ export class MaterialFitCapture extends Laya.Script3D {
             : 0;
         const states: AnimatorState[] = [];
         for (const animator of animators) {
+            const stateName = configuredStateName || this.defaultAnimationStateName(animator, layerIndex);
             const state: AnimatorState = {
                 source: animator,
                 speed: typeof animator.speed === "number" ? animator.speed : null,
@@ -527,17 +543,40 @@ export class MaterialFitCapture extends Laya.Script3D {
                     animator.sleep = false;
                 }
                 if (stateName && typeof animator.play === "function") {
-                    animator.speed = 1;
+                    // Laya skips sampling at speed 0. Keep the one-frame pose
+                    // evaluation independent of the current frame duration.
+                    animator.speed = 1e-6;
                     animator.play(stateName, layerIndex, normalizedTime);
-                }
-                if (typeof animator.speed === "number") {
-                    animator.speed = 0;
                 }
             } catch (error) {
                 console.warn(`[MaterialFitCapture] animator freeze failed: ${error}`);
             }
         }
         return states;
+    }
+
+    private defaultAnimationStateName(animator: any, layerIndex: number): string {
+        try {
+            const layer = typeof animator.getControllerLayer === "function"
+                ? animator.getControllerLayer(layerIndex)
+                : animator._controllerLayers && animator._controllerLayers[layerIndex];
+            const state = layer && (
+                layer.defaultState || layer._defaultState
+                || layer.states && layer.states[0]
+                || layer._states && layer._states[0]
+            );
+            return state && typeof state.name === "string" ? state.name : "";
+        } catch {
+            return "";
+        }
+    }
+
+    private pauseAnimators(states: AnimatorState[]): void {
+        for (const state of states) {
+            if (state.source && typeof state.source.speed === "number") {
+                state.source.speed = 0;
+            }
+        }
     }
 
     private restoreAnimators(states: AnimatorState[]): void {
@@ -622,8 +661,8 @@ export class MaterialFitCapture extends Laya.Script3D {
 
     private applyMaterialPatch(command: CaptureCommand, fallbackTarget: Laya.Sprite3D | null): MaterialPatchResult {
         const patch = command.material_patch;
-        if (!patch || !patch.values) {
-            return { applied: false, materialCount: 0, valueCount: 0 };
+        if (!patch || (!patch.values && !patch.defines && !patch.render_states)) {
+            return { applied: false, materialCount: 0, valueCount: 0, defineCount: 0, renderStateCount: 0, enabledDefines: [], appliedRenderStates: {} };
         }
         try {
             const target = patch.target_name ? this.resolveTarget(patch.target_name) : fallbackTarget;
@@ -632,6 +671,10 @@ export class MaterialFitCapture extends Laya.Script3D {
                     applied: false,
                     materialCount: 0,
                     valueCount: 0,
+                    defineCount: 0,
+                    renderStateCount: 0,
+                    enabledDefines: [],
+                    appliedRenderStates: {},
                     error: `material_patch target not found: ${patch.target_name || command.target_name || "(empty)"}`,
                 };
             }
@@ -648,16 +691,92 @@ export class MaterialFitCapture extends Laya.Script3D {
                 }
             }
             let valueCount = 0;
+            let defineCount = 0;
+            let renderStateCount = 0;
+            const definePatch = this.normalizeMaterialDefinePatch(patch.defines);
             for (const material of materials) {
-                for (const key of Object.keys(patch.values)) {
-                    this.setMaterialValue(material, key, patch.values[key]);
+                defineCount += this.applyMaterialDefines(material, definePatch.managed, definePatch.enabled);
+                renderStateCount += this.applyMaterialRenderStates(material, patch.render_states || {});
+                for (const key of Object.keys(patch.values || {})) {
+                    this.setMaterialValue(material, key, (patch.values || {})[key]);
                     valueCount++;
                 }
             }
-            return { applied: materials.length > 0, materialCount: materials.length, valueCount, ...(fallback ? { fallback } : {}) };
+            return {
+                applied: materials.length > 0,
+                materialCount: materials.length,
+                valueCount,
+                defineCount,
+                renderStateCount,
+                enabledDefines: definePatch.enabled,
+                appliedRenderStates: { ...(patch.render_states || {}) },
+                ...(fallback ? { fallback } : {}),
+            };
         } catch (error) {
-            return { applied: false, materialCount: 0, valueCount: 0, error: String(error) };
+            return { applied: false, materialCount: 0, valueCount: 0, defineCount: 0, renderStateCount: 0, enabledDefines: [], appliedRenderStates: {}, error: String(error) };
         }
+    }
+
+    private normalizeMaterialDefinePatch(patch: MaterialPatch["defines"]): { managed: string[]; enabled: string[] } {
+        if (!patch) {
+            return { managed: [], enabled: [] };
+        }
+        const allowlist = new Set(["NORMALMAP", "NORMALMAP_Y_INVERT", "RIMSMOOTHNESS"]);
+        const managed = Array.from(new Set((patch.managed || []).map(String)));
+        const enabled = Array.from(new Set((patch.enabled || []).map(String)));
+        for (const name of managed.concat(enabled)) {
+            if (!allowlist.has(name)) throw new Error(`material define is not allowed: ${name}`);
+        }
+        for (const name of enabled) {
+            if (managed.indexOf(name) < 0) throw new Error(`enabled material define is not managed: ${name}`);
+        }
+        if (enabled.indexOf("NORMALMAP_Y_INVERT") >= 0 && enabled.indexOf("NORMALMAP") < 0) {
+            throw new Error("NORMALMAP_Y_INVERT requires NORMALMAP");
+        }
+        return { managed, enabled };
+    }
+
+    private applyMaterialDefines(material: Laya.Material, managed: string[], enabled: string[]): number {
+        const enabledSet = new Set(enabled);
+        let changed = 0;
+        for (const name of managed) {
+            const define = Laya.Shader3D.getDefineByName(name);
+            if (!define) throw new Error(`material define is unknown to Laya: ${name}`);
+            const shouldEnable = enabledSet.has(name);
+            if (material.hasDefine(define) === shouldEnable) continue;
+            if (shouldEnable) material.addDefine(define);
+            else material.removeDefine(define);
+            changed++;
+        }
+        return changed;
+    }
+
+    private applyMaterialRenderStates(material: Laya.Material, states: { [name: string]: number | boolean }): number {
+        const properties: { [name: string]: string } = {
+            renderQueue: "renderQueue",
+            s_Cull: "cull",
+            s_Blend: "blend",
+            s_BlendSrc: "blendSrc",
+            s_BlendDst: "blendDst",
+            s_BlendSrcRGB: "blendSrcRGB",
+            s_BlendDstRGB: "blendDstRGB",
+            s_BlendSrcAlpha: "blendSrcAlpha",
+            s_BlendDstAlpha: "blendDstAlpha",
+            s_BlendEquation: "blendEquation",
+            s_BlendEquationRGB: "blendEquationRGB",
+            s_BlendEquationAlpha: "blendEquationAlpha",
+            s_DepthTest: "depthTest",
+            s_DepthWrite: "depthWrite",
+        };
+        let applied = 0;
+        for (const name of Object.keys(states)) {
+            const propertyName = properties[name];
+            if (!propertyName) throw new Error(`material render state is not allowed: ${name}`);
+            if (!(propertyName in (material as any))) throw new Error(`material render state is unavailable: ${propertyName}`);
+            (material as any)[propertyName] = states[name];
+            applied++;
+        }
+        return applied;
     }
 
     private collectPatchMaterials(target: any, materials: Laya.Material[]): void {
@@ -891,12 +1010,19 @@ export class MaterialFitCapture extends Laya.Script3D {
             const targetOffset = y * width * 4;
             target.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
         }
-        this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
+        if (command?.preserve_artifact_alpha !== true) {
+            this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
+        }
         context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
     }
 
-    private applyVisualBackground(pixels: Uint8ClampedArray, color: [number, number, number]): void {
+    private copyPixelsForBrowserScore(pixels: Uint8Array, command?: CaptureCommand): Uint8Array {
+        void command;
+        return new Uint8Array(pixels);
+    }
+
+    private applyVisualBackground(pixels: Uint8Array | Uint8ClampedArray, color: [number, number, number]): void {
         for (let i = 0; i < pixels.length; i += 4) {
             if (pixels[i + 3] === 0 || (pixels[i] <= 1 && pixels[i + 1] <= 1 && pixels[i + 2] <= 1)) {
                 pixels[i] = color[0];
@@ -1043,10 +1169,19 @@ export class MaterialFitCapture extends Laya.Script3D {
         let foregroundCount = 0;
         let unionCount = 0;
         let intersectionCount = 0;
+        const residualGridSize = Math.max(1, Math.min(32, Math.floor(this.numberOrDefault(command.browser_score && command.browser_score.residual_grid_size, 4))));
+        const residualSums = new Array(residualGridSize * residualGridSize * 3).fill(0);
+        const residualWeights = new Array(residualGridSize * residualGridSize).fill(0);
+        const captureWidth = Math.max(1, Math.floor(this.numberOrDefault(command.width, 900)));
+        const captureHeight = Math.max(1, Math.floor(this.numberOrDefault(command.height, 700)));
+        const candidateUsesAlpha = this.hasForegroundAlpha(candidate);
+        const referenceUsesAlpha = this.hasForegroundAlpha(reference);
         for (let i = 0; i < length; i += 4) {
             const candidateAlpha = candidate[i + 3];
             const referenceAlpha = reference[i + 3];
-            const foregroundWeight = Math.max(candidateAlpha, referenceAlpha) / 255.0;
+            const candidateForeground = this.foregroundWeightAt(candidate, i, candidateUsesAlpha);
+            const referenceForeground = this.foregroundWeightAt(reference, i, referenceUsesAlpha);
+            const foregroundWeight = Math.max(candidateForeground, referenceForeground);
             if (foregroundWeight <= 0) {
                 continue;
             }
@@ -1061,15 +1196,30 @@ export class MaterialFitCapture extends Laya.Script3D {
             rgbMaeSum += rgbDiff;
             alphaMaeSum += alphaDiff;
             foregroundCount++;
-            if (candidateAlpha > 0 || referenceAlpha > 0) {
+            const pixelIndex = i / 4;
+            const pixelX = pixelIndex % captureWidth;
+            const pixelY = Math.floor(pixelIndex / captureWidth);
+            const gridX = Math.min(residualGridSize - 1, Math.floor(pixelX * residualGridSize / captureWidth));
+            const gridY = Math.min(residualGridSize - 1, Math.floor(pixelY * residualGridSize / captureHeight));
+            const cellIndex = gridY * residualGridSize + gridX;
+            const featureIndex = cellIndex * 3;
+            residualWeights[cellIndex] += foregroundWeight;
+            residualSums[featureIndex] += (candidate[i] - reference[i]) / 255.0 * foregroundWeight;
+            residualSums[featureIndex + 1] += (candidate[i + 1] - reference[i + 1]) / 255.0 * foregroundWeight;
+            residualSums[featureIndex + 2] += (candidate[i + 2] - reference[i + 2]) / 255.0 * foregroundWeight;
+            if (candidateForeground > 0 || referenceForeground > 0) {
                 unionCount++;
-                if (candidateAlpha > 0 && referenceAlpha > 0) {
+                if (candidateForeground > 0 && referenceForeground > 0) {
                     intersectionCount++;
                 }
             }
         }
         const diffScore = weightSum > 0 ? weightedDiff / weightSum : 1.0;
         const fitScore = this.clamp01(1.0 - diffScore);
+        const residualFeatures = residualSums.map((value, index) => {
+            const weight = residualWeights[Math.floor(index / 3)];
+            return weight > 0 ? value / weight : 0;
+        });
         return {
             view_id: viewId,
             diff_score: diffScore,
@@ -1078,7 +1228,40 @@ export class MaterialFitCapture extends Laya.Script3D {
             alpha_mae: foregroundCount > 0 ? alphaMaeSum / foregroundCount : 1.0,
             mask_iou: unionCount > 0 ? intersectionCount / unionCount : 1.0,
             foreground_weight_sum: weightSum,
+            residual_grid_size: residualGridSize,
+            residual_features: residualFeatures,
         };
+    }
+
+    private hasForegroundAlpha(pixels: Uint8Array | Uint8ClampedArray): boolean {
+        let hasTransparent = false;
+        let hasOpaque = false;
+        for (let i = 3; i < pixels.length; i += 4) {
+            const alpha = pixels[i];
+            hasTransparent = hasTransparent || alpha < 250;
+            hasOpaque = hasOpaque || alpha > 5;
+            if (hasTransparent && hasOpaque) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private foregroundWeightAt(
+        pixels: Uint8Array | Uint8ClampedArray,
+        index: number,
+        useAlpha: boolean,
+    ): number {
+        const alpha = pixels[index + 3];
+        if (useAlpha) {
+            return alpha / 255.0;
+        }
+        const distanceFromWhite = Math.max(
+            Math.abs(pixels[index] - 255),
+            Math.abs(pixels[index + 1] - 255),
+            Math.abs(pixels[index + 2] - 255),
+        );
+        return distanceFromWhite > 8 ? 1.0 : 0.0;
     }
 
     private aggregateBrowserScore(command: CaptureCommand, views: BrowserScoreView[], width: number, height: number, patchResult: MaterialPatchResult): any {
@@ -1093,6 +1276,12 @@ export class MaterialFitCapture extends Laya.Script3D {
         }
         const diffScore = diffSum / viewCount;
         const fitScore = fitSum / viewCount;
+        const residualFeatures: number[] = [];
+        for (const view of views) {
+            if (Array.isArray(view.residual_features)) {
+                residualFeatures.push(...view.residual_features);
+            }
+        }
         const metric = command.browser_score && command.browser_score.metric
             ? command.browser_score.metric
             : "browser_fast_rgba_mae_v1";
@@ -1107,6 +1296,12 @@ export class MaterialFitCapture extends Laya.Script3D {
             score: fitScore,
             worst_diff_score: worstDiff,
             views,
+            structured_residual_features: {
+                profile: "signed_rgb_grid_v1",
+                grid_size: views.length > 0 ? (views[0].residual_grid_size || 4) : 4,
+                feature_count: residualFeatures.length,
+                features: residualFeatures,
+            },
             material_patch: patchResult,
             summary: {
                 mean_diff_score: diffScore,

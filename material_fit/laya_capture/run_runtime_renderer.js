@@ -1,4 +1,10 @@
-const { chromium } = require('playwright-chromium');
+let playwright;
+try {
+  playwright = require('playwright');
+} catch (error) {
+  playwright = require('playwright-chromium');
+}
+const { chromium } = playwright;
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -7,18 +13,32 @@ const { spawnSync } = require('child_process');
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = path.resolve(__dirname, '..', '..');
-  const defaultEngineRoot = process.env.LOCALAPPDATA
+  const vendoredEngineRoot = path.join(repoRoot, 'vendor', 'layaair-3.4.0', 'libs');
+  const ideEngineRoot = process.env.LOCALAPPDATA
     ? path.join(process.env.LOCALAPPDATA, 'Programs', 'LayaAirIDE', 'resources', 'engine', 'libs')
     : '';
-  const engineRoot = args.engineRoot || path.resolve(process.env.LAYA_ENGINE_LIBS || defaultEngineRoot || 'resources/engine/libs');
+  const defaultEngineRoot = fs.existsSync(vendoredEngineRoot) ? vendoredEngineRoot : ideEngineRoot;
+  const engineRoot = path.resolve(args.engineRoot || process.env.LAYA_ENGINE_LIBS || defaultEngineRoot || 'resources/engine/libs');
   const pagePath = args.page || path.resolve(__dirname, 'runtime_renderer.html');
+  const profilePath = args.assetProfile ? path.resolve(args.assetProfile) : '';
+  const assetProfile = profilePath ? loadAssetProfile(profilePath) : {};
+  const profileDir = profilePath ? path.dirname(profilePath) : repoRoot;
   const defaultProjectRoot = path.resolve(repoRoot, 'examples', 'fish_laya_project');
-  const projectRoot = args.projectRoot || (fs.existsSync(defaultProjectRoot) ? defaultProjectRoot : '');
+  const profileProjectRoot = resolveProfilePath(assetProfile.project_root, profileDir);
+  const projectRoot = path.resolve(args.projectRoot || profileProjectRoot || (fs.existsSync(defaultProjectRoot) ? defaultProjectRoot : ''));
   const defaultScene = projectRoot ? path.resolve(projectRoot, 'assets', 'resources', 'game.ls') : '';
-  const scene = args.scene || (defaultScene && fs.existsSync(defaultScene) ? defaultScene : '');
+  const profileScene = resolveProjectAssetPath(assetProfile.scene, projectRoot, profileDir);
+  const scene = args.scene || profileScene || (defaultScene && fs.existsSync(defaultScene) ? defaultScene : '');
+  const environmentScene = resolveEnvironmentScene({
+    requested: args.environmentScene,
+    profile: assetProfile,
+    profileDir,
+    engineRoot,
+  });
+  const environmentRoot = environmentScene ? path.dirname(environmentScene) : '';
   const server = args.server || 'http://127.0.0.1:8787';
-  const width = Number(args.width || 320);
-  const height = Number(args.height || 240);
+  const width = Number(args.width || assetProfile.width || 320);
+  const height = Number(args.height || assetProfile.height || 240);
   const headed = args.headed === '1' || args.headed === 'true';
   if (projectRoot && args.prepareBrowserAssets !== 'false') {
     prepareBrowserAssets(projectRoot);
@@ -27,6 +47,8 @@ async function main() {
     repoRoot,
     engineRoot,
     projectRoot,
+    environmentRoot,
+    assetProfile,
     host: args.assetHost || '127.0.0.1',
     port: Number(args.assetPort || 0),
   });
@@ -37,11 +59,13 @@ async function main() {
     height: String(height),
     engineRoot: `${assetBase}/engine`,
   });
-  if (projectRoot) query.set('projectRoot', toStaticUrl(assetBase, repoRoot, projectRoot));
-  if (scene) query.set('scene', toStaticUrl(assetBase, repoRoot, scene));
+  if (projectRoot) query.set('projectRoot', `${assetBase}/project`);
+  if (scene) query.set('scene', toRootUrl(assetBase, '/project/', projectRoot, scene));
+  if (environmentScene) query.set('environmentScene', toRootUrl(assetBase, '/environment/', environmentRoot, environmentScene));
   if (projectRoot) query.set('assetManifest', `${assetBase}/asset-manifest.json`);
+  if (profilePath) query.set('assetProfile', `${assetBase}/asset-profile.json`);
   if (args.debugMaterial === '1' || args.debugMaterial === 'true') query.set('debugMaterial', 'true');
-  const url = toStaticUrl(assetBase, repoRoot, pagePath) + '?' + query.toString();
+  const url = toRootUrl(assetBase, '/repo/', repoRoot, pagePath) + '?' + query.toString();
   const launchOptions = {
     headless: !headed,
     args: [
@@ -104,12 +128,60 @@ async function main() {
   await new Promise(() => {});
 }
 
-function toStaticUrl(assetBase, repoRoot, inputPath) {
-  const relative = path.relative(repoRoot, path.resolve(inputPath)).replace(/\\/g, '/');
+function toRootUrl(assetBase, prefix, root, inputPath) {
+  const relative = path.relative(root, path.resolve(inputPath)).replace(/\\/g, '/');
   if (relative.startsWith('..')) {
-    throw new Error(`path is outside repo root: ${inputPath}`);
+    throw new Error(`path is outside served root ${root}: ${inputPath}`);
   }
-  return `${assetBase}/repo/${relative.split('/').map(encodeURIComponent).join('/')}`;
+  const normalizedPrefix = prefix.startsWith('/') ? prefix : `/${prefix}`;
+  return `${assetBase}${normalizedPrefix}${relative.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function loadAssetProfile(profilePath) {
+  if (!fs.existsSync(profilePath)) throw new Error(`asset profile not found: ${profilePath}`);
+  const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+    throw new Error(`asset profile must be a JSON object: ${profilePath}`);
+  }
+  if (Number(profile.schema_version || 1) !== 1) {
+    throw new Error(`unsupported asset profile schema_version: ${profile.schema_version}`);
+  }
+  profile.capture_defaults = Object.assign({
+    animation_mode: 'disabled',
+    freeze_animators: true,
+    settle_frames: 0,
+    animation_freeze_settle_frames: 0,
+  }, profile.capture_defaults || {});
+  return profile;
+}
+
+function resolveProfilePath(value, profileDir) {
+  if (!value) return '';
+  return path.resolve(profileDir, String(value));
+}
+
+function resolveProjectAssetPath(value, projectRoot, profileDir) {
+  if (!value) return '';
+  const text = String(value);
+  if (path.isAbsolute(text)) return path.resolve(text);
+  const projectCandidate = projectRoot ? path.resolve(projectRoot, text) : '';
+  if (projectCandidate && fs.existsSync(projectCandidate)) return projectCandidate;
+  return path.resolve(profileDir, text);
+}
+
+function resolveEnvironmentScene({ requested, profile, profileDir, engineRoot }) {
+  if (requested) return path.resolve(requested);
+  const runtime = profile && profile.runtime && typeof profile.runtime === 'object' ? profile.runtime : {};
+  const environment = runtime.environment && typeof runtime.environment === 'object' ? runtime.environment : {};
+  if (environment.scene) return resolveProfilePath(environment.scene, profileDir);
+  if (environment.preset === 'laya_prefab_editor') {
+    const candidate = path.resolve(engineRoot, '..', '..', 'internal', 'DefaultPrefabEditEnv.ls');
+    if (!fs.existsSync(candidate)) {
+      throw new Error(`Laya prefab editor environment is unavailable: ${candidate}`);
+    }
+    return candidate;
+  }
+  return '';
 }
 
 function prepareBrowserAssets(projectRoot) {
@@ -126,12 +198,22 @@ function prepareBrowserAssets(projectRoot) {
   }
 }
 
-async function startStaticServer({ repoRoot, engineRoot, projectRoot, host, port }) {
+async function startStaticServer({ repoRoot, engineRoot, projectRoot, environmentRoot, assetProfile, host, port }) {
   const roots = {
     '/repo/': path.resolve(repoRoot),
     '/engine/': path.resolve(engineRoot),
   };
-  const manifest = projectRoot ? buildAssetManifest(repoRoot, projectRoot) : { uuidMap: {} };
+  if (projectRoot) roots['/project/'] = path.resolve(projectRoot);
+  if (environmentRoot) roots['/environment/'] = path.resolve(environmentRoot);
+  const assetRoots = [];
+  if (projectRoot) assetRoots.push({ root: path.resolve(projectRoot), prefix: '/project/' });
+  if (environmentRoot) assetRoots.push({ root: path.resolve(environmentRoot), prefix: '/environment/' });
+  const runtimeProfile = assetProfile && assetProfile.runtime && typeof assetProfile.runtime === 'object'
+    ? assetProfile.runtime
+    : {};
+  const manifest = buildAssetManifest(assetRoots, {
+    preferImportedLibraryAssets: runtimeProfile.prefer_imported_library_assets === true,
+  });
   const server = http.createServer((req, res) => {
     try {
       const url = new URL(req.url, `http://${host}`);
@@ -142,6 +224,15 @@ async function startStaticServer({ repoRoot, engineRoot, projectRoot, host, port
           'Cache-Control': 'no-store',
         });
         res.end(JSON.stringify(manifest));
+        return;
+      }
+      if (url.pathname === '/asset-profile.json') {
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify(assetProfile || {}));
         return;
       }
       const match = Object.keys(roots).find(prefix => url.pathname === prefix.slice(0, -1) || url.pathname.startsWith(prefix));
@@ -226,42 +317,78 @@ function isChromiumUnsafePort(port) {
   return unsafe.has(Number(port));
 }
 
-function buildAssetManifest(repoRoot, projectRoot) {
+function buildAssetManifest(assetRoots, options = {}) {
   const uuidMap = {};
   const shaderNameMap = {};
-  const files = listFiles(projectRoot);
-  for (const file of files) {
-    if (file.endsWith('.meta')) {
-      try {
-        const meta = JSON.parse(fs.readFileSync(file, 'utf8'));
-        const uuid = meta && meta.uuid;
-        const assetPath = file.slice(0, -'.meta'.length);
-        if (uuid && fs.existsSync(assetPath)) {
-          const browserAsset = browserAssetPath(projectRoot, assetPath);
-          uuidMap[uuid] = toStaticUrl('', repoRoot, browserAsset || assetPath).replace(/^\/?/, '/');
+  const sourceExtensionByUuid = {};
+  for (const assetRoot of assetRoots || []) {
+    const files = listFiles(assetRoot.root);
+    for (const file of files) {
+      if (file.endsWith('.meta')) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const uuid = meta && meta.uuid;
+          const assetPath = file.slice(0, -'.meta'.length);
+          if (uuid && fs.existsSync(assetPath)) {
+            const browserAsset = browserAssetPath(assetRoot.root, assetPath);
+            uuidMap[uuid] = toRootUrl('', assetRoot.prefix, assetRoot.root, browserAsset || assetPath);
+            sourceExtensionByUuid[uuid] = path.extname(assetPath).toLowerCase();
+          }
+        } catch {
+          // Ignore non-JSON meta files.
         }
-      } catch {
-        // Ignore non-JSON meta files.
-      }
-    } else if (file.endsWith('.shader')) {
-      const text = fs.readFileSync(file, 'utf8');
-      const match = /name\s*:\s*"([^"]+)"/.exec(text);
-      if (match) {
-        shaderNameMap[match[1]] = toStaticUrl('', repoRoot, file).replace(/^\/?/, '/');
+      } else if (file.endsWith('.shader')) {
+        const text = fs.readFileSync(file, 'utf8');
+        const match = /name\s*:\s*"([^"]+)"/.exec(text);
+        if (match) {
+          shaderNameMap[match[1]] = toRootUrl('', assetRoot.prefix, assetRoot.root, file);
+        }
       }
     }
-  }
-  const libraryRoot = path.join(projectRoot, 'library');
-  if (fs.existsSync(libraryRoot)) {
-    for (const file of listFiles(libraryRoot)) {
-      const base = path.basename(file);
-      const match = /^([0-9a-fA-F-]{36})(?:@[^.]+)?\.[^.]+$/.exec(base);
-      if (match && !uuidMap[match[1]]) {
-        uuidMap[match[1]] = toStaticUrl('', repoRoot, file).replace(/^\/?/, '/');
+    const libraryRoot = path.join(assetRoot.root, 'library');
+    if (fs.existsSync(libraryRoot)) {
+      for (const metadataPath of listFiles(libraryRoot).filter(file => file.endsWith('.json'))) {
+        const uuid = path.basename(metadataPath, '.json');
+        if (!/^[0-9a-fA-F-]{36}$/.test(uuid)) continue;
+        try {
+          const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+          const importedTexture = preferredImportedTexture(metadataPath, uuid, metadata);
+          const mustUseImported = options.preferImportedLibraryAssets === true
+            || Number(metadata && metadata.shape) === 1
+            || sourceExtensionByUuid[uuid] === '.exr';
+          if (mustUseImported && importedTexture) {
+            uuidMap[uuid] = toRootUrl('', assetRoot.prefix, assetRoot.root, importedTexture);
+          }
+        } catch {
+          // Ignore stale or non-texture library metadata.
+        }
+      }
+      for (const file of listFiles(libraryRoot)) {
+        const base = path.basename(file);
+        const match = /^([0-9a-fA-F-]{36})(?:@[^.]+)?\.[^.]+$/.exec(base);
+        if (match && !uuidMap[match[1]]) {
+          uuidMap[match[1]] = toRootUrl('', assetRoot.prefix, assetRoot.root, file);
+        }
       }
     }
   }
   return { uuidMap, shaderNameMap };
+}
+
+function preferredImportedTexture(metadataPath, uuid, metadata) {
+  const directory = path.dirname(metadataPath);
+  const files = Array.isArray(metadata && metadata.files) ? metadata.files : [];
+  const platformIndex = Number(metadata && metadata.platforms && metadata.platforms['0']);
+  const preferred = Number.isInteger(platformIndex) && files[platformIndex] ? files[platformIndex] : files[0];
+  const candidates = [];
+  if (preferred && preferred.ext) {
+    const suffix = preferred.file === '' ? '' : `@${preferred.file}`;
+    candidates.push(path.join(directory, `${uuid}${suffix}.${preferred.ext}`));
+  }
+  candidates.push(...fs.readdirSync(directory)
+    .filter(name => name.startsWith(`${uuid}@`) && /\.(ktx|ltcb)$/i.test(name))
+    .map(name => path.join(directory, name)));
+  return candidates.find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) || '';
 }
 
 function browserAssetPath(projectRoot, assetPath) {

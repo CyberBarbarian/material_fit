@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import json
 import math
 import os
@@ -12,11 +13,37 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from ..laya_capture.asset_profile import capture_command_from_profile, load_asset_profile
 from ..laya_capture.capture_quality import default_visual_quality_guard
+from ..laya_capture.managed_runtime import ManagedRuntimeRenderer
 from ..laya_capture.runtime_bridge import RuntimeCaptureBridge
+from ..optimizer.material_discrete_space import (
+    BROWSER_SCORE_OVERRIDE_PARAM,
+    merge_candidate_into_material_patch,
+    split_discrete_candidate,
+)
 
 
 _VIEW_ID_RE = re.compile(r"(v\d{3}_yaw-?\d+(?:\.\d+)?_pitch-?\d+(?:\.\d+)?)")
+
+
+def _capture_config_with_asset_profile(config: dict[str, Any]) -> dict[str, Any]:
+    capture_config = copy.deepcopy(config)
+    runtime_cfg = capture_config.get("runtime_bridge")
+    if not isinstance(runtime_cfg, dict) or not runtime_cfg.get("asset_profile"):
+        return capture_config
+    profile = load_asset_profile(str(runtime_cfg["asset_profile"]))
+    defaults = capture_command_from_profile(profile)
+    defaults.setdefault("width", int(profile.get("width") or 320))
+    defaults.setdefault("height", int(profile.get("height") or 240))
+    defaults.update(capture_config)
+    normalized_runtime = copy.deepcopy(runtime_cfg)
+    normalized_runtime["asset_profile"] = str(profile["_profile_path"])
+    defaults["runtime_bridge"] = normalized_runtime
+    queue_cfg = defaults.get("persistent_queue")
+    if isinstance(queue_cfg, dict) and queue_cfg.get("enabled"):
+        raise ValueError("asset-profile runtime_bridge and persistent_queue cannot both be enabled")
+    return defaults
 
 
 class RenderDriver:
@@ -38,11 +65,13 @@ class RenderDriver:
         self.output_dir = Path(output_dir)
         self.command = command or []
         self.dry_run = dry_run
-        self.capture_config = capture_config or {}
+        self.capture_config = _capture_config_with_asset_profile(capture_config or {})
         self._worker_name: str | None = None
         self._worker_index: int | None = None
         self._runtime_bridge: RuntimeCaptureBridge | None = None
+        self._runtime_renderer: ManagedRuntimeRenderer | None = None
         self._persistent_queue: _PersistentQueueClient | None = None
+        self._atexit_registered = False
         self._workers = self._build_workers()
         self.worker_count = len(self._workers) if self._workers else 1
         self.parallel_safe = bool(
@@ -51,9 +80,16 @@ class RenderDriver:
             and all(bool(worker_cfg.get("parallel_safe")) for worker_cfg, _ in self._workers)
         )
         if not self._workers and not self.dry_run:
-            self._runtime_bridge = self._build_runtime_bridge()
-            self._persistent_queue = self._build_persistent_queue()
+            try:
+                self._runtime_bridge = self._build_runtime_bridge()
+                self._runtime_renderer = self._build_profile_runtime_renderer()
+                self._persistent_queue = self._build_persistent_queue()
+            except Exception:
+                self.close()
+                raise
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        atexit.register(self.close)
+        self._atexit_registered = True
 
     @property
     def runtime_capture_base_url(self) -> str:
@@ -62,8 +98,14 @@ class RenderDriver:
         return self._runtime_bridge.base_url
 
     def close(self) -> None:
+        if self._atexit_registered:
+            atexit.unregister(self.close)
+            self._atexit_registered = False
         for _worker_cfg, worker_driver in self._workers:
             worker_driver.close()
+        if self._runtime_renderer is not None:
+            self._runtime_renderer.stop()
+            self._runtime_renderer = None
         if self._runtime_bridge is not None:
             self._runtime_bridge.stop()
             self._runtime_bridge = None
@@ -578,6 +620,14 @@ class RenderDriver:
         params_path = iteration_dir / "params.json"
         params_path.write_text(json.dumps(params, ensure_ascii=False, indent=2), encoding="utf-8")
 
+        if self._runtime_bridge is not None:
+            return self._render_with_runtime_bridge(
+                iteration=iteration,
+                params=params,
+                iteration_dir=iteration_dir,
+                params_path=params_path,
+            )
+
         if self.dry_run or (self._persistent_queue is None and not self.command):
             return {"status": "dry_run", "params_path": str(params_path), "screenshots": []}
 
@@ -653,20 +703,14 @@ class RenderDriver:
             }
 
         if self._runtime_bridge is not None:
-            runtime_cfg = self.capture_config.get("runtime_bridge") if isinstance(self.capture_config.get("runtime_bridge"), dict) else {}
-            runtime_output_dir = iteration_dir / str(runtime_cfg.get("output_subdir") or "laya_multiview")
-            runtime_request = dict(request)
-            runtime_request["nonce"] = str(runtime_request.get("nonce") or f"capture-{iteration:04d}")
-            result = self._runtime_bridge.capture(
-                runtime_request,
-                output_dir=runtime_output_dir,
-                timeout_s=float(runtime_cfg.get("timeout_s", self.capture_config.get("timeout_s", 90)) or 90),
+            return self._render_with_runtime_bridge(
+                iteration=iteration,
+                params=params,
+                iteration_dir=iteration_dir,
+                params_path=params_path,
+                request=request,
+                request_path=request_path,
             )
-            return {
-                **result,
-                "params_path": str(params_path),
-                "capture_request_path": str(request_path),
-            }
 
         completed = subprocess.run(
             [*capture_command, str(request_path), str(screenshot_path)],
@@ -687,17 +731,70 @@ class RenderDriver:
             "candidate_overrides": _build_candidate_overrides(screenshots),
         }
 
+    def _render_with_runtime_bridge(
+        self,
+        *,
+        iteration: int,
+        params: dict[str, Any],
+        iteration_dir: Path,
+        params_path: Path,
+        request: dict[str, Any] | None = None,
+        request_path: Path | None = None,
+    ) -> dict[str, Any]:
+        if self._runtime_bridge is None:
+            raise RuntimeError("runtime_bridge is not enabled")
+        request_path = request_path or iteration_dir / "capture_request.json"
+        request = request or _build_capture_request(self.capture_config, params_path, params)
+        request_path.write_text(json.dumps(request, ensure_ascii=False, indent=2), encoding="utf-8")
+        runtime_cfg = self.capture_config.get("runtime_bridge")
+        runtime_cfg = runtime_cfg if isinstance(runtime_cfg, dict) else {}
+        runtime_output_dir = iteration_dir / str(runtime_cfg.get("output_subdir") or "laya_multiview")
+        runtime_request = dict(request)
+        runtime_request["nonce"] = str(runtime_request.get("nonce") or f"capture-{iteration:04d}")
+        result = self._runtime_bridge.capture(
+            runtime_request,
+            output_dir=runtime_output_dir,
+            timeout_s=float(runtime_cfg.get("timeout_s", self.capture_config.get("timeout_s", 90)) or 90),
+        )
+        return {
+            **result,
+            "params_path": str(params_path),
+            "capture_request_path": str(request_path),
+        }
+
     def _build_runtime_bridge(self) -> RuntimeCaptureBridge | None:
         runtime_cfg = self.capture_config.get("runtime_bridge")
         if not isinstance(runtime_cfg, dict) or not runtime_cfg.get("enabled"):
             return None
+        raw_port = runtime_cfg.get("port", 8787)
+        port = 8787 if raw_port is None or raw_port == "" else int(raw_port)
         bridge = RuntimeCaptureBridge(
             host=str(runtime_cfg.get("host") or "127.0.0.1"),
-            port=int(runtime_cfg.get("port", 8787) or 8787),
+            port=port,
         )
         if bool(runtime_cfg.get("auto_start", True)):
             bridge.start()
         return bridge
+
+    def _build_profile_runtime_renderer(self) -> ManagedRuntimeRenderer | None:
+        runtime_cfg = self.capture_config.get("runtime_bridge")
+        if not isinstance(runtime_cfg, dict) or self._runtime_bridge is None:
+            return None
+        profile_path = runtime_cfg.get("asset_profile")
+        if not profile_path or not bool(runtime_cfg.get("auto_start_renderer", True)):
+            return None
+        state_value = runtime_cfg.get("state_dir")
+        state_dir = Path(str(state_value)).expanduser() if state_value else self.output_dir / "runtime_renderer"
+        node_modules = runtime_cfg.get("node_modules")
+        renderer = ManagedRuntimeRenderer(
+            profile_path=str(profile_path),
+            server_url=self._runtime_bridge.base_url,
+            state_dir=state_dir,
+            timeout_s=float(runtime_cfg.get("startup_timeout_s", runtime_cfg.get("timeout_s", 30)) or 30),
+            node_modules=str(node_modules) if node_modules else None,
+        )
+        renderer.start()
+        return renderer
 
     def _build_persistent_queue(self) -> "_PersistentQueueClient | None":
         queue_cfg = self.capture_config.get("persistent_queue")
@@ -1210,7 +1307,13 @@ class _PersistentQueueClient:
                 command["fixed_animation_state"] = str(fixed_state)
         command.setdefault("fixed_animation_layer", int(queue_cfg.get("fixed_animation_layer", 0) or 0))
         command.setdefault("fixed_animation_time", float(queue_cfg.get("fixed_animation_time", 0.0) or 0.0))
-        command.setdefault("animation_freeze_settle_frames", int(queue_cfg.get("animation_freeze_settle_frames", 3) or 3))
+        if "settle_frames" in queue_cfg:
+            command.setdefault("settle_frames", max(0, int(queue_cfg["settle_frames"])))
+        animation_settle_frames = queue_cfg.get("animation_freeze_settle_frames")
+        command.setdefault(
+            "animation_freeze_settle_frames",
+            3 if animation_settle_frames is None else max(0, int(animation_settle_frames)),
+        )
         command.setdefault("render_backend", "draw_scene")
         if "visual_quality_guard" not in command:
             guard_cfg = queue_cfg.get("visual_quality_guard")
@@ -1219,7 +1322,11 @@ class _PersistentQueueClient:
         command["server_base_url"] = server_base_url
         command["post_url"] = f"{server_base_url}/material-fit/capture-result"
         command["output_dir"] = str(iteration_dir)
-        command["material_patch"] = {"target_name": str(command.get("target_name") or "model"), "values": copy.deepcopy(params)}
+        command["material_patch"] = _candidate_material_patch(
+            command.get("material_patch"),
+            target_name=str(command.get("target_name") or "model"),
+            params=params,
+        )
         command = _with_reference_image_urls(command, server_base_url)
         request = {"request_id": request_id, "params_path": str(params_path), "command": command}
         command_path.write_text(json.dumps(request, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1460,12 +1567,42 @@ def _build_capture_request(capture_config: dict[str, Any], params_path: Path, pa
         if key not in internal_keys
     }
     request["paramsPath"] = str(params_path)
-    if "material_patch" not in request:
-        request["material_patch"] = {
-            "target_name": str(capture_config.get("target_name") or ""),
-            "values": copy.deepcopy(params),
-        }
+    raw_score_override = params.get(BROWSER_SCORE_OVERRIDE_PARAM)
+    if isinstance(raw_score_override, dict):
+        browser_score = request.get("browser_score")
+        if isinstance(browser_score, dict):
+            score_override = {
+                key: copy.deepcopy(raw_score_override[key])
+                for key in (
+                    "metric",
+                    "readback_width",
+                    "readback_height",
+                    "render_width",
+                    "render_height",
+                )
+                if key in raw_score_override
+            }
+            browser_score.update(score_override)
+    request["material_patch"] = _candidate_material_patch(
+        request.get("material_patch"),
+        target_name=str(capture_config.get("target_name") or ""),
+        params=params,
+    )
     return request
+
+
+def _candidate_material_patch(
+    template: Any,
+    *,
+    target_name: str,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    patch = copy.deepcopy(template) if isinstance(template, dict) else {}
+    continuous_params, discrete_candidate = split_discrete_candidate(params)
+    patch = merge_candidate_into_material_patch(patch, discrete_candidate)
+    patch["target_name"] = str(patch.get("target_name") or target_name)
+    patch["values"] = continuous_params
+    return patch
 
 
 def _bool_config(value: Any, default: bool) -> bool:

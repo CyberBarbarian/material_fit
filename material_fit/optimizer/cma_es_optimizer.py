@@ -39,7 +39,7 @@ real renderer — it produces *param dicts*, and it is the caller's job to
 feed those into ``write_candidate_lmat`` + the Laya screenshot pipeline
 to obtain a fitness. This separation is what makes it possible to also
 unit-test the optimizer on synthetic objectives (see
-``experiments/cma_es_warm_start_benchmark.py``).
+the optimizer unit tests).
 """
 
 from __future__ import annotations
@@ -84,8 +84,11 @@ def _is_texture_type(param: ShaderParam) -> bool:
     return is_texture_param_type(param.param_type)
 
 
-def _is_blacklisted_name(name: str) -> bool:
-    return fixed_optimizer_param_reason(name) is not None
+def _is_blacklisted_name(name: str, *, allow_scene_lighting: bool = False) -> bool:
+    return fixed_optimizer_param_reason(
+        name,
+        allow_scene_lighting=allow_scene_lighting,
+    ) is not None
 
 
 def _param_semantics_map(
@@ -182,6 +185,8 @@ class ParameterEncoder:
         *,
         param_whitelist: Iterable[str] | None = None,
         semantics: ShaderEffectGraph | dict[str, ParamSemantics] | None = None,
+        allow_scene_lighting: bool = False,
+        axis_bounds: dict[str, tuple[float, float]] | None = None,
     ) -> None:
         self._param_info = {p.name: p for p in shader_params}
         self._semantics = _param_semantics_map(semantics)
@@ -190,6 +195,7 @@ class ParameterEncoder:
         # alpha-of-color values, indexed by param name (we round-trip them
         # outside the optimizer).
         self._alpha: dict[str, float] = {}
+        self._axis_bounds = dict(axis_bounds or {})
         whitelist = set(param_whitelist) if param_whitelist is not None else None
         seen_names: set[str] = set()
         ordered_names: list[str] = []
@@ -208,13 +214,27 @@ class ParameterEncoder:
                 continue
             param = self._param_info.get(name)
             semantic = self._semantics.get(name)
-            if semantic is not None and not semantic.searchable:
+            scene_whitelist_override = (
+                allow_scene_lighting
+                and whitelist is not None
+                and name in whitelist
+                and fixed_optimizer_param_reason(name) == "scene lighting/environment orientation parameter"
+                and fixed_optimizer_param_reason(
+                    name,
+                    allow_scene_lighting=True,
+                )
+                is None
+            )
+            if semantic is not None and not semantic.searchable and not scene_whitelist_override:
                 self._fixed[name] = value
                 continue
             if param is not None and _is_texture_type(param):
                 self._fixed[name] = value
                 continue
-            if _is_blacklisted_name(name):
+            if _is_blacklisted_name(
+                name,
+                allow_scene_lighting=allow_scene_lighting,
+            ):
                 self._fixed[name] = value
                 continue
             if isinstance(value, bool):
@@ -225,8 +245,9 @@ class ParameterEncoder:
                 self._fixed[name] = value
                 continue
             if isinstance(value, (int, float)):
-                low, high = self._scalar_bounds(name, float(value), param, semantic)
-                transform = _axis_transform(semantic, name, param)
+                override = self._bound_override(name, -1)
+                low, high = override or self._scalar_bounds(name, float(value), param, semantic)
+                transform = "linear" if override is not None else _axis_transform(semantic, name, param)
                 low_t, high_t, initial_t, transform = self._transform_bounds(
                     low, high, float(value), transform
                 )
@@ -250,8 +271,20 @@ class ParameterEncoder:
                     self._alpha[name] = float(value[3])
                 for sub_idx in range(effective_len):
                     sub_value = float(value[sub_idx])
-                    low, high = self._sub_bounds(name, sub_idx, sub_value, param, is_color, semantic)
-                    transform = "linear" if is_color else _axis_transform(semantic, name, param)
+                    override = self._bound_override(name, sub_idx)
+                    low, high = override or self._sub_bounds(
+                        name,
+                        sub_idx,
+                        sub_value,
+                        param,
+                        is_color,
+                        semantic,
+                    )
+                    transform = (
+                        "linear"
+                        if override is not None or is_color
+                        else _axis_transform(semantic, name, param)
+                    )
                     low_t, high_t, initial_t, transform = self._transform_bounds(
                         low, high, sub_value, transform
                     )
@@ -270,6 +303,18 @@ class ParameterEncoder:
             # Anything else (string, None, length-2 vec like u_*_ST that
             # somehow slipped past blacklist, etc.) is fixed.
             self._fixed[name] = value
+
+    def _bound_override(self, name: str, sub_index: int) -> tuple[float, float] | None:
+        key = name if sub_index < 0 else f"{name}[{sub_index}]"
+        raw = self._axis_bounds.get(key)
+        if raw is None:
+            return None
+        if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+            raise ValueError(f"invalid CMA axis bound override for {key}: {raw!r}")
+        low, high = float(raw[0]), float(raw[1])
+        if not math.isfinite(low) or not math.isfinite(high) or low >= high:
+            raise ValueError(f"invalid CMA axis bound override for {key}: {raw!r}")
+        return low, high
 
     # ------------------------------------------------------------------
     # Public properties

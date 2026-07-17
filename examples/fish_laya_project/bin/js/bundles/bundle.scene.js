@@ -3923,6 +3923,7 @@
       this._preFrozenAnimators = [];
     }
     onEnable() {
+      this.prefreezeSceneForCapture();
       Laya.Browser.window.__materialFitCapture = (command) => this.capture(command);
       if (this.autoPoll) {
         Laya.timer.loop(Math.max(100, this.pollIntervalMs), this, this.pollCommand);
@@ -3947,7 +3948,7 @@
         freeze_animators: true,
         fixed_animation_state: "idle1",
         fixed_animation_layer: 0,
-        fixed_animation_time: 0,
+        fixed_animation_time: 0.21875,
         freeze_scene_scripts: true
       };
       this._preFrozenScripts = this.freezeSceneScripts(command, root);
@@ -4013,10 +4014,11 @@
           const captureMode = this.resolveCaptureMode(command, camera, target);
           const preFreezeTargetEuler = target ? target.transform.localRotationEuler.clone() : null;
           const frozenScripts = this.freezeSceneScripts(command, target || this.sceneRoot());
-          const frozenAnimators = this.freezeAnimators(command, target || this.sceneRoot());
+          const frozenAnimators = this._prefreezeApplied && this._preFrozenAnimators.length > 0 ? this._preFrozenAnimators : this.freezeAnimators(command, target || this.sceneRoot());
           const freezeSettleFrames = this.resolveAnimationFreezeSettleFrames(command);
           if (frozenAnimators.length > 0) {
-            yield this.waitFrames(freezeSettleFrames);
+            yield this.waitFrames(Math.max(1, freezeSettleFrames));
+            this.pauseAnimators(frozenAnimators);
           }
           const originalTargetEuler = target ? target.transform.localRotationEuler.clone() : preFreezeTargetEuler;
           const captureDiagnostics = {
@@ -4342,17 +4344,21 @@
             animator.sleep = false;
           }
           if (stateName && typeof animator.play === "function") {
-            animator.speed = 1;
+            animator.speed = 1e-6;
             animator.play(stateName, layerIndex, normalizedTime);
-          }
-          if (typeof animator.speed === "number") {
-            animator.speed = 0;
           }
         } catch (error) {
           console.warn(`[MaterialFitCapture] animator freeze failed: ${error}`);
         }
       }
       return states;
+    }
+    pauseAnimators(states) {
+      for (const state of states) {
+        if (state.source && typeof state.source.speed === "number") {
+          state.source.speed = 0;
+        }
+      }
     }
     restoreAnimators(states) {
       for (const state of states) {
@@ -4572,8 +4578,8 @@
     }
     applyMaterialPatch(command, fallbackTarget) {
       const patch = command.material_patch;
-      if (!patch || !patch.values) {
-        return { applied: false, materialCount: 0, valueCount: 0 };
+      if (!patch || !patch.values && !patch.defines && !patch.render_states) {
+        return { applied: false, materialCount: 0, valueCount: 0, defineCount: 0, renderStateCount: 0, enabledDefines: [] };
       }
       try {
         const target = patch.target_name ? this.resolveTarget(patch.target_name) : fallbackTarget;
@@ -4582,6 +4588,9 @@
             applied: false,
             materialCount: 0,
             valueCount: 0,
+            defineCount: 0,
+            renderStateCount: 0,
+            enabledDefines: [],
             error: `material_patch target not found: ${patch.target_name || command.target_name || "(empty)"}`
           };
         }
@@ -4598,16 +4607,87 @@
           }
         }
         let valueCount = 0;
+        let defineCount = 0;
+        let renderStateCount = 0;
+        const definePatch = this.normalizeMaterialDefinePatch(patch.defines);
         for (const material of materials) {
-          for (const key of Object.keys(patch.values)) {
-            this.setMaterialValue(material, key, patch.values[key]);
+          defineCount += this.applyMaterialDefines(material, definePatch.managed, definePatch.enabled);
+          renderStateCount += this.applyMaterialRenderStates(material, patch.render_states || {});
+          for (const key of Object.keys(patch.values || {})) {
+            this.setMaterialValue(material, key, (patch.values || {})[key]);
             valueCount++;
           }
         }
-        return __spreadValues({ applied: materials.length > 0, materialCount: materials.length, valueCount }, fallback ? { fallback } : {});
+        return __spreadValues({
+          applied: materials.length > 0,
+          materialCount: materials.length,
+          valueCount,
+          defineCount,
+          renderStateCount,
+          enabledDefines: definePatch.enabled
+        }, fallback ? { fallback } : {});
       } catch (error) {
-        return { applied: false, materialCount: 0, valueCount: 0, error: String(error) };
+        return { applied: false, materialCount: 0, valueCount: 0, defineCount: 0, renderStateCount: 0, enabledDefines: [], error: String(error) };
       }
+    }
+    normalizeMaterialDefinePatch(patch) {
+      if (!patch) {
+        return { managed: [], enabled: [] };
+      }
+      const allowlist = /* @__PURE__ */ new Set(["NORMALMAP", "NORMALMAP_Y_INVERT", "RIMSMOOTHNESS"]);
+      const managed = Array.from(new Set((patch.managed || []).map(String)));
+      const enabled = Array.from(new Set((patch.enabled || []).map(String)));
+      for (const name of managed.concat(enabled)) {
+        if (!allowlist.has(name)) throw new Error(`material define is not allowed: ${name}`);
+      }
+      for (const name of enabled) {
+        if (managed.indexOf(name) < 0) throw new Error(`enabled material define is not managed: ${name}`);
+      }
+      if (enabled.indexOf("NORMALMAP_Y_INVERT") >= 0 && enabled.indexOf("NORMALMAP") < 0) {
+        throw new Error("NORMALMAP_Y_INVERT requires NORMALMAP");
+      }
+      return { managed, enabled };
+    }
+    applyMaterialDefines(material, managed, enabled) {
+      const enabledSet = new Set(enabled);
+      let changed = 0;
+      for (const name of managed) {
+        const define = Laya.Shader3D.getDefineByName(name);
+        if (!define) throw new Error(`material define is unknown to Laya: ${name}`);
+        const shouldEnable = enabledSet.has(name);
+        if (material.hasDefine(define) === shouldEnable) continue;
+        if (shouldEnable) material.addDefine(define);
+        else material.removeDefine(define);
+        changed++;
+      }
+      return changed;
+    }
+    applyMaterialRenderStates(material, states) {
+      const properties = {
+        renderQueue: "renderQueue",
+        s_Cull: "cull",
+        s_Blend: "blend",
+        s_BlendSrc: "blendSrc",
+        s_BlendDst: "blendDst",
+        s_BlendSrcRGB: "blendSrcRGB",
+        s_BlendDstRGB: "blendDstRGB",
+        s_BlendSrcAlpha: "blendSrcAlpha",
+        s_BlendDstAlpha: "blendDstAlpha",
+        s_BlendEquation: "blendEquation",
+        s_BlendEquationRGB: "blendEquationRGB",
+        s_BlendEquationAlpha: "blendEquationAlpha",
+        s_DepthTest: "depthTest",
+        s_DepthWrite: "depthWrite"
+      };
+      let applied = 0;
+      for (const name of Object.keys(states)) {
+        const propertyName = properties[name];
+        if (!propertyName) throw new Error(`material render state is not allowed: ${name}`);
+        if (!(propertyName in material)) throw new Error(`material render state is unavailable: ${propertyName}`);
+        material[propertyName] = states[name];
+        applied++;
+      }
+      return applied;
     }
     collectPatchMaterials(target, materials) {
       this.walk(target, (node) => {
@@ -4827,7 +4907,9 @@
         const targetOffset = y * width * 4;
         target.set(pixels.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
       }
-      this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
+      if ((command == null ? void 0 : command.preserve_artifact_alpha) !== true) {
+        this.applyVisualBackground(target, this.resolveVisualBackgroundColor(command));
+      }
       context.putImageData(imageData, 0, 0);
       return canvas.toDataURL("image/png");
     }
@@ -4842,7 +4924,7 @@
       }
     }
     resolveVisualBackgroundColor(command) {
-      const value = command && (command.visual_background_color || command.background_color);
+      const value = (command == null ? void 0 : command.visual_background_color) || (command == null ? void 0 : command.background_color);
       if (Array.isArray(value) && value.length >= 3) {
         return [this.clampByte(value[0]), this.clampByte(value[1]), this.clampByte(value[2])];
       }
@@ -4972,6 +5054,11 @@
       let foregroundCount = 0;
       let unionCount = 0;
       let intersectionCount = 0;
+      const residualGridSize = Math.max(1, Math.min(16, Math.floor(this.numberOrDefault(command.browser_score && command.browser_score.residual_grid_size, 4))));
+      const residualSums = new Array(residualGridSize * residualGridSize * 3).fill(0);
+      const residualWeights = new Array(residualGridSize * residualGridSize).fill(0);
+      const captureWidth = Math.max(1, Math.floor(this.numberOrDefault(command.width, 900)));
+      const captureHeight = Math.max(1, Math.floor(this.numberOrDefault(command.height, 700)));
       for (let i = 0; i < length; i += 4) {
         const candidateAlpha = candidate[i + 3];
         const referenceAlpha = reference[i + 3];
@@ -4986,6 +5073,17 @@
         rgbMaeSum += rgbDiff;
         alphaMaeSum += alphaDiff;
         foregroundCount++;
+        const pixelIndex = i / 4;
+        const pixelX = pixelIndex % captureWidth;
+        const pixelY = Math.floor(pixelIndex / captureWidth);
+        const gridX = Math.min(residualGridSize - 1, Math.floor(pixelX * residualGridSize / captureWidth));
+        const gridY = Math.min(residualGridSize - 1, Math.floor(pixelY * residualGridSize / captureHeight));
+        const cellIndex = gridY * residualGridSize + gridX;
+        const featureIndex = cellIndex * 3;
+        residualWeights[cellIndex] += foregroundWeight;
+        residualSums[featureIndex] += (candidate[i] - reference[i]) / 255 * foregroundWeight;
+        residualSums[featureIndex + 1] += (candidate[i + 1] - reference[i + 1]) / 255 * foregroundWeight;
+        residualSums[featureIndex + 2] += (candidate[i + 2] - reference[i + 2]) / 255 * foregroundWeight;
         if (candidateAlpha > 0 || referenceAlpha > 0) {
           unionCount++;
           if (candidateAlpha > 0 && referenceAlpha > 0) {
@@ -4995,6 +5093,10 @@
       }
       const diffScore = weightSum > 0 ? weightedDiff / weightSum : 1;
       const fitScore = this.clamp01(1 - diffScore);
+      const residualFeatures = residualSums.map((value, index) => {
+        const weight = residualWeights[Math.floor(index / 3)];
+        return weight > 0 ? value / weight : 0;
+      });
       return {
         view_id: viewId,
         diff_score: diffScore,
@@ -5002,7 +5104,9 @@
         rgb_mae: foregroundCount > 0 ? rgbMaeSum / foregroundCount : 1,
         alpha_mae: foregroundCount > 0 ? alphaMaeSum / foregroundCount : 1,
         mask_iou: unionCount > 0 ? intersectionCount / unionCount : 1,
-        foreground_weight_sum: weightSum
+        foreground_weight_sum: weightSum,
+        residual_grid_size: residualGridSize,
+        residual_features: residualFeatures
       };
     }
     aggregateBrowserScore(command, views, width, height, patchResult, diagnostics) {
@@ -5017,6 +5121,12 @@
       }
       const diffScore = diffSum / viewCount;
       const fitScore = fitSum / viewCount;
+      const residualFeatures = [];
+      for (const view of views) {
+        if (Array.isArray(view.residual_features)) {
+          residualFeatures.push(...view.residual_features);
+        }
+      }
       const metric = command.browser_score && command.browser_score.metric ? command.browser_score.metric : "browser_fast_rgba_mae_v1";
       return {
         enabled: true,
@@ -5029,6 +5139,12 @@
         score: fitScore,
         worst_diff_score: worstDiff,
         views,
+        structured_residual_features: {
+          profile: "signed_rgb_grid_v1",
+          grid_size: views.length > 0 ? views[0].residual_grid_size || 4 : 4,
+          feature_count: residualFeatures.length,
+          features: residualFeatures
+        },
         material_patch: patchResult,
         diagnostics: diagnostics || null,
         summary: {

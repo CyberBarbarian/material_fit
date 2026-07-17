@@ -229,8 +229,8 @@ def create_project(
             "laya_capture_dir": None,
             "laya_capture_state_file": None,
             "laya_capture_prefix": "laya_candidate",
-            # E-007 (ExperimentLog.md): Laya editor pauses rendering
-            # when its window loses focus. Before each .lmat write
+            # LayaAirIDE may pause rendering when its window loses focus.
+            # Before each .lmat write
             # and each capture, the pipeline brings this window to
             # the foreground. Set process_pattern='' to disable.
             "laya_window": {

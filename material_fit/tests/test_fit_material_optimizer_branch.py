@@ -57,9 +57,63 @@ except ModuleNotFoundError:
     sys.modules.setdefault("tools", tools_package)
     sys.modules.setdefault("tools.material_fit", material_fit_package)
 
+from material_fit.optimizer.structured_fish_space import FishSearchCoordinate
+
 
 # --------------------------------------------------------------------
 # Fixtures
+
+
+def test_searchable_proposal_quantization_suppresses_jitter_and_preserves_metadata() -> None:
+    coordinate = FishSearchCoordinate(
+        "u_GammaPower",
+        None,
+        "material_scalar",
+        0.0,
+        10.0,
+        0.1,
+    )
+    metadata = {"candidate_id": "normal_y_invert"}
+    first, first_audit = fit_material._quantize_searchable_proposal(
+        {
+            "u_GammaPower": 5.00031,
+            "u_LockedValue": 7.25,
+            "__material_fit_discrete_candidate__": metadata,
+        },
+        coordinates=[coordinate],
+        normalized_step=0.0001,
+    )
+    second, second_audit = fit_material._quantize_searchable_proposal(
+        {
+            "u_GammaPower": 5.00033,
+            "u_LockedValue": 7.25,
+            "__material_fit_discrete_candidate__": metadata,
+        },
+        coordinates=[coordinate],
+        normalized_step=0.0001,
+    )
+
+    assert first["u_GammaPower"] == second["u_GammaPower"] == pytest.approx(5.0)
+    assert first["u_LockedValue"] == second["u_LockedValue"] == pytest.approx(7.25)
+    assert first["__material_fit_discrete_candidate__"] == metadata
+    assert second["__material_fit_discrete_candidate__"] == metadata
+    assert first_audit["changed_coordinate_count"] == 1
+    assert second_audit["changed_coordinate_count"] == 1
+
+
+def test_decision_can_override_proposal_quantization_step() -> None:
+    assert fit_material._proposal_quantization_step_for_decision({}, 0.0001) == pytest.approx(
+        0.0001
+    )
+    assert fit_material._proposal_quantization_step_for_decision(
+        {"proposal_quantization_normalized_step": 0.001},
+        0.0001,
+    ) == pytest.approx(0.001)
+    with pytest.raises(ValueError):
+        fit_material._proposal_quantization_step_for_decision(
+            {"proposal_quantization_normalized_step": 0.02},
+            0.0001,
+        )
 
 
 def _shader_params() -> list[ShaderParam]:
@@ -1257,6 +1311,27 @@ def test_fit_material_passes_cold_start_prior_anchors_to_strategy(
     assert prior_anchors[0]["param_values"]["u_GammaPower"] == pytest.approx(2.25)
 
 
+def test_fit_material_rejects_human_target_teacher_optimizer(patched_pipeline):
+    output_dir, lmat = patched_pipeline
+    target_params = {**_initial_params(), "u_Gamma_Power": 3.4}
+    target_path = output_dir / "inputs/human_target_params.json"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(json.dumps(target_params), encoding="utf-8")
+
+    result = _run(
+        output_dir=output_dir,
+        laya_material_path=lmat,
+        optimizer="human_target",
+        iterations=1,
+        config={"human_target": {"params_path": str(target_path)}},
+    )
+
+    assert result["status"] == "configuration_error"
+    assert result["optimizer"] == "human_target"
+    assert "unknown optimizer" in result["reason"]
+    assert not (output_dir / "human_target_params.json").exists()
+
+
 def test_fit_material_runs_heuristic_branch(patched_pipeline):
     output_dir, lmat = patched_pipeline
     result = _run(
@@ -1980,6 +2055,7 @@ def test_fit_material_cma_cli_overrides_stagnation_config():
         restart_population_multiplier=1.0,
         restart_population_schedule="ipop",
         restart_max_population_size=None,
+        allow_scene_lighting=True,
     )
     args = argparse.Namespace(
         cma_warm_start_iters=None,
@@ -2009,6 +2085,7 @@ def test_fit_material_cma_cli_overrides_stagnation_config():
     assert config.restart_population_multiplier == pytest.approx(2.0)
     assert config.restart_population_schedule == "bipop"
     assert config.restart_max_population_size == 32
+    assert config.allow_scene_lighting is True
 
 
 def test_fit_material_cma_batch_mode_evaluates_candidates_in_batches(

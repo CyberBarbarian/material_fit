@@ -18,6 +18,10 @@ param(
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
 $repoRootPath = $repoRoot.Path
+$python = Join-Path $repoRootPath ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $python)) {
+    throw "Missing .venv. Run scripts\bootstrap.ps1 first."
+}
 $args = @(
     "-m", "material_fit.experiments.fish_core_experiment",
     "--mode", $Mode,
@@ -27,7 +31,8 @@ $args = @(
     "--width", "$Width",
     "--height", "$Height",
     "--cap-port", "$CapPort",
-    "--platform-name", "windows"
+    "--platform-name", "windows",
+    "--engine-root", (Join-Path $repoRootPath "vendor\layaair-3.4.0\libs")
 )
 if ($EngineRoot) {
     $args += @("--engine-root", $EngineRoot)
@@ -53,7 +58,7 @@ if ($Headed) {
 
 Push-Location $repoRootPath
 try {
-    & python @args
+    & $python @args
     exit $LASTEXITCODE
 } finally {
     Pop-Location

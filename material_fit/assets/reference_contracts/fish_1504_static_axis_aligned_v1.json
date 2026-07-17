@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "contract_id": "fish_1504_static_axis_aligned_v1",
+  "asset_id": "fish_1504",
+  "role": "canonical_cross_engine_reference",
+  "source_archive": {
+    "path": "artifacts/source_archives/20260612_original_fish_inputs/unity_references(1).zip",
+    "sha256": "b1afb643185a5dbee67e590c517af8edbcc54ad87d98f894ecd7bfa66bd6968f"
+  },
+  "pose": {
+    "animation_mode": "disabled",
+    "semantic": "serialized_scene_start_pose_before_startup_settle",
+    "fixed_animation_state": null,
+    "fixed_animation_time": null
+  },
+  "camera": {
+    "capture_mode": "rotate_target",
+    "projection": "orthographic",
+    "orthographic_vertical_size": 8.0,
+    "yaw_offset": 0.0,
+    "pitch_offset": 0.0,
+    "camera_height_factor": 0.0,
+    "target_yaw_sign": -1.0,
+    "target_pitch_sign": -1.0
+  },
+  "image": {
+    "width": 900,
+    "height": 700,
+    "source_background": "transparent_alpha",
+    "comparison_background_rgba": [255, 255, 255, 255]
+  },
+  "views": [
+    {
+      "view_id": "v000_yaw0_pitch0",
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "file_name": "laya_v000_yaw0_pitch0.png",
+      "size": 178381,
+      "sha256": "5577bb68c1f8c4f5e9d27c6265cc4a7e5dd41ff04868f43e16eaf515af00b961"
+    },
+    {
+      "view_id": "v001_yaw45_pitch0",
+      "yaw": 45.0,
+      "pitch": 0.0,
+      "file_name": "laya_v001_yaw45_pitch0.png",
+      "size": 141849,
+      "sha256": "8bd67d957682e80a564045d03b42b9c1e29c16ff92d2596c3d8380247ec9c55d"
+    },
+    {
+      "view_id": "v002_yaw90_pitch0",
+      "yaw": 90.0,
+      "pitch": 0.0,
+      "file_name": "laya_v002_yaw90_pitch0.png",
+      "size": 62176,
+      "sha256": "70543b85ee5abb667cde947c86318c83d65827fbc2d7161bd94858b8108b0918"
+    },
+    {
+      "view_id": "v003_yaw135_pitch0",
+      "yaw": 135.0,
+      "pitch": 0.0,
+      "file_name": "laya_v003_yaw135_pitch0.png",
+      "size": 140262,
+      "sha256": "a925c33ce651e8c01fca2b501eadfa956738d1ffc4df413e4132e078ae78d559"
+    },
+    {
+      "view_id": "v004_yaw180_pitch0",
+      "yaw": 180.0,
+      "pitch": 0.0,
+      "file_name": "laya_v004_yaw180_pitch0.png",
+      "size": 179640,
+      "sha256": "7c1e2186c28d0598ee43a23825ce76bfac15bb3b6090b32472f23091e1da1e70"
+    },
+    {
+      "view_id": "v005_yaw225_pitch0",
+      "yaw": 225.0,
+      "pitch": 0.0,
+      "file_name": "laya_v005_yaw225_pitch0.png",
+      "size": 141769,
+      "sha256": "32957c9a39789f938e48f2926a66ba980399c0afac118213129ab13b9dae9ef6"
+    },
+    {
+      "view_id": "v006_yaw270_pitch0",
+      "yaw": 270.0,
+      "pitch": 0.0,
+      "file_name": "laya_v006_yaw270_pitch0.png",
+      "size": 63068,
+      "sha256": "7c24bc6bf32f211fe2fae4926fbfaaa39547bc79da14a716f815d0ecf50f39b2"
+    },
+    {
+      "view_id": "v007_yaw315_pitch0",
+      "yaw": 315.0,
+      "pitch": 0.0,
+      "file_name": "laya_v007_yaw315_pitch0.png",
+      "size": 140800,
+      "sha256": "c92d831ab07804c1abc41b8eb3c6b6d01aeb1684d886fdf4f38caafead2a2658"
+    }
+  ]
+}

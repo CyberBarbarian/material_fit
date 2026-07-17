@@ -99,9 +99,8 @@ class OptimizerStrategy(ABC):
 class HeuristicStrategy(OptimizerStrategy):
     """Wraps :func:`adjustment_algorithm.propose_next_params` 1:1.
 
-    This is the production strategy that has been driving the auto-adjust
-    loop since E-002 ([`ExperimentLog.md`](../docs/ExperimentLog.md))
-    fixed the stage-progression bug. It uses ``analysis.material_channels``
+    This is the legacy UI auto-adjust strategy. It uses
+    ``analysis.material_channels``
     feedback to pick a stage and propose channel-bias corrections
     inside that stage.
     """
@@ -204,3 +203,4 @@ class CmaesStrategyConfig:
     initial_design_method: str = "latin_hypercube"
     initial_design_include_current: bool = True
     initial_design_local_step_ratio: float = 0.05
+    allow_scene_lighting: bool = False

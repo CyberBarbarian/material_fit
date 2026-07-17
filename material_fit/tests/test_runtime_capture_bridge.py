@@ -9,12 +9,63 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.material_fit.laya_capture.runtime_bridge import RuntimeCaptureBridge  # noqa: E402
+from tools.material_fit.laya_capture.runtime_bridge import RuntimeCaptureBridge, RuntimeCaptureTimeout  # noqa: E402
+
+
+def _poll_and_post_error_log(base_url: str, expected_nonce: str) -> None:
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        with urllib.request.urlopen(
+            f"{base_url}/material-fit/capture-command?last_nonce=",
+            timeout=1.0,
+        ) as response:
+            command = json.loads(response.read().decode("utf-8"))
+        if command.get("enabled") is False:
+            time.sleep(0.02)
+            continue
+        assert command["nonce"] == expected_nonce
+        request = urllib.request.Request(
+            f"{base_url}/material-fit/capture-log",
+            data=json.dumps(
+                {
+                    "level": "error",
+                    "message": "synthetic browser capture failure",
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=1.0) as response:
+            assert response.status == 200
+        return
+    raise AssertionError("Laya simulator did not observe the capture command")
+
+
+def _poll_post_image_then_score(
+    base_url: str,
+    expected_nonce: str,
+    *,
+    expected_reference: bytes,
+) -> None:
+    _poll_and_post_one_capture(
+        base_url,
+        expected_nonce,
+        view_id="v000_yaw0_pitch0",
+        file_name="laya_v000_yaw0_pitch0.png",
+    )
+    time.sleep(0.1)
+    _poll_reference_and_post_browser_score(
+        base_url,
+        expected_nonce,
+        expected_reference=expected_reference,
+    )
 
 
 def _poll_and_post_one_capture(base_url: str, expected_nonce: str, *, view_id: str, file_name: str) -> None:
@@ -188,6 +239,28 @@ def test_runtime_capture_bridge_reuses_one_server_for_multiple_capture_jobs(tmp_
     assert Path(second["screenshots"][0]).read_bytes() == b"fake-png-bytes"
 
 
+def test_runtime_capture_bridge_surfaces_browser_error_log_immediately(tmp_path: Path):
+    views = [{"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0}]
+
+    with RuntimeCaptureBridge(host="127.0.0.1", port=0) as bridge:
+        capture_thread = threading.Thread(
+            target=_poll_and_post_error_log,
+            args=(bridge.base_url, "iter-error"),
+        )
+        capture_thread.start()
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="synthetic browser capture failure"):
+            bridge.capture(
+                {"nonce": "iter-error", "views": views},
+                output_dir=tmp_path / "error",
+                timeout_s=3.0,
+            )
+        elapsed = time.monotonic() - started
+        capture_thread.join(timeout=1.0)
+
+    assert elapsed < 1.0
+
+
 def test_runtime_capture_bridge_accepts_raw_rgba_payload(tmp_path: Path):
     views = [{"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0, "file_name": "laya_v000_yaw0_pitch0.png"}]
 
@@ -247,6 +320,7 @@ def test_runtime_capture_bridge_accepts_browser_score_without_images(tmp_path: P
                         }
                     ],
                 },
+                "return_images": False,
             },
             output_dir=tmp_path / "score",
             timeout_s=3.0,
@@ -258,3 +332,123 @@ def test_runtime_capture_bridge_accepts_browser_score_without_images(tmp_path: P
     assert result["candidate_overrides"] == {}
     assert result["browser_score"]["fit_score"] == 0.82
     assert (tmp_path / "score" / "browser_score.json").exists()
+
+
+def test_runtime_capture_bridge_can_skip_browser_score_artifact(tmp_path: Path):
+    views = [{"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0}]
+    reference_path = tmp_path / "unity_v000_yaw0_pitch0.png"
+    reference_bytes = b"reference-png"
+    reference_path.write_bytes(reference_bytes)
+
+    with RuntimeCaptureBridge(host="127.0.0.1", port=0) as bridge:
+        capture_thread = threading.Thread(
+            target=_poll_reference_and_post_browser_score,
+            args=(bridge.base_url, "iter-score-memory-only"),
+            kwargs={"expected_reference": reference_bytes},
+        )
+        capture_thread.start()
+        result = bridge.capture(
+            {
+                "nonce": "iter-score-memory-only",
+                "views": views,
+                "browser_score": {
+                    "enabled": True,
+                    "reference_images": [
+                        {
+                            "view_id": "v000_yaw0_pitch0",
+                            "path": str(reference_path),
+                        }
+                    ],
+                },
+                "return_images": False,
+                "persist_browser_score": False,
+            },
+            output_dir=tmp_path / "score-memory-only",
+            timeout_s=3.0,
+        )
+        capture_thread.join(timeout=1.0)
+
+    assert result["status"] == "ok"
+    assert result["browser_score"]["fit_score"] == 0.82
+    assert not (tmp_path / "score-memory-only" / "browser_score.json").exists()
+
+
+def test_runtime_capture_bridge_does_not_treat_score_as_images(tmp_path: Path):
+    views = [{"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0}]
+    reference_path = tmp_path / "unity_v000_yaw0_pitch0.png"
+    reference_bytes = b"reference-png"
+    reference_path.write_bytes(reference_bytes)
+
+    with RuntimeCaptureBridge(host="127.0.0.1", port=0) as bridge:
+        capture_thread = threading.Thread(
+            target=_poll_reference_and_post_browser_score,
+            args=(bridge.base_url, "iter-score-with-images"),
+            kwargs={"expected_reference": reference_bytes},
+        )
+        capture_thread.start()
+        with pytest.raises(RuntimeCaptureTimeout):
+            bridge.capture(
+                {
+                    "nonce": "iter-score-with-images",
+                    "views": views,
+                    "browser_score": {
+                        "enabled": True,
+                        "reference_images": [
+                            {
+                                "view_id": "v000_yaw0_pitch0",
+                                "path": str(reference_path),
+                            }
+                        ],
+                    },
+                    "return_images": True,
+                },
+                output_dir=tmp_path / "score-with-images",
+                timeout_s=0.2,
+            )
+        capture_thread.join(timeout=1.0)
+
+
+def test_runtime_capture_bridge_waits_for_images_and_browser_score(tmp_path: Path):
+    views = [
+        {
+            "view_id": "v000_yaw0_pitch0",
+            "yaw": 0.0,
+            "pitch": 0.0,
+            "file_name": "laya_v000_yaw0_pitch0.png",
+        }
+    ]
+    reference_path = tmp_path / "unity_v000_yaw0_pitch0.png"
+    reference_bytes = b"reference-png"
+    reference_path.write_bytes(reference_bytes)
+
+    with RuntimeCaptureBridge(host="127.0.0.1", port=0) as bridge:
+        capture_thread = threading.Thread(
+            target=_poll_post_image_then_score,
+            args=(bridge.base_url, "iter-images-and-score"),
+            kwargs={"expected_reference": reference_bytes},
+        )
+        capture_thread.start()
+        result = bridge.capture(
+            {
+                "nonce": "iter-images-and-score",
+                "views": views,
+                "browser_score": {
+                    "enabled": True,
+                    "reference_images": [
+                        {
+                            "view_id": "v000_yaw0_pitch0",
+                            "path": str(reference_path),
+                        }
+                    ],
+                },
+                "return_images": True,
+            },
+            output_dir=tmp_path / "images-and-score",
+            timeout_s=3.0,
+        )
+        capture_thread.join(timeout=1.0)
+
+    assert result["screenshots"] == [
+        str(tmp_path / "images-and-score" / "laya_v000_yaw0_pitch0.png")
+    ]
+    assert result["browser_score"]["fit_score"] == pytest.approx(0.82)

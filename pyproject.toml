@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "material-fit"
+version = "0.2.0"
+description = "Black-box material fitting across LayaAir and reference renders"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "material_fit contributors" }]
+dependencies = [
+  "cmaes>=0.11,<1",
+  "numpy>=1.26,<3",
+  "Pillow>=10,<13",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8,<10",
+  "scikit-image>=0.22,<1",
+]
+research = [
+  "scikit-image>=0.22,<1",
+]
+ui = [
+  "fastapi>=0.110,<1",
+  "uvicorn[standard]>=0.27,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["material_fit*"]
+
+[tool.setuptools.package-data]
+material_fit = [
+  "assets/**/*.json",
+  "assets/**/*.lmat",
+  "config/**/*.json",
+  "laya_capture/*.html",
+  "laya_capture/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["material_fit/tests"]
+norecursedirs = ["artifacts", ".git", ".venv", "node_modules"]

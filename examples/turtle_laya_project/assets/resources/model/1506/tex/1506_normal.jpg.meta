@@ -1,0 +1,15 @@
+{
+  "uuid": "d7558b74-87c9-4f65-b51e-33ac2158c68a",
+  "importer": {
+    "wrapMode": 0,
+    "anisoLevel": 1,
+    "platformAndroid": {
+      "format": "ASTC_6X6",
+      "quality": 1
+    },
+    "platformIOS": {
+      "format": "ASTC_6X6",
+      "quality": 1
+    }
+  }
+}

@@ -303,10 +303,11 @@ def make_server(host: str, port: int, state: CaptureState) -> ThreadingHTTPServe
                 return
             state.browser_score = dict(browser_score)
             state.browser_score.setdefault("enabled", True)
-            (state.output_dir / "browser_score.json").write_text(
-                json.dumps(state.browser_score, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            if state.command.get("persist_browser_score", True) is not False:
+                (state.output_dir / "browser_score.json").write_text(
+                    json.dumps(state.browser_score, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
             state.received.update(state.expected)
             self.write_json({"ok": True, "received": sorted(state.received), "browser_score": state.browser_score})
 

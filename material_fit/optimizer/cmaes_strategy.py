@@ -51,6 +51,7 @@ class CmaesStrategy(OptimizerStrategy):
         warm_start_history: Sequence[tuple[dict[str, Any], float]] = (),
         semantic_graph: ShaderEffectGraph | None = None,
         param_whitelist: Sequence[str] | None = None,
+        axis_bounds: dict[str, tuple[float, float]] | None = None,
     ) -> None:
         try:
             from .cma_es_optimizer import (  # noqa: WPS433 — lazy import
@@ -78,6 +79,8 @@ class CmaesStrategy(OptimizerStrategy):
             list(shader_params),
             param_whitelist=param_whitelist,
             semantics=semantic_graph,
+            allow_scene_lighting=bool(config.allow_scene_lighting),
+            axis_bounds=axis_bounds,
         )
         if self._encoder.dim == 0:
             raise OptimizerUnavailableError(
@@ -826,7 +829,7 @@ class CmaesStrategy(OptimizerStrategy):
     ) -> tuple["np.ndarray", list[str]]:
         """Translate channel-level hints into a per-axis delta vector.
 
-        Algorithm (E-010, see ``ExperimentLog.md`` E-010 entry):
+        Algorithm:
 
         1. For each axis, look up its parameter name and find every
            hint whose ``related_params`` contains that name (with

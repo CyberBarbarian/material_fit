@@ -25,7 +25,12 @@ def is_texture_param(param: ShaderParam) -> bool:
     return is_texture_param_type(param.param_type)
 
 
-def fixed_optimizer_param_reason(name: str, param: ShaderParam | None = None) -> str | None:
+def fixed_optimizer_param_reason(
+    name: str,
+    param: ShaderParam | None = None,
+    *,
+    allow_scene_lighting: bool = False,
+) -> str | None:
     """Return why ``name`` must not be part of numeric appearance search."""
 
     lower = str(name).strip().lower()
@@ -44,7 +49,7 @@ def fixed_optimizer_param_reason(name: str, param: ShaderParam | None = None) ->
         return "texture UV scale/offset"
     if _is_alpha_or_cutoff_name(compact):
         return "alpha/cutoff material-validity parameter"
-    if _is_scene_lighting_name(compact):
+    if not allow_scene_lighting and _is_scene_lighting_name(compact):
         return "scene lighting/environment orientation parameter"
     return None
 

@@ -1,0 +1,57 @@
+{
+  "_$type": "Animator",
+  "enabled": true,
+  "controller": "null",
+  "cullingMode": 0,
+  "controllerLayers": [
+    {
+      "_$type": "AnimatorControllerLayer",
+      "playOnWake": true,
+      "name": "Base Layer",
+      "defaultWeight": 1,
+      "blendingMode": 0,
+      "states": [
+        {
+          "_$type": "AnimatorState",
+          "name": "swim",
+          "speed": 1,
+          "clipStart": 0,
+          "clipEnd": 1,
+          "x": 270,
+          "y": 110,
+          "clip": {
+            "_$uuid": "194bc663-a7b9-4553-8ea9-ce390332b03c"
+          },
+          "id": "0",
+          "loopState": 0,
+          "loop": -1
+        },
+        {
+          "id": "-1",
+          "name": "进入",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 120,
+          "soloTransitions": [
+            {
+              "id": "0"
+            }
+          ]
+        },
+        {
+          "id": "-2",
+          "name": "任何状态",
+          "speed": 1,
+          "clipEnd": 1,
+          "x": 50,
+          "y": 60
+        }
+      ],
+      "stageX": 355,
+      "stageY": 179,
+      "stageScale": 1
+    }
+  ],
+  "layerW": 150
+}

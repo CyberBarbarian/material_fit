@@ -1,52 +1,34 @@
 {
-  "source": "D:\\project_data\\laya\\laya_research\\laya_project",
-  "target": "D:\\project_data\\laya\\laya_research\\laya_project_minimal",
-  "purpose": "Minimal executable Laya project for the current material_fit fish_1504_test scene.",
-  "copied_count": 30,
-  "missing": [],
-  "kept_core": [
+  "name": "fish_1504_static_axis_aligned_v1",
+  "purpose": "Tracked runtime package for the canonical fish experiment.",
+  "scene": "assets/resources/game.ls",
+  "source_material": "assets/resources/play/fish/1504/mat/fish_jxs_test.lmat",
+  "runtime_bundle": "bin/js/bundles/bundle.js",
+  "animation_mode": "disabled",
+  "views": {
+    "yaw_degrees": [0, 45, 90, 135, 180, 225, 270, 315],
+    "pitch_degrees": 0,
+    "background": "white"
+  },
+  "tracked_runtime_inputs": [
     "assets/resources/game.ls",
-    "assets/resources/play/fish/1504/mesh/1504-fish_jxs.lm",
-    "assets/resources/play/fish/1504/mat/fish_jxs_test.lmat",
-    "assets/resources/play/fish/1504/tex/* current material textures",
-    "assets/Editor/CameraCapture*.ts",
-    "src/MaterialFitCapture.ts",
-    "bin/js/bundles"
+    "assets/resources/play/fish/1504/mesh",
+    "assets/resources/play/fish/1504/mat",
+    "assets/resources/play/fish/1504/tex",
+    "assets/resources/shader",
+    "bin/js/bundles",
+    "library/95"
   ],
-  "intentionally_not_copied": [
-    ".svn",
-    ".tmp",
+  "excluded_local_state": [
     ".chat",
-    ".claude",
-    ".cursor",
-    ".trae",
     "local",
-    "Screenshots",
-    "material_fit",
-    "tools",
-    "library/cache",
-    "full library asset cache",
-    "assets/resources/art",
-    "assets/resources/equipment",
-    "other fish ids",
-    "1504 prefab/anim/ui/cube/backup materials"
+    "output",
+    ".material_fit_browser_assets",
+    "editor source and type caches",
+    "unrelated game assets"
   ],
   "notes": [
-    "Original laya_project was not modified.",
-    "library/packages and bin/js/bundles are kept to reduce risk when opening in Laya editor.",
-    "Full library/cache is intentionally omitted; Laya may regenerate cache on open.",
-    "If material_fit UI should use this copy, update project laya_project_path/lmat path/command path to laya_project_minimal."
-  ],
-  "target_size_mb": 36.42,
-  "added_after_initial_copy": [
-    {
-      "reason": "Fix shader not found: Custom/FishStandar_Low",
-      "files": [
-        "assets/resources/shader/Custom_low.shader",
-        "assets/resources/shader/Custom_low.shader.meta",
-        "library/fe/fed6ad23-e2b6-484e-b2f9-fcdc9a6f2c3a.json",
-        "library/fe/fed6ad23-e2b6-484e-b2f9-fcdc9a6f2c3a@0.shader"
-      ]
-    }
+    "library/95 contains the imported KTX payload required by the EXR environment texture.",
+    "The experiment uses the vendored LayaAir 3.4.0 runtime in vendor/layaair-3.4.0."
   ]
 }

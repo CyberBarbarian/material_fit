@@ -1,0 +1,724 @@
+{
+  "_$ver": 1,
+  "_$id": "wwcffr33",
+  "_$type": "Sprite3D",
+  "name": "1503_snap",
+  "layer": 2,
+  "_$child": [
+    {
+      "_$id": "6o7n8ric",
+      "_$type": "Camera",
+      "name": "camera",
+      "layer": 2,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3",
+          "z": 10
+        }
+      },
+      "fieldOfView": 22,
+      "nearPlane": 0.3,
+      "farPlane": 1000,
+      "clearFlag": 2,
+      "clearColor": {
+        "_$type": "Color",
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      },
+      "cullingMask": 4,
+      "_$comp": [
+        {
+          "_$type": "14f7676c-1e84-4820-a0ff-e8d4d21ce866",
+          "scriptPath": "../src/Base/Node/CameraRotationAdapter.ts"
+        }
+      ]
+    },
+    {
+      "_$id": "vbam07mp",
+      "_$type": "Sprite3D",
+      "name": "model",
+      "layer": 2,
+      "transform": {
+        "localRotation": {
+          "_$type": "Quaternion",
+          "x": 0.7071067811865475,
+          "w": 0.7071067811865476
+        },
+        "localScale": {
+          "_$type": "Vector3",
+          "x": 0.6000000238418579,
+          "y": 0.6000000238418579,
+          "z": 0.6000000238418579
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "Animator",
+          "controller": {
+            "_$uuid": "5c5fe665-9131-4f77-936f-cb74ccb62258",
+            "_$type": "AnimationController"
+          },
+          "controllerLayers": [
+            {
+              "_$type": "AnimatorControllerLayer",
+              "name": "Base Layer",
+              "states": [
+                {
+                  "_$type": "AnimatorState",
+                  "name": "snap",
+                  "speed": 1.5,
+                  "clipStart": 0,
+                  "clip": {
+                    "_$uuid": "5d73adc1-0bb6-4688-b354-b3ca3c3bb954",
+                    "_$type": "AnimationClip"
+                  },
+                  "soloTransitions": []
+                }
+              ],
+              "defaultStateName": "snap"
+            }
+          ]
+        }
+      ],
+      "_$child": [
+        {
+          "_$id": "7h0pu4ug",
+          "_$type": "Sprite3D",
+          "name": "Dummy001",
+          "layer": 2,
+          "transform": {
+            "localPosition": {
+              "_$type": "Vector3",
+              "x": 24.026649475097656,
+              "y": 2.351490020751953
+            },
+            "localRotation": {
+              "_$type": "Quaternion",
+              "x": 0.7071067811865476,
+              "w": -0.7071067811865476
+            }
+          },
+          "_$child": [
+            {
+              "_$id": "4sk64n4b",
+              "_$type": "Sprite3D",
+              "name": "Bone006",
+              "layer": 2,
+              "transform": {
+                "localPosition": {
+                  "_$type": "Vector3",
+                  "x": -0.6188012361526489,
+                  "y": -0.12937499582767487,
+                  "z": 0.1450599581003189
+                },
+                "localRotation": {
+                  "_$type": "Quaternion",
+                  "x": 0.6841817135230248,
+                  "y": 0.031353240014062075,
+                  "z": -0.009973639890506834,
+                  "w": -0.7285690658603705
+                },
+                "localScale": {
+                  "_$type": "Vector3",
+                  "x": 1,
+                  "y": 0.9999998807907104,
+                  "z": 1.0000004768371582
+                }
+              },
+              "_$child": [
+                {
+                  "_$id": "o995ic7i",
+                  "_$type": "Sprite3D",
+                  "name": "Bone003",
+                  "layer": 2,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.125730037689209,
+                      "y": -0.14974546432495117,
+                      "z": -0.020701132714748383
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.012380855020625211,
+                      "y": 0.018049906066226595,
+                      "z": 0.9991096825816581,
+                      "w": -0.036066015742485726
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 1.0000007152557373,
+                      "y": 1.000002145767212,
+                      "z": 0.999999463558197
+                    }
+                  }
+                },
+                {
+                  "_$id": "nh0n7rbk",
+                  "_$type": "Sprite3D",
+                  "name": "Bone005",
+                  "layer": 2,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": -1.3773581981658936,
+                      "y": 0.3916260302066803,
+                      "z": -0.046303123235702515
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.08897479636335244,
+                      "y": 0.025747780839656422,
+                      "z": 0.9939352303624533,
+                      "w": -0.05927305659631423
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 0.9999995231628418,
+                      "y": 1.000001072883606,
+                      "z": 1.000000238418579
+                    }
+                  }
+                },
+                {
+                  "_$id": "8uga8ihq",
+                  "_$type": "Sprite3D",
+                  "name": "Bone008",
+                  "layer": 2,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": 2.6103551387786865,
+                      "y": 0.0454733707010746,
+                      "z": 0.1092141717672348
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": 0.03668522217368134,
+                      "y": 0.09460857296846337,
+                      "z": -0.03953303541121248,
+                      "w": -0.9940525899096659
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 0.9999994039535522,
+                      "y": 1.0000004768371582,
+                      "z": 0.9999999403953552
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "phagxinf",
+                      "_$type": "Sprite3D",
+                      "name": "Bone010",
+                      "layer": 2,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 2.4454751014709473,
+                          "y": 0.31257128715515137,
+                          "z": 0.042319245636463165
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.015536213986153619,
+                          "y": -0.023771933781148363,
+                          "z": -0.12154032746956397,
+                          "w": -0.9921801600605973
+                        },
+                        "localScale": {
+                          "_$type": "Vector3",
+                          "x": 1.0000081062316895,
+                          "y": 0.9999920725822449,
+                          "z": 0.9999998211860657
+                        }
+                      },
+                      "_$child": [
+                        {
+                          "_$id": "yyxd7gro",
+                          "_$type": "Sprite3D",
+                          "name": "Bone012",
+                          "layer": 2,
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 2.840341806411743,
+                              "y": -0.21431992948055267,
+                              "z": -0.20801706612110138
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -0.02092500522185615,
+                              "y": -0.2286502485668026,
+                              "z": 0.11866569991578739,
+                              "w": -0.9660225978983623
+                            },
+                            "localScale": {
+                              "_$type": "Vector3",
+                              "x": 0.9999855756759644,
+                              "y": 1.0000157356262207,
+                              "z": 0.9999999403953552
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "urtmd67s",
+                              "_$type": "Sprite3D",
+                              "name": "Bone013",
+                              "layer": 2,
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 1.5984716415405273,
+                                  "y": 6.256103461055318e-06,
+                                  "z": -2.197265530412551e-05
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.001054808967894852,
+                                  "y": -0.08281768960276623,
+                                  "z": 0.012693413959968515,
+                                  "w": -0.9964833139139573
+                                },
+                                "localScale": {
+                                  "_$type": "Vector3",
+                                  "x": 0.9999741315841675,
+                                  "y": 1.0000126361846924,
+                                  "z": 1.00001060962677
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "_$id": "8hv14llt",
+                      "_$type": "Sprite3D",
+                      "name": "Bone024",
+                      "layer": 2,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 1.96672523021698,
+                          "y": 0.22790031135082245,
+                          "z": -0.8671174049377441
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.602601565922292,
+                          "y": -0.07351955426553348,
+                          "z": -0.1595979176102138,
+                          "w": -0.7784566350048554
+                        },
+                        "localScale": {
+                          "_$type": "Vector3",
+                          "x": 0.9999994039535522,
+                          "y": 1.0000022649765015,
+                          "z": 0.9999961256980896
+                        }
+                      },
+                      "_$child": [
+                        {
+                          "_$id": "ot5ceer0",
+                          "_$type": "Sprite3D",
+                          "name": "Bone025",
+                          "layer": 2,
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 0.7823998928070068,
+                              "y": -1.8310546465727384e-06,
+                              "z": -2.441406195430318e-06
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": -0.14412064565307925,
+                              "y": 0.07861925573896492,
+                              "z": 0.0971623218837494,
+                              "w": -0.9816352353750091
+                            },
+                            "localScale": {
+                              "_$type": "Vector3",
+                              "x": 1.0000004768371582,
+                              "y": 1.0000001192092896,
+                              "z": 0.9999993443489075
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "ff82ntf3",
+                              "_$type": "Sprite3D",
+                              "name": "Bone026",
+                              "layer": 2,
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 0.591052234172821,
+                                  "y": 3.128051730527659e-06,
+                                  "z": -9.765624781721272e-06
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.2754517375258154,
+                                  "y": -0.11534860971149104,
+                                  "z": -0.0008283328717872657,
+                                  "w": -0.9543690860439105
+                                },
+                                "localScale": {
+                                  "_$type": "Vector3",
+                                  "x": 0.9999998807907104,
+                                  "y": 1.000000238418579,
+                                  "z": 1.0000009536743164
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "_$id": "vuqp15oh",
+                      "_$type": "Sprite3D",
+                      "name": "Bone028",
+                      "layer": 2,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 1.8029333353042603,
+                          "y": 0.25029420852661133,
+                          "z": 0.8790810704231262
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": 0.570386126562746,
+                          "y": 0.2931163216414922,
+                          "z": 0.008682628725712759,
+                          "w": -0.7672464405720759
+                        },
+                        "localScale": {
+                          "_$type": "Vector3",
+                          "x": 0.999999463558197,
+                          "y": 0.9999963045120239,
+                          "z": 1.0000029802322388
+                        }
+                      },
+                      "_$child": [
+                        {
+                          "_$id": "7hm05swm",
+                          "_$type": "Sprite3D",
+                          "name": "Bone029",
+                          "layer": 2,
+                          "transform": {
+                            "localPosition": {
+                              "_$type": "Vector3",
+                              "x": 0.6847729086875916,
+                              "y": -6.103515261202119e-06,
+                              "z": 7.324218586290954e-06
+                            },
+                            "localRotation": {
+                              "_$type": "Quaternion",
+                              "x": 0.5213407542441147,
+                              "y": -0.03483122339920215,
+                              "z": -0.34968337154586354,
+                              "w": -0.7776323961262225
+                            },
+                            "localScale": {
+                              "_$type": "Vector3",
+                              "x": 1.0000001192092896,
+                              "y": 0.9999994039535522,
+                              "z": 1.0000004768371582
+                            }
+                          },
+                          "_$child": [
+                            {
+                              "_$id": "1uhkdwh2",
+                              "_$type": "Sprite3D",
+                              "name": "Bone030",
+                              "layer": 2,
+                              "transform": {
+                                "localPosition": {
+                                  "_$type": "Vector3",
+                                  "x": 0.6902074813842773,
+                                  "y": -1.220703097715159e-06,
+                                  "z": -1.5258788721439487e-07
+                                },
+                                "localRotation": {
+                                  "_$type": "Quaternion",
+                                  "x": -0.571664571830194,
+                                  "y": 0.2572942972489772,
+                                  "z": 0.1759788692207192,
+                                  "w": -0.7589668632457895
+                                },
+                                "localScale": {
+                                  "_$type": "Vector3",
+                                  "x": 1.0000004768371582,
+                                  "y": 1.000000238418579,
+                                  "z": 0.9999995231628418
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "_$id": "x87521lq",
+                  "_$type": "Sprite3D",
+                  "name": "Bone016",
+                  "layer": 2,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": 0.4727781116962433,
+                      "y": 0.33715805411338806,
+                      "z": 0.7825325131416321
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.09957750419802629,
+                      "y": 0.44818623682348924,
+                      "z": -0.11006245017340963,
+                      "w": -0.8815325716282509
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 0.9999998807907104,
+                      "y": 1.0000011920928955,
+                      "z": 1.0000007152557373
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "klqoa75m",
+                      "_$type": "Sprite3D",
+                      "name": "Bone017",
+                      "layer": 2,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.7958325147628784,
+                          "y": -6.713867151120212e-06,
+                          "z": -9.765624781721272e-06
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": -0.0268802894617985,
+                          "y": -0.30722887740745536,
+                          "z": -0.03047887542639758,
+                          "w": -0.9507675347203157
+                        },
+                        "localScale": {
+                          "_$type": "Vector3",
+                          "x": 0.999998927116394,
+                          "y": 1.0000001192092896,
+                          "z": 0.9999995827674866
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "_$id": "w87o6rq9",
+                  "_$type": "Sprite3D",
+                  "name": "Bone020",
+                  "layer": 2,
+                  "transform": {
+                    "localPosition": {
+                      "_$type": "Vector3",
+                      "x": 0.4030905067920685,
+                      "y": 0.3356079161167145,
+                      "z": -0.7829999923706055
+                    },
+                    "localRotation": {
+                      "_$type": "Quaternion",
+                      "x": -0.8030053933406863,
+                      "y": -0.25214916547388777,
+                      "z": 0.40676995944420974,
+                      "w": -0.35516381672454667
+                    },
+                    "localScale": {
+                      "_$type": "Vector3",
+                      "x": 0.999999463558197,
+                      "y": 1.0000003576278687,
+                      "z": 1.0000001192092896
+                    }
+                  },
+                  "_$child": [
+                    {
+                      "_$id": "7xs02efi",
+                      "_$type": "Sprite3D",
+                      "name": "Bone021",
+                      "layer": 2,
+                      "transform": {
+                        "localPosition": {
+                          "_$type": "Vector3",
+                          "x": 0.7984582185745239,
+                          "y": -5.981445065117441e-05,
+                          "z": 4.028320108773187e-05
+                        },
+                        "localRotation": {
+                          "_$type": "Quaternion",
+                          "x": -0.2615337194910145,
+                          "y": -0.3776257817959766,
+                          "z": -0.09077490563264765,
+                          "w": -0.8836055675467177
+                        },
+                        "localScale": {
+                          "_$type": "Vector3",
+                          "x": 0.9999999403953552,
+                          "y": 1.0000007152557373,
+                          "z": 1.0000004768371582
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "_$id": "scuudx8z",
+          "_$type": "Sprite3D",
+          "name": "fish_eyu_001",
+          "layer": 2,
+          "transform": {
+            "localRotation": {
+              "_$type": "Quaternion",
+              "x": 0.7071067811865476,
+              "w": -0.7071067811865476
+            }
+          },
+          "_$comp": [
+            {
+              "_$type": "MeshFilter",
+              "sharedMesh": {
+                "_$uuid": "281b0766-40a8-4a2b-b661-d7ed74bf65c8",
+                "_$type": "Mesh"
+              }
+            },
+            {
+              "_$type": "SkinnedMeshRenderer",
+              "receiveShadow": true,
+              "castShadow": true,
+              "lightmapScaleOffset": {
+                "_$type": "Vector4"
+              },
+              "sharedMaterials": [
+                {
+                  "_$uuid": "4b2f88b3-8d0c-4d90-bb56-36f9b4a3b751",
+                  "_$type": "Material"
+                }
+              ],
+              "_bones": [
+                {
+                  "_$ref": "4sk64n4b"
+                },
+                {
+                  "_$ref": "8uga8ihq"
+                },
+                {
+                  "_$ref": "phagxinf"
+                },
+                {
+                  "_$ref": "yyxd7gro"
+                },
+                {
+                  "_$ref": "w87o6rq9"
+                },
+                {
+                  "_$ref": "nh0n7rbk"
+                },
+                {
+                  "_$ref": "o995ic7i"
+                },
+                {
+                  "_$ref": "urtmd67s"
+                },
+                {
+                  "_$ref": "8hv14llt"
+                },
+                {
+                  "_$ref": "7xs02efi"
+                },
+                {
+                  "_$ref": "ot5ceer0"
+                },
+                {
+                  "_$ref": "ff82ntf3"
+                },
+                {
+                  "_$ref": "x87521lq"
+                },
+                {
+                  "_$ref": "vuqp15oh"
+                },
+                {
+                  "_$ref": "klqoa75m"
+                },
+                {
+                  "_$ref": "7hm05swm"
+                },
+                {
+                  "_$ref": "1uhkdwh2"
+                }
+              ],
+              "rootBone": {
+                "_$ref": "4sk64n4b"
+              },
+              "localBounds": {
+                "_$type": "Bounds",
+                "min": {
+                  "_$type": "Vector3",
+                  "x": -5.596929,
+                  "y": -2.087352,
+                  "z": -3.837382
+                },
+                "max": {
+                  "_$type": "Vector3",
+                  "x": 18.41641,
+                  "y": 3.266659,
+                  "z": 3.675653
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_$id": "gjnygmkc",
+      "_$prefab": "89123e50-4810-4a42-994a-dd618a4bdb24",
+      "name": "深渊巨鳄_捕获_爆环",
+      "active": true,
+      "layer": 0,
+      "transform": {
+        "localPosition": {
+          "_$type": "Vector3"
+        },
+        "localRotation": {
+          "_$type": "Quaternion"
+        },
+        "localScale": {
+          "_$type": "Vector3",
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "_$comp": [
+        {
+          "_$type": "566e89b7-1bd5-4616-b467-0bb3eddfdc6d",
+          "scriptPath": "../src/Base/Node/EffectDelay.ts",
+          "delayTime": 1.6
+        }
+      ],
+      "drawCallOptimize": false
+    }
+  ]
+}

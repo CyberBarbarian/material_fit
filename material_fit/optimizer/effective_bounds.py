@@ -48,6 +48,12 @@ FISH_STANDARD_EFFECTIVE_BOUNDS: dict[str, tuple[float, float]] = {
     "u_adjusthue": (-180.0, 180.0),
     "u_adjustsaturation": (-1.0, 2.0),
     "u_adjustlightness": (-1.0, 1.0),
+    "u_skyrotatex": (-180.0, 180.0),
+    "u_skyrotatey": (-180.0, 180.0),
+    "u_skyrotatez": (-180.0, 180.0),
+    "u_lightrotatex": (-180.0, 180.0),
+    "u_lightrotatey": (-180.0, 180.0),
+    "u_lightrotatez": (-180.0, 180.0),
     "u_saturationprotection": (0.0, 1.0),
     "u_contrastscale": (-1.0, 2.0),
 }

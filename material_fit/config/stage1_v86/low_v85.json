@@ -1,0 +1,392 @@
+{
+  "continuous": {
+    "block_iterations": 1,
+    "block_order": [
+      "rim",
+      "specular"
+    ],
+    "late_material_polish_iterations": 1,
+    "late_realign_trigger_score": 0.0,
+    "late_scene_realign_iterations": 1,
+    "local_jacobian_iterations": 1,
+    "local_jacobian_trigger_score": 0.0,
+    "profile": "material_stage1_v15_shared_scene_material_warmup",
+    "refine_iterations": 1,
+    "sigma_scale": 1.0,
+    "structured_only": true,
+    "warmup_iterations": 150
+  },
+  "continuous_after_final_rescan": {
+    "cascade": {
+      "profile": "material_response_cascade_v85_portfolio_scene_refine",
+      "stages": [
+        {
+          "frozen_param_names": [],
+          "max_proposals": 378,
+          "minimum_proposals": 378,
+          "name": "groupwise_basin_portfolio",
+          "optimizer": "portfolio",
+          "portfolio": {
+            "branches": [
+              {
+                "jacobian": {
+                  "accept_improving_probes": true,
+                  "acceptance_objective": "residual_merit",
+                  "active_coordinate_count": 0,
+                  "difference_mode": "forward",
+                  "feedback_source": "target_png_score_and_signed_residuals_only",
+                  "full_refresh_interval": 0,
+                  "group_weight_clip": 2.0,
+                  "group_weight_ridge": 1e-06,
+                  "line_search_scales": [
+                    1.0,
+                    2.0,
+                    4.0,
+                    0.5,
+                    0.25
+                  ],
+                  "max_axis_update": 0.4,
+                  "maximum_score_drop": 0.03,
+                  "maximum_trust_radius": 0.3,
+                  "minimum_probe_score_gain": 1e-07,
+                  "minimum_probe_step": 0.01,
+                  "probe_step": 0.1,
+                  "profile": "material_jacobian_trust_region_stage1_groupwise_portfolio_a",
+                  "ridge": 0.0001,
+                  "score_feature_weight": 0.0,
+                  "shader_default_anchor_enabled": false,
+                  "solve_mode": "groupwise_least_squares",
+                  "target_params_visible": false,
+                  "trust_radius": 0.12
+                },
+                "max_proposals": 189,
+                "name": "groupwise_default",
+                "optimizer": "jacobian",
+                "start_from": "shared_seed"
+              },
+              {
+                "jacobian": {
+                  "accept_improving_probes": true,
+                  "acceptance_objective": "residual_merit",
+                  "active_coordinate_count": 0,
+                  "difference_mode": "forward",
+                  "feedback_source": "target_png_score_and_signed_residuals_only",
+                  "full_refresh_interval": 0,
+                  "group_weight_clip": 2.0,
+                  "group_weight_ridge": 1e-06,
+                  "line_search_scales": [
+                    1.0,
+                    2.0,
+                    4.0,
+                    0.5,
+                    0.25
+                  ],
+                  "max_axis_update": 0.3,
+                  "maximum_score_drop": 0.03,
+                  "maximum_trust_radius": 0.25,
+                  "minimum_probe_score_gain": 1e-07,
+                  "minimum_probe_step": 0.01,
+                  "probe_step": 0.08,
+                  "profile": "material_jacobian_trust_region_stage1_groupwise_portfolio_b",
+                  "ridge": 0.0003,
+                  "score_feature_weight": 0.0,
+                  "shader_default_anchor_enabled": false,
+                  "solve_mode": "groupwise_least_squares",
+                  "target_params_visible": false,
+                  "trust_radius": 0.1
+                },
+                "max_proposals": 189,
+                "name": "groupwise_conservative",
+                "optimizer": "jacobian",
+                "start_from": "shared_seed"
+              }
+            ],
+            "profile": "material_optimizer_portfolio_v85_groupwise"
+          },
+          "switch_score": null
+        },
+        {
+          "frozen_param_names": [
+            "u_GammaPower",
+            "u_Saturation",
+            "u_Contrast",
+            "u_HueShift",
+            "u_TexPower",
+            "u_AoPower",
+            "u_EmissionPow",
+            "u_IndirectStrength",
+            "u_NormalScale",
+            "u_ShadowSmoothness",
+            "u_ShadowThreshold1",
+            "u_SpecularIntensity",
+            "u_SpecularPower",
+            "u_SpecularThreshold",
+            "u_SpecularSmoothness",
+            "u_RimIntensity",
+            "u_RimWidth",
+            "u_Color",
+            "u_ReflectColor",
+            "u_ShadowColor1",
+            "u_SpecularColor",
+            "u_RimColor",
+            "u_SpeOffet",
+            "u_RimOffet"
+          ],
+          "jacobian": {
+            "accept_improving_probes": true,
+            "acceptance_objective": "fit_score",
+            "active_coordinate_count": 0,
+            "difference_mode": "central",
+            "feedback_source": "target_png_score_and_signed_residuals_only",
+            "full_refresh_interval": 0,
+            "line_search_scales": [
+              1.0,
+              0.5,
+              0.25,
+              0.125
+            ],
+            "max_axis_update": 0.3,
+            "maximum_score_drop": 0.02,
+            "maximum_trust_radius": 0.3,
+            "minimum_probe_score_gain": 1e-05,
+            "minimum_probe_step": 0.01,
+            "probe_step": 0.08,
+            "profile": "material_jacobian_trust_region_stage1_scene_central_v1",
+            "ridge": 0.001,
+            "score_feature_weight": 20.0,
+            "shader_default_anchor_enabled": false,
+            "solve_mode": "full_least_squares",
+            "target_params_visible": false,
+            "trust_radius": 0.12
+          },
+          "max_proposals": 64,
+          "minimum_proposals": 64,
+          "name": "dedicated_scene_calibration",
+          "switch_score": null
+        },
+        {
+          "frozen_param_names": [
+            "u_SkyRotateX",
+            "u_SkyRotateY",
+            "u_SkyRotateZ",
+            "u_LightRotateX",
+            "u_LightRotateY",
+            "u_LightRotateZ"
+          ],
+          "jacobian": {
+            "accept_improving_probes": true,
+            "acceptance_objective": "fit_score",
+            "active_coordinate_count": 0,
+            "difference_mode": "forward",
+            "feedback_source": "target_png_score_and_signed_residuals_only",
+            "full_refresh_interval": 0,
+            "line_search_scales": [
+              1.0,
+              0.5,
+              0.25,
+              0.125
+            ],
+            "max_axis_update": 0.15,
+            "maximum_score_drop": 0.02,
+            "maximum_trust_radius": 0.2,
+            "minimum_probe_score_gain": 1e-05,
+            "minimum_probe_step": 0.001,
+            "model_reuse_frozen_param_names": [
+              "u_SkyRotateX",
+              "u_SkyRotateY",
+              "u_SkyRotateZ",
+              "u_LightRotateX",
+              "u_LightRotateY",
+              "u_LightRotateZ"
+            ],
+            "model_reuse_min_score": 0.97,
+            "model_reuse_updates": 8,
+            "probe_step": 0.02,
+            "profile": "material_jacobian_trust_region_stage1_material_portfolio_full40_reuse_v1",
+            "ridge": 0.001,
+            "score_feature_weight": 20.0,
+            "shader_default_anchor_enabled": false,
+            "solve_mode": "full_least_squares",
+            "target_params_visible": false,
+            "trust_radius": 0.08
+          },
+          "max_proposals": 326,
+          "minimum_proposals": 0,
+          "name": "scene_frozen_material_full40_refine"
+        },
+        {
+          "frozen_param_names": [
+            "u_SkyRotateX",
+            "u_SkyRotateY",
+            "u_SkyRotateZ",
+            "u_LightRotateX",
+            "u_LightRotateY",
+            "u_LightRotateZ"
+          ],
+          "max_proposals": 69,
+          "minimum_proposals": 0,
+          "name": "scene_frozen_material_full_secant",
+          "optimizer": "secant",
+          "secant": {
+            "antithetic": false,
+            "compressed_design": false,
+            "design_size": 64,
+            "line_search_scales": [
+              1.0,
+              0.5,
+              0.25,
+              0.125
+            ],
+            "max_axis_update": 0.15,
+            "maximum_probe_radius": 0.1,
+            "maximum_score_drop": 0.02,
+            "minimum_probe_radius": 0.003,
+            "model_reuse_updates": 4,
+            "probe_radius": 0.025,
+            "profile": "material_secant_stage1_v67_scene_frozen_reuse4",
+            "radius_growth": 1.1,
+            "radius_shrink": 0.6,
+            "ridge": 0.001,
+            "score_feature_weight": 20.0,
+            "trust_radius": 0.2
+          },
+          "switch_score": null
+        },
+        {
+          "frozen_param_names": [
+            "u_SkyRotateX",
+            "u_SkyRotateY",
+            "u_SkyRotateZ",
+            "u_LightRotateX",
+            "u_LightRotateY",
+            "u_LightRotateZ"
+          ],
+          "max_proposals": 241,
+          "minimum_proposals": 0,
+          "name": "scene_frozen_material_coordinate_pattern",
+          "optimizer": "pattern",
+          "pattern": {
+            "active_coordinate_count": 16,
+            "full_refresh_interval": 3,
+            "initial_step_scale": 0.03125,
+            "minimum_score_gain": 1e-06,
+            "minimum_step_scale": 0.000244140625,
+            "pattern_move_scales": [
+              0.5,
+              1.0
+            ],
+            "step_growth": 1.15,
+            "step_shrink": 0.5
+          },
+          "switch_score": null
+        }
+      ],
+      "total_max_proposals": 1078
+    },
+    "frozen_param_names": [],
+    "profile": "material_stage1_v52_groupwise_large_active8_cascade",
+    "strategy": "material_jacobian_cascade"
+  },
+  "discrete_observation_equivalence": true,
+  "diversity_rounds": 0,
+  "feedback_full_precision_after_final_rescan": true,
+  "feedback_residual_step": 0.0,
+  "feedback_score_step": 1e-06,
+  "initial_score_rescan_schedule": {
+    "at_or_above": [
+      150,
+      400
+    ],
+    "below": [
+      110,
+      400
+    ],
+    "feedback_source": "initial_online_target_png_score_only",
+    "target_params_visible": false,
+    "threshold": 0.85
+  },
+  "max_rescans": 2,
+  "max_scored_candidates": 1500,
+  "optimization_score_metric": "cross_engine_foreground_components_v4",
+  "planned_proposal_budget": {
+    "high_initial_score_path": {
+      "continuous_before_final_rescan": 400,
+      "first_common_parameter_discrete_rescan": 6,
+      "initial_discrete_probes": 5,
+      "initial_round_shared_seed_and_adaptation": 2,
+      "online_winner_probe": 1,
+      "post_final_rescan_dedicated_scene_calibration": 64,
+      "post_final_rescan_groupwise_portfolio": 378,
+      "post_final_rescan_scene_frozen_full_secant": 69,
+      "post_final_rescan_scene_frozen_material_coordinate_pattern": 241,
+      "post_final_rescan_scene_frozen_material_full40": 326,
+      "second_common_parameter_discrete_rescan": 6,
+      "total": 1498
+    },
+    "low_initial_score_path": {
+      "continuous_before_final_rescan": 400,
+      "first_common_parameter_discrete_rescan": 6,
+      "initial_discrete_probes": 5,
+      "initial_round_shared_seed_and_adaptation": 2,
+      "online_winner_probe": 1,
+      "post_final_rescan_dedicated_scene_calibration": 64,
+      "post_final_rescan_groupwise_portfolio": 378,
+      "post_final_rescan_scene_frozen_full_secant": 69,
+      "post_final_rescan_scene_frozen_material_coordinate_pattern": 241,
+      "post_final_rescan_scene_frozen_material_full40": 326,
+      "second_common_parameter_discrete_rescan": 6,
+      "total": 1498
+    }
+  },
+  "post_rescan_branch_race": {
+    "budget_per_candidate": 1,
+    "enabled": true,
+    "final_continuous": {
+      "block_iterations": 32,
+      "block_order": [
+        "rim"
+      ],
+      "frozen_param_names": [],
+      "late_material_polish_iterations": 140,
+      "late_realign_trigger_score": 1.0,
+      "late_scene_realign_iterations": 120,
+      "local_jacobian_iterations": 1,
+      "local_jacobian_trigger_score": 0.0,
+      "profile": "material_stage1_v49_v4_material_then_scene_then_polish",
+      "refine_iterations": 561,
+      "scalar_grid_scans": [],
+      "sigma_scale": 1.0,
+      "structured_only": false,
+      "warmup_iterations": 1
+    },
+    "frozen_param_names": [],
+    "group_axes": [
+      "normal_mode",
+      "rim_smooth",
+      "blend_src"
+    ],
+    "sigma": 0.1,
+    "strategy": "cmaes",
+    "width": 1
+  },
+  "proposal_quantization_normalized_step": 0.0001,
+  "rescan_at": [
+    110,
+    400
+  ],
+  "rescan_interval": 0,
+  "restart_continuous_after_rescan": true,
+  "round_budgets": [
+    1
+  ],
+  "round_sigmas": [
+    0.18
+  ],
+  "round_widths": [
+    1
+  ],
+  "runtime_profile": "material_discrete_joint_v85_budget1500_v4_portfolio_scene_refine",
+  "score_height": 0,
+  "score_width": 400,
+  "winner_continuation_budget": 0
+}
