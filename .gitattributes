@@ -1,1 +1,4 @@
 vendor/** -text -whitespace
+examples/** -text -whitespace
+*.lmat -text -whitespace
+*.ls -text -whitespace
