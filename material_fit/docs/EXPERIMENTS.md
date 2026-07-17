@@ -40,15 +40,15 @@ speed audits in its own `stage1_report.json`.
 
 ## Clean-install reproduction
 
-On 2026-07-18, the packaged fish task was installed and run from source trees
-that contained no virtual environment, Node modules, Playwright browser, prior
-run output, or Git metadata. Both systems used V86 with 1,499 proposals and the
-same tracked assets and policy snapshots.
+On 2026-07-18, commit `622db84` was installed from fresh Git checkouts that
+contained no virtual environment, Node modules, Playwright browser, or prior
+run output. Linux used the shallow clone command from the README. Both systems
+used V86 with 1,499 proposals and the same tracked assets and policy snapshots.
 
 | System | Initial | Best | Fit time | Stable mean / P50 / P95 | Cleanup |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Windows 11 | 0.776088 | 0.987674 | 367.3 s | 237.4 / 195.2 / 228.9 ms | 0 owned PIDs |
-| Linux x86-64 | 0.776126 | 0.990880 | 442.2 s | 284.6 / 274.0 / 339.8 ms | 0 owned PIDs |
+| Windows 11 | 0.774738 | 0.987781 | 297.9 s | 192.1 / 187.2 / 208.9 ms | 0 owned PIDs |
+| Linux x86-64 | 0.774743 | 0.990940 | 422.2 s | 273.2 / 264.2 / 329.2 ms | 0 owned PIDs |
 
 Each report passed the 500 ms stable-iteration gate and contained eight target,
 optimizer-target, start, and best renders. The small score difference is normal
