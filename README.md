@@ -50,7 +50,7 @@ the matching Chromium build, and run the checkout doctor.
 Windows PowerShell:
 
 ```powershell
-git clone https://github.com/CyberBarbarian/material_fit.git
+git clone --depth 1 --branch main https://github.com/CyberBarbarian/material_fit.git
 Set-Location material_fit
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 ```
@@ -58,7 +58,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 Linux:
 
 ```bash
-git clone https://github.com/CyberBarbarian/material_fit.git
+git clone --depth 1 --branch main https://github.com/CyberBarbarian/material_fit.git
 cd material_fit
 bash scripts/bootstrap.sh
 ```
