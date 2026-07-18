@@ -1,0 +1,1303 @@
+{
+  "exporterVersion": "1.1.0",
+  "exportedAtUtc": "2026-07-15T09:01:31.6294863Z",
+  "unityVersion": "2020.3.47f1c1",
+  "targetName": "1506",
+  "targetAssetPath": "Assets/Fishes/FishBoss/Prefab/boss_1506/1506.prefab",
+  "outputFolder": ".",
+  "imageWidth": 900,
+  "imageHeight": 700,
+  "distanceScale": 2.200000047683716,
+  "minDistance": 1.0,
+  "transparentBackground": true,
+  "useSilhouetteMaskAlpha": true,
+  "keyBackgroundToAlpha": false,
+  "exportMask": false,
+  "backgroundKeyTolerance": 0.019999999552965164,
+  "backgroundKeySoftness": 0.05999999865889549,
+  "useCameraProjection": false,
+  "captureMode": "rotate_target",
+  "useOrthographic": true,
+  "fieldOfView": 35.0,
+  "orthographicScale": 4.0,
+  "orthographicSize": 4.0,
+  "targetCenter": [
+    0.10541629791259766,
+    0.004276275634765625,
+    5.620833396911621
+  ],
+  "targetSize": [
+    7.48799991607666,
+    4.485104084014893,
+    11.241666793823242
+  ],
+  "modelGeometry": {
+    "schemaVersion": "material_fit_model_geometry_v1",
+    "targetName": "1506",
+    "coordinateSystem": "laya_right_handed_x_flipped_from_unity",
+    "boundsSpace": "target_local_current_pose",
+    "poseSource": "visible_renderer_vertices",
+    "targetPivot": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pivotToBoundsCenter": [
+      0.11093097925186157,
+      -2.0265579223632812e-06,
+      -1.0719577074050903
+    ],
+    "actualBounds": {
+      "valid": true,
+      "min": [
+        -1.8005303144454956,
+        -1.1109663248062134,
+        -2.117497444152832
+      ],
+      "max": [
+        2.0223922729492188,
+        1.1109622716903687,
+        -0.0264180488884449
+      ],
+      "center": [
+        0.11093097925186157,
+        -2.0265579223632812e-06,
+        -1.0719577074050903
+      ],
+      "size": [
+        3.822922706604004,
+        2.221928596496582,
+        2.0910794734954834
+      ]
+    },
+    "rendererCount": 31,
+    "visibleRendererCount": 1,
+    "exactBoundsRendererCount": 1,
+    "fallbackBoundsRendererCount": 0,
+    "materialSlotCount": 51,
+    "totalVertexCount": 5664,
+    "totalTriangleCount": 8474,
+    "totalSubMeshCount": 1,
+    "boneCount": 29,
+    "renderers": [
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/fire",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/lizi",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/dust_front_left",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/dust_front_right",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/dust_back_left",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/dust_back_right",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": false,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left/baozha_002",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left/xulie_dilie",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left/smoke",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left/huoxing",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_left/baozha_001",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": false,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right/baozha_002",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right/xulie_dilie",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right/smoke",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right/huoxing",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/GameObject/longgui_foot_right/baozha_001",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/fire_hand_L",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/fire_hand_R",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/huoxing",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_lan",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_shu_01",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_shu_02",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_dis01_left",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_dis02_left",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_dis01_right",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/effect/fire_dis02_right",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001/Bone002/fire_weiba",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/fish_longgui_001",
+        "rendererType": "SkinnedMeshRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": true,
+        "boundsSource": "current_pose_vertices",
+        "meshName": "fish_longgui_001",
+        "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1506/model/fish_longgui_001.FBX",
+        "vertexCount": 5664,
+        "triangleCount": 8474,
+        "subMeshCount": 1,
+        "materialSlotCount": 1
+      }
+    ],
+    "bones": [
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+        "localPosition": [
+          0.9792553782463074,
+          -0.0032417296897619963,
+          -1.907348590179936e-08
+        ],
+        "localRotation": [
+          -7.979999772089741e-09,
+          3.6318274965196906e-07,
+          -0.12359980493783951,
+          -0.9923321604728699
+        ],
+        "localScale": [
+          0.9999999403953552,
+          0.9999999403953552,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine",
+        "localPosition": [
+          1.8839586973190308,
+          -0.0015129089588299394,
+          -9.53674295089968e-09
+        ],
+        "localRotation": [
+          7.148599610483017e-14,
+          1.6019249926557677e-07,
+          -0.05775616317987442,
+          -0.9983307123184204
+        ],
+        "localScale": [
+          1.0000001192092896,
+          1.0000001192092896,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001",
+        "localPosition": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "localRotation": [
+          0.49999964237213135,
+          0.5000003576278687,
+          0.49999964237213135,
+          -0.5000003576278687
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis",
+        "localPosition": [
+          0.7378852963447571,
+          -0.0016429137904196978,
+          1.1062621751989354e-06
+        ],
+        "localRotation": [
+          2.1347213987610303e-06,
+          7.319194423871522e-07,
+          -0.05155245587229729,
+          -0.9986702799797058
+        ],
+        "localScale": [
+          1.0000001192092896,
+          1.0000001192092896,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1",
+        "localPosition": [
+          1.9250037670135498,
+          0.18089644610881805,
+          9.53674295089968e-09
+        ],
+        "localRotation": [
+          8.747781166107416e-09,
+          -2.686422249098541e-07,
+          0.08945197612047195,
+          -0.9959911704063416
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/Bone006",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+        "localPosition": [
+          0.18263550102710724,
+          0.01322891190648079,
+          -7.324218586290954e-06
+        ],
+        "localRotation": [
+          -0.9792617559432983,
+          -0.20259937644004822,
+          4.102219008927932e-07,
+          1.700790107861394e-06
+        ],
+        "localScale": [
+          1.000000238418579,
+          0.9999997019767761,
+          1.0000001192092896
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+        "localPosition": [
+          -1.2456063032150269,
+          -0.057338714599609375,
+          0.7438918948173523
+        ],
+        "localRotation": [
+          -0.7042972445487976,
+          -0.06297167390584946,
+          -0.7042972445487976,
+          0.06297167390584946
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle",
+        "localPosition": [
+          0.5839070081710815,
+          -1.5258788721439487e-07,
+          -3.814697180359872e-08
+        ],
+        "localRotation": [
+          0.27448755502700806,
+          -0.002075568540021777,
+          0.3689863383769989,
+          -0.8879759907722473
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm",
+        "localPosition": [
+          1.0579453706741333,
+          1.5258788721439487e-07,
+          -1.5258788721439487e-07
+        ],
+        "localRotation": [
+          0.5623935461044312,
+          0.2842887043952942,
+          0.42454758286476135,
+          -0.6501175165176392
+        ],
+        "localScale": [
+          1.0000001192092896,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger0",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+        "localPosition": [
+          0.6967248320579529,
+          0.06375310570001602,
+          -5.081176641397178e-05
+        ],
+        "localRotation": [
+          0.0003981590270996094,
+          -7.76705034923747e-13,
+          -5.820797316369308e-11,
+          -0.9999999403953552
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm",
+        "localPosition": [
+          1.1466096639633179,
+          0.0,
+          0.0
+        ],
+        "localRotation": [
+          -1.5421349530697626e-08,
+          -1.0071866007876906e-08,
+          0.35592636466026306,
+          -0.9345139861106873
+        ],
+        "localScale": [
+          0.9999997615814209,
+          1.0,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine",
+        "localPosition": [
+          -0.7337946891784668,
+          0.0776090994477272,
+          1.2838799953460693
+        ],
+        "localRotation": [
+          -0.8029258251190186,
+          -0.43471089005470276,
+          -0.40749841928482056,
+          0.016782021149992943
+        ],
+        "localScale": [
+          1.0000001192092896,
+          1.000000238418579,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh",
+        "localPosition": [
+          1.3215444087982178,
+          7.629394360719743e-08,
+          0.0
+        ],
+        "localRotation": [
+          2.999197690201072e-08,
+          3.314941565690788e-08,
+          0.67090904712677,
+          -0.741539716720581
+        ],
+        "localScale": [
+          0.9999998211860657,
+          1.0,
+          0.9999998807907104
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf",
+        "localPosition": [
+          0.8447246551513672,
+          -5.7220457705398076e-08,
+          0.0
+        ],
+        "localRotation": [
+          -0.19104881584644318,
+          0.09509439021348953,
+          -0.3354918360710144,
+          -0.9175525307655334
+        ],
+        "localScale": [
+          0.9999999403953552,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot/Bip001 L Toe0",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot",
+        "localPosition": [
+          0.3984017074108124,
+          0.7864663600921631,
+          -3.0517577442878974e-07
+        ],
+        "localRotation": [
+          -1.0497484659310885e-08,
+          -2.0783385679123967e-08,
+          -0.7071068286895752,
+          -0.7071068286895752
+        ],
+        "localScale": [
+          0.9999999403953552,
+          0.9999998807907104,
+          0.9999998807907104
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis",
+        "localPosition": [
+          -0.8265326023101807,
+          -0.25211623311042786,
+          1.5258788721439487e-07
+        ],
+        "localRotation": [
+          -0.004075918346643448,
+          0.9999917149543762,
+          -1.0006085631175665e-06,
+          3.120997860150965e-08
+        ],
+        "localScale": [
+          1.0,
+          0.9999996423721313,
+          1.000000238418579
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001/Bone002",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001",
+        "localPosition": [
+          1.1016765832901,
+          -3.0517577442878974e-07,
+          -9.536742595628311e-08
+        ],
+        "localRotation": [
+          -7.39963201823457e-10,
+          -2.953881939049552e-08,
+          0.025019358843564987,
+          -0.9996869564056396
+        ],
+        "localScale": [
+          0.9999998807907104,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001/Bone002/Bone007",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bone001/Bone002",
+        "localPosition": [
+          1.0272570848464966,
+          -3.0517577442878974e-07,
+          -1.678466787780053e-06
+        ],
+        "localRotation": [
+          -0.9999894499778748,
+          -0.004601362161338329,
+          -1.9097235508525046e-06,
+          -5.117666432852275e-07
+        ],
+        "localScale": [
+          1.0000003576278687,
+          1.0000003576278687,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine",
+        "localPosition": [
+          -0.7337946891784668,
+          0.07761642336845398,
+          -1.2838795185089111
+        ],
+        "localRotation": [
+          -0.8029260039329529,
+          -0.4347118139266968,
+          0.4074971675872803,
+          -0.016779780387878418
+        ],
+        "localScale": [
+          1.0000001192092896,
+          1.0000001192092896,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+        "localPosition": [
+          -1.2456063032150269,
+          -0.05733444169163704,
+          -0.7438912987709045
+        ],
+        "localRotation": [
+          -0.7042972445487976,
+          -0.06297167390584946,
+          0.7042972445487976,
+          -0.06297167390584946
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle",
+        "localPosition": [
+          0.5839070081710815,
+          -1.5258788721439487e-07,
+          -7.629394360719743e-08
+        ],
+        "localRotation": [
+          -0.27448755502700806,
+          0.0020755641162395477,
+          0.3689863383769989,
+          -0.8879759907722473
+        ],
+        "localScale": [
+          0.9999999403953552,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm",
+        "localPosition": [
+          1.0579452514648438,
+          0.0,
+          0.0
+        ],
+        "localRotation": [
+          -0.5623935461044312,
+          -0.2842887043952942,
+          0.42454758286476135,
+          -0.6501175165176392
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger0",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+        "localPosition": [
+          0.6967248320579529,
+          0.06375310570001602,
+          5.081176641397178e-05
+        ],
+        "localRotation": [
+          -0.0003981590270996094,
+          1.0319287958859835e-11,
+          5.8203556557723246e-11,
+          -0.9999999403953552
+        ],
+        "localScale": [
+          1.0,
+          0.9999999403953552,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm",
+        "localPosition": [
+          1.1466100215911865,
+          3.0517577442878974e-07,
+          0.0
+        ],
+        "localRotation": [
+          -1.1967091761988513e-09,
+          4.557880184385965e-10,
+          0.3559263050556183,
+          -0.934514045715332
+        ],
+        "localScale": [
+          0.9999999403953552,
+          1.0000001192092896,
+          0.9999998807907104
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh",
+        "localPosition": [
+          1.3215444087982178,
+          1.5258788721439487e-07,
+          3.0517577442878974e-07
+        ],
+        "localRotation": [
+          2.10471249317834e-08,
+          1.0524813243151243e-09,
+          0.6709089279174805,
+          -0.7415397763252258
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf",
+        "localPosition": [
+          0.8447243571281433,
+          1.5258788721439487e-07,
+          3.0517577442878974e-07
+        ],
+        "localRotation": [
+          0.19104868173599243,
+          -0.09509433805942535,
+          -0.3354915678501129,
+          -0.9175527095794678
+        ],
+        "localScale": [
+          0.9999998211860657,
+          1.0,
+          0.9999999403953552
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot/Bip001 R Toe0",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot",
+        "localPosition": [
+          0.39840179681777954,
+          0.7864659428596497,
+          -3.0517577442878974e-07
+        ],
+        "localRotation": [
+          1.0537998917925506e-08,
+          2.04135961467955e-08,
+          -0.7071068286895752,
+          -0.7071068286895752
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/Bone010",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+        "localPosition": [
+          0.5562741160392761,
+          -0.6353011727333069,
+          0.35395193099975586
+        ],
+        "localRotation": [
+          0.5169985890388489,
+          -0.08283451944589615,
+          0.775075376033783,
+          -0.3537076711654663
+        ],
+        "localScale": [
+          0.9999999403953552,
+          1.0,
+          1.000000238418579
+        ]
+      },
+      {
+        "path": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/Bone012",
+        "parentPath": "1506/FishView/Adapt/DieAction/boss_longgui_jishen01/fish_longgui_new/Bone009/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+        "localPosition": [
+          0.5097323656082153,
+          -0.6746246218681335,
+          -0.08348563313484192
+        ],
+        "localRotation": [
+          0.4013757109642029,
+          -0.7607818841934204,
+          0.04656190797686577,
+          -0.5078784227371216
+        ],
+        "localScale": [
+          0.9999998211860657,
+          1.0,
+          0.9999998807907104
+        ]
+      }
+    ]
+  },
+  "views": [
+    {
+      "index": 0,
+      "yaw": 0.0,
+      "captureYaw": 0.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v000_yaw0_pitch0.png",
+      "fileName": "unity_ref_v000_yaw0_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "index": 1,
+      "yaw": 45.0,
+      "captureYaw": 315.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v001_yaw45_pitch0.png",
+      "fileName": "unity_ref_v001_yaw45_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        45.000003814697266,
+        0.0
+      ]
+    },
+    {
+      "index": 2,
+      "yaw": 90.0,
+      "captureYaw": 270.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v002_yaw90_pitch0.png",
+      "fileName": "unity_ref_v002_yaw90_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        90.0,
+        0.0
+      ]
+    },
+    {
+      "index": 3,
+      "yaw": 135.0,
+      "captureYaw": 225.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v003_yaw135_pitch0.png",
+      "fileName": "unity_ref_v003_yaw135_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        135.00001525878906,
+        0.0
+      ]
+    },
+    {
+      "index": 4,
+      "yaw": 180.0,
+      "captureYaw": 180.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v004_yaw180_pitch0.png",
+      "fileName": "unity_ref_v004_yaw180_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        180.0,
+        0.0
+      ]
+    },
+    {
+      "index": 5,
+      "yaw": 225.0,
+      "captureYaw": 135.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v005_yaw225_pitch0.png",
+      "fileName": "unity_ref_v005_yaw225_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        225.0,
+        0.0
+      ]
+    },
+    {
+      "index": 6,
+      "yaw": 270.0,
+      "captureYaw": 90.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v006_yaw270_pitch0.png",
+      "fileName": "unity_ref_v006_yaw270_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        270.0,
+        0.0
+      ]
+    },
+    {
+      "index": 7,
+      "yaw": 315.0,
+      "captureYaw": 45.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v007_yaw315_pitch0.png",
+      "fileName": "unity_ref_v007_yaw315_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        315.0,
+        0.0
+      ]
+    }
+  ]
+}

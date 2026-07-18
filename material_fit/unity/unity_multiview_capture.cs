@@ -9,13 +9,12 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
 {
     private GameObject targetObject;
     private Camera captureCamera;
-    private DefaultAsset outputFolder;
-    private string outputFolderPath = "Assets/MaterialFitCaptures";
+    private string outputFolderPath = "";
     private string filePrefix = "unity_ref";
     private string yawDegrees = "0,45,90,135,180,225,270,315";
     private string pitchDegrees = "0";
     private int imageWidth = 900;
-    private int imageHeight = 600;
+    private int imageHeight = 700;
     private float distanceScale = 2.2f;
     private float minDistance = 1.0f;
     private float fieldOfView = 35.0f;
@@ -23,12 +22,12 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
     private bool transparentBackground = true;
     private bool useSilhouetteMaskAlpha = true;
     private bool keyBackgroundToAlpha = false;
-    private bool exportMask = true;
+    private bool exportMask = false;
     private float backgroundKeyTolerance = 0.02f;
     private float backgroundKeySoftness = 0.06f;
-    private bool useCameraProjection = true;
-    private bool useOrthographic = false;
-    private float orthographicScale = 1.2f;
+    private bool useCameraProjection = false;
+    private bool useOrthographic = true;
+    private float orthographicScale = 4.0f;
 
     [MenuItem("Material Fit/Multi-view Capture Window", false, 20)]
     public static void ShowWindow()
@@ -50,82 +49,91 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
 
     private void OnGUI()
     {
-        EditorGUILayout.LabelField("Reference Capture", EditorStyles.boldLabel);
-        targetObject = (GameObject)EditorGUILayout.ObjectField("Target Object", targetObject, typeof(GameObject), true);
-        captureCamera = (Camera)EditorGUILayout.ObjectField("Camera", captureCamera, typeof(Camera), true);
-        outputFolder = (DefaultAsset)EditorGUILayout.ObjectField("Output Folder", outputFolder, typeof(DefaultAsset), false);
-        if (outputFolder != null)
+        EditorGUILayout.LabelField("参考图导出", EditorStyles.boldLabel);
+        targetObject = (GameObject)EditorGUILayout.ObjectField("目标模型根节点", targetObject, typeof(GameObject), true);
+        captureCamera = (Camera)EditorGUILayout.ObjectField("截图相机", captureCamera, typeof(Camera), true);
+
+        EditorGUILayout.LabelField("导出目录");
+        using (new EditorGUILayout.HorizontalScope())
         {
-            string assetPath = AssetDatabase.GetAssetPath(outputFolder);
-            if (AssetDatabase.IsValidFolder(assetPath))
+            outputFolderPath = EditorGUILayout.TextField(outputFolderPath);
+            if (GUILayout.Button("浏览...", GUILayout.Width(72)))
             {
-                outputFolderPath = assetPath;
+                string initialPath = ResolveInitialOutputPath(outputFolderPath);
+                string selectedPath = EditorUtility.OpenFolderPanel("选择 Unity 参考图导出目录", initialPath, "");
+                if (!string.IsNullOrEmpty(selectedPath))
+                {
+                    outputFolderPath = selectedPath;
+                    GUI.FocusControl(null);
+                }
             }
         }
-        outputFolderPath = EditorGUILayout.TextField("Output Path", outputFolderPath);
-        filePrefix = EditorGUILayout.TextField("File Prefix", filePrefix);
+        EditorGUILayout.HelpBox("导出目录可以是电脑上的任意文件夹，不再限制在当前 Unity 项目的 Assets 目录内。建议直接选择 Material Fit 项目的 inputs/unity_references 目录，或先导出到临时目录后在工具界面导入。", MessageType.Info);
+        filePrefix = EditorGUILayout.TextField("文件名前缀", filePrefix);
 
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Views", EditorStyles.boldLabel);
-        yawDegrees = EditorGUILayout.TextField("Yaw Degrees", yawDegrees);
-        pitchDegrees = EditorGUILayout.TextField("Pitch Degrees", pitchDegrees);
-        distanceScale = EditorGUILayout.FloatField("Distance Scale", distanceScale);
-        minDistance = EditorGUILayout.FloatField("Min Distance", minDistance);
+        EditorGUILayout.LabelField("视角", EditorStyles.boldLabel);
+        yawDegrees = EditorGUILayout.TextField("水平角列表", yawDegrees);
+        pitchDegrees = EditorGUILayout.TextField("俯仰角列表", pitchDegrees);
+        distanceScale = EditorGUILayout.FloatField("距离倍率", distanceScale);
+        minDistance = EditorGUILayout.FloatField("最小距离", minDistance);
+        EditorGUILayout.HelpBox("不同引擎中相同 distance scale / FOV 不一定表现一致。Unity/Laya 工具默认统一使用 900x700、正交相机、旋转目标；metadata 只用于备查，不作为 Laya 设置来源。", MessageType.None);
 
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Render", EditorStyles.boldLabel);
-        imageWidth = EditorGUILayout.IntField("Width", imageWidth);
-        imageHeight = EditorGUILayout.IntField("Height", imageHeight);
-        useCameraProjection = EditorGUILayout.Toggle("Use Camera Projection", useCameraProjection);
+        EditorGUILayout.LabelField("渲染", EditorStyles.boldLabel);
+        imageWidth = EditorGUILayout.IntField("宽度", imageWidth);
+        imageHeight = EditorGUILayout.IntField("高度", imageHeight);
+        useCameraProjection = EditorGUILayout.Toggle("使用当前相机投影", useCameraProjection);
         if (useCameraProjection && captureCamera != null)
         {
             using (new EditorGUI.DisabledScope(true))
             {
-                EditorGUILayout.Toggle("Camera Orthographic", captureCamera.orthographic);
+                EditorGUILayout.Toggle("相机为正交", captureCamera.orthographic);
                 if (captureCamera.orthographic)
                 {
-                    EditorGUILayout.FloatField("Camera Ortho Size", captureCamera.orthographicSize);
+                    EditorGUILayout.FloatField("相机正交尺寸", captureCamera.orthographicSize);
                 }
                 else
                 {
-                    EditorGUILayout.FloatField("Camera Field Of View", captureCamera.fieldOfView);
+                    EditorGUILayout.FloatField("相机视野角 FOV", captureCamera.fieldOfView);
                 }
             }
         }
         else
         {
-            useOrthographic = EditorGUILayout.Toggle("Orthographic", useOrthographic);
+            useOrthographic = EditorGUILayout.Toggle("使用正交相机", useOrthographic);
             if (useOrthographic)
             {
-                orthographicScale = EditorGUILayout.FloatField("Ortho Scale", orthographicScale);
+                orthographicScale = EditorGUILayout.FloatField("正交垂直尺寸", orthographicScale);
             }
             else
             {
-                fieldOfView = EditorGUILayout.FloatField("Field Of View", fieldOfView);
+                fieldOfView = EditorGUILayout.FloatField("视野角 FOV", fieldOfView);
             }
         }
-        transparentBackground = EditorGUILayout.Toggle("Transparent BG", transparentBackground);
-        backgroundColor = EditorGUILayout.ColorField("Background", backgroundColor);
-        useSilhouetteMaskAlpha = EditorGUILayout.Toggle("Silhouette Mask Alpha", useSilhouetteMaskAlpha);
-        keyBackgroundToAlpha = EditorGUILayout.Toggle("Key BG To Alpha", keyBackgroundToAlpha);
+        transparentBackground = EditorGUILayout.Toggle("透明背景", transparentBackground);
+        backgroundColor = EditorGUILayout.ColorField("背景颜色", backgroundColor);
+        useSilhouetteMaskAlpha = EditorGUILayout.Toggle("用轮廓遮罩生成 Alpha", useSilhouetteMaskAlpha);
+        keyBackgroundToAlpha = EditorGUILayout.Toggle("按背景色扣 Alpha", keyBackgroundToAlpha);
         using (new EditorGUI.DisabledScope(!keyBackgroundToAlpha || useSilhouetteMaskAlpha))
         {
-            backgroundKeyTolerance = EditorGUILayout.Slider("Key Tolerance", backgroundKeyTolerance, 0.0f, 0.25f);
-            backgroundKeySoftness = EditorGUILayout.Slider("Key Softness", backgroundKeySoftness, 0.0f, 0.25f);
+            backgroundKeyTolerance = EditorGUILayout.Slider("扣色容差", backgroundKeyTolerance, 0.0f, 0.25f);
+            backgroundKeySoftness = EditorGUILayout.Slider("扣色柔和度", backgroundKeySoftness, 0.0f, 0.25f);
         }
-        exportMask = EditorGUILayout.Toggle("Export Alpha Mask", exportMask);
+        exportMask = EditorGUILayout.Toggle("导出 Alpha 遮罩", exportMask);
+        EditorGUILayout.HelpBox("Laya 端已支持按 Unity 参考图尺寸自动设置截图 width/height。只要这里导出的参考图尺寸固定，Laya 后续评分会优先使用相同画布尺寸。", MessageType.Info);
 
         EditorGUILayout.Space();
         using (new EditorGUI.DisabledScope(targetObject == null || imageWidth <= 0 || imageHeight <= 0))
         {
-            if (GUILayout.Button("Capture Multi-view References"))
+            if (GUILayout.Button("导出多视角参考图"))
             {
                 Capture();
             }
         }
 
         EditorGUILayout.HelpBox(
-            "Place this file in a Unity Editor folder. Select the fish/model root, choose an output folder, then export one PNG per yaw/pitch view plus metadata JSON.",
+            "把脚本放在 Unity 项目的 Editor 目录下。选择鱼/模型根节点、截图相机和导出目录后，会按每个 yaw/pitch 组合导出 PNG，并生成 metadata JSON。",
             MessageType.Info);
     }
 
@@ -135,18 +143,23 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         List<float> pitches = ParseFloatList(pitchDegrees);
         if (yaws.Count == 0 || pitches.Count == 0)
         {
-            EditorUtility.DisplayDialog("Material Fit", "Yaw Degrees and Pitch Degrees must contain at least one number.", "OK");
+            EditorUtility.DisplayDialog("Material Fit", "水平角列表和俯仰角列表至少要各包含一个数字。", "确定");
             return;
         }
 
         Bounds bounds;
         if (!TryGetRenderBounds(targetObject, out bounds))
         {
-            EditorUtility.DisplayDialog("Material Fit", "Target Object has no Renderer bounds.", "OK");
+            EditorUtility.DisplayDialog("Material Fit", "目标模型下没有可渲染 Renderer，无法计算包围盒。", "确定");
             return;
         }
 
         string absoluteOutputPath = ResolveOutputPath(outputFolderPath);
+        if (string.IsNullOrEmpty(absoluteOutputPath))
+        {
+            EditorUtility.DisplayDialog("Material Fit", "请先选择或输入导出目录。", "确定");
+            return;
+        }
         Directory.CreateDirectory(absoluteOutputPath);
 
         Camera camera = captureCamera;
@@ -165,10 +178,11 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         float effectiveFieldOfView = useCameraProjection && captureCamera != null ? camera.fieldOfView : fieldOfView;
         float effectiveOrthographicSize = useCameraProjection && captureCamera != null
             ? camera.orthographicSize
-            : Mathf.Max(0.01f, bounds.extents.magnitude * orthographicScale);
+            : Mathf.Max(0.01f, orthographicScale);
+        ModelGeometryMetadata modelGeometry = BuildModelGeometryMetadata(targetObject);
         CaptureMetadata metadata = new CaptureMetadata
         {
-            exporterVersion = "1.0.0",
+            exporterVersion = "1.1.0",
             exportedAtUtc = System.DateTime.UtcNow.ToString("o"),
             unityVersion = Application.unityVersion,
             targetName = targetObject.name,
@@ -176,6 +190,8 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
             outputFolder = absoluteOutputPath,
             imageWidth = imageWidth,
             imageHeight = imageHeight,
+            distanceScale = distanceScale,
+            minDistance = minDistance,
             transparentBackground = transparentBackground,
             useSilhouetteMaskAlpha = useSilhouetteMaskAlpha,
             keyBackgroundToAlpha = keyBackgroundToAlpha,
@@ -189,7 +205,8 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
             orthographicScale = orthographicScale,
             orthographicSize = effectiveOrthographicSize,
             targetCenter = ToArray(bounds.center),
-            targetSize = ToArray(bounds.size)
+            targetSize = ToArray(bounds.size),
+            modelGeometry = modelGeometry
         };
 
         try
@@ -197,10 +214,13 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
             int viewIndex = 0;
             foreach (float pitch in pitches)
             {
+                int pitchBaseIndex = viewIndex;
                 foreach (float yaw in yaws)
                 {
-                    string fileName = string.Format(CultureInfo.InvariantCulture, "{0}_v{1:000}_yaw{2}_pitch{3}.png", filePrefix, viewIndex, FormatAngle(yaw), FormatAngle(pitch));
-                    string maskFileName = string.Format(CultureInfo.InvariantCulture, "{0}_v{1:000}_yaw{2}_pitch{3}_mask.png", filePrefix, viewIndex, FormatAngle(yaw), FormatAngle(pitch));
+                    float outputYaw = MirrorYawForLayaName(yaw);
+                    int outputViewIndex = ResolveOutputViewIndex(yaws, outputYaw, pitchBaseIndex, viewIndex);
+                    string fileName = string.Format(CultureInfo.InvariantCulture, "{0}_v{1:000}_yaw{2}_pitch{3}.png", filePrefix, outputViewIndex, FormatAngle(outputYaw), FormatAngle(pitch));
+                    string maskFileName = string.Format(CultureInfo.InvariantCulture, "{0}_v{1:000}_yaw{2}_pitch{3}_mask.png", filePrefix, outputViewIndex, FormatAngle(outputYaw), FormatAngle(pitch));
                     string imagePath = Path.Combine(absoluteOutputPath, fileName);
                     string maskPath = exportMask ? Path.Combine(absoluteOutputPath, maskFileName) : string.Empty;
                     if (rotateTargetInsteadOfCamera)
@@ -215,8 +235,9 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
                     RenderCameraToPng(camera, targetObject, imagePath, maskPath, imageWidth, imageHeight, backgroundColor, useSilhouetteMaskAlpha, keyBackgroundToAlpha, backgroundKeyTolerance, backgroundKeySoftness);
                     metadata.views.Add(new CaptureView
                     {
-                        index = viewIndex,
-                        yaw = yaw,
+                        index = outputViewIndex,
+                        yaw = outputYaw,
+                        captureYaw = yaw,
                         pitch = pitch,
                         imagePath = imagePath,
                         fileName = fileName,
@@ -230,10 +251,12 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
                 }
             }
 
+            metadata.views.Sort((left, right) => left.index.CompareTo(right.index));
             string metadataPath = Path.Combine(absoluteOutputPath, filePrefix + "_multiview_metadata.json");
             File.WriteAllText(metadataPath, UnityEngine.JsonUtility.ToJson(metadata, true));
             AssetDatabase.Refresh();
             Debug.Log("Material Fit multi-view capture exported: " + absoluteOutputPath);
+            EditorUtility.DisplayDialog("Material Fit", "多视角参考图导出完成：\n" + absoluteOutputPath, "确定");
         }
         finally
         {
@@ -553,6 +576,228 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         return true;
     }
 
+    private static ModelGeometryMetadata BuildModelGeometryMetadata(GameObject target)
+    {
+        ModelGeometryMetadata metadata = new ModelGeometryMetadata
+        {
+            targetName = target.name,
+            coordinateSystem = "laya_right_handed_x_flipped_from_unity",
+            boundsSpace = "target_local_current_pose",
+            poseSource = "visible_renderer_vertices",
+            targetPivot = new float[] { 0.0f, 0.0f, 0.0f }
+        };
+
+        Matrix4x4 worldToTarget = target.transform.worldToLocalMatrix;
+        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+        List<Transform> uniqueBones = new List<Transform>();
+        bool hasBounds = false;
+        Vector3 min = Vector3.zero;
+        Vector3 max = Vector3.zero;
+
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            Mesh sourceMesh = null;
+            Mesh vertexMesh = null;
+            Mesh bakedMesh = null;
+            SkinnedMeshRenderer skinned = renderer as SkinnedMeshRenderer;
+            if (skinned != null)
+            {
+                sourceMesh = skinned.sharedMesh;
+                if (sourceMesh != null)
+                {
+                    bakedMesh = new Mesh();
+                    bakedMesh.name = sourceMesh.name + "_MaterialFitBaked";
+                    skinned.BakeMesh(bakedMesh);
+                    vertexMesh = bakedMesh;
+                }
+                foreach (Transform bone in skinned.bones)
+                {
+                    if (bone != null && !uniqueBones.Contains(bone))
+                    {
+                        uniqueBones.Add(bone);
+                    }
+                }
+            }
+            else
+            {
+                MeshFilter filter = renderer.GetComponent<MeshFilter>();
+                sourceMesh = filter != null ? filter.sharedMesh : null;
+                vertexMesh = sourceMesh;
+            }
+
+            bool visible = renderer.enabled && renderer.gameObject.activeInHierarchy;
+            bool vertexReadable = vertexMesh != null && (bakedMesh != null || vertexMesh.isReadable);
+            bool included = visible && vertexMesh != null;
+            RendererGeometryMetadata rendererMetadata = BuildRendererGeometryMetadata(
+                renderer,
+                sourceMesh,
+                included,
+                vertexReadable ? "current_pose_vertices" : (included ? "renderer_bounds_fallback" : "excluded"),
+                target.transform
+            );
+            metadata.renderers.Add(rendererMetadata);
+            metadata.rendererCount++;
+            metadata.materialSlotCount += rendererMetadata.materialSlotCount;
+            metadata.totalVertexCount += rendererMetadata.vertexCount;
+            metadata.totalTriangleCount += rendererMetadata.triangleCount;
+            metadata.totalSubMeshCount += rendererMetadata.subMeshCount;
+            if (included && vertexReadable)
+            {
+                metadata.visibleRendererCount++;
+                metadata.exactBoundsRendererCount++;
+                Matrix4x4 localToTarget = worldToTarget * renderer.transform.localToWorldMatrix;
+                Vector3[] vertices = vertexMesh.vertices;
+                foreach (Vector3 vertex in vertices)
+                {
+                    Vector3 point = ToLayaPosition(localToTarget.MultiplyPoint3x4(vertex));
+                    if (!hasBounds)
+                    {
+                        min = point;
+                        max = point;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        min = Vector3.Min(min, point);
+                        max = Vector3.Max(max, point);
+                    }
+                }
+            }
+            else if (included)
+            {
+                metadata.visibleRendererCount++;
+                metadata.fallbackBoundsRendererCount++;
+                Bounds rendererBounds = renderer.bounds;
+                for (int cornerIndex = 0; cornerIndex < 8; cornerIndex++)
+                {
+                    Vector3 worldPoint = new Vector3(
+                        (cornerIndex & 1) == 0 ? rendererBounds.min.x : rendererBounds.max.x,
+                        (cornerIndex & 2) == 0 ? rendererBounds.min.y : rendererBounds.max.y,
+                        (cornerIndex & 4) == 0 ? rendererBounds.min.z : rendererBounds.max.z
+                    );
+                    Vector3 point = ToLayaPosition(worldToTarget.MultiplyPoint3x4(worldPoint));
+                    if (!hasBounds)
+                    {
+                        min = point;
+                        max = point;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        min = Vector3.Min(min, point);
+                        max = Vector3.Max(max, point);
+                    }
+                }
+            }
+
+            if (bakedMesh != null)
+            {
+                Object.DestroyImmediate(bakedMesh);
+            }
+        }
+
+        metadata.boneCount = uniqueBones.Count;
+        foreach (Transform bone in uniqueBones)
+        {
+            metadata.bones.Add(BuildBoneMetadata(bone, target.transform));
+        }
+
+        metadata.actualBounds.valid = hasBounds;
+        if (hasBounds)
+        {
+            Vector3 center = (min + max) * 0.5f;
+            Vector3 size = max - min;
+            metadata.actualBounds.min = ToArray(min);
+            metadata.actualBounds.max = ToArray(max);
+            metadata.actualBounds.center = ToArray(center);
+            metadata.actualBounds.size = ToArray(size);
+            metadata.pivotToBoundsCenter = ToArray(center);
+        }
+        return metadata;
+    }
+
+    private static RendererGeometryMetadata BuildRendererGeometryMetadata(
+        Renderer renderer,
+        Mesh mesh,
+        bool included,
+        string boundsSource,
+        Transform target
+    )
+    {
+        RendererGeometryMetadata metadata = new RendererGeometryMetadata
+        {
+            path = GetRelativePath(renderer.transform, target),
+            rendererType = renderer.GetType().Name,
+            enabled = renderer.enabled,
+            activeInHierarchy = renderer.gameObject.activeInHierarchy,
+            includedInActualBounds = included,
+            boundsSource = boundsSource,
+            meshName = mesh != null ? mesh.name : string.Empty,
+            meshAssetPath = mesh != null ? AssetDatabase.GetAssetPath(mesh) : string.Empty,
+            materialSlotCount = renderer.sharedMaterials != null ? renderer.sharedMaterials.Length : 0
+        };
+        if (mesh == null)
+        {
+            return metadata;
+        }
+        metadata.vertexCount = mesh.vertexCount;
+        metadata.subMeshCount = mesh.subMeshCount;
+        long indexCount = 0;
+        for (int index = 0; index < mesh.subMeshCount; index++)
+        {
+            indexCount += (long)mesh.GetIndexCount(index);
+        }
+        metadata.triangleCount = indexCount / 3L;
+        return metadata;
+    }
+
+    private static BoneGeometryMetadata BuildBoneMetadata(Transform bone, Transform target)
+    {
+        Vector3 position = ToLayaPosition(bone.localPosition);
+        Quaternion rotation = bone.localRotation;
+        rotation.x *= -1.0f;
+        rotation.w *= -1.0f;
+        return new BoneGeometryMetadata
+        {
+            path = GetRelativePath(bone, target),
+            parentPath = bone.parent != null ? GetRelativePath(bone.parent, target) : string.Empty,
+            localPosition = ToArray(position),
+            localRotation = ToArray(rotation),
+            localScale = ToArray(bone.localScale)
+        };
+    }
+
+    private static string GetRelativePath(Transform node, Transform root)
+    {
+        if (node == null)
+        {
+            return string.Empty;
+        }
+        List<string> parts = new List<string>();
+        Transform current = node;
+        while (current != null && current != root)
+        {
+            parts.Add(current.name);
+            current = current.parent;
+        }
+        if (current == root)
+        {
+            parts.Add(root.name);
+        }
+        parts.Reverse();
+        return string.Join("/", parts.ToArray());
+    }
+
+    private static Vector3 ToLayaPosition(Vector3 value)
+    {
+        return new Vector3(-value.x, value.y, value.z);
+    }
+
     private static bool IsDescendantOf(Transform child, Transform ancestor)
     {
         Transform current = child != null ? child.parent : null;
@@ -569,11 +814,33 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
 
     private static string ResolveOutputPath(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
         if (Path.IsPathRooted(path))
         {
             return path;
         }
         return Path.GetFullPath(Path.Combine(Directory.GetParent(Application.dataPath).FullName, path));
+    }
+
+    private static string ResolveInitialOutputPath(string currentPath)
+    {
+        string resolved = ResolveOutputPath(currentPath);
+        if (!string.IsNullOrEmpty(resolved))
+        {
+            if (Directory.Exists(resolved))
+            {
+                return resolved;
+            }
+            string parent = Path.GetDirectoryName(resolved);
+            if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent))
+            {
+                return parent;
+            }
+        }
+        return Directory.GetParent(Application.dataPath).FullName;
     }
 
     private static string GetTargetAssetPath(GameObject gameObject)
@@ -591,9 +858,37 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         return angle.ToString("0.###", CultureInfo.InvariantCulture).Replace("-", "m").Replace(".", "p");
     }
 
+    private static float MirrorYawForLayaName(float yaw)
+    {
+        float mirrored = 360.0f - Mathf.Repeat(yaw, 360.0f);
+        if (Mathf.Approximately(mirrored, 360.0f))
+        {
+            return 0.0f;
+        }
+        return mirrored;
+    }
+
+    private static int ResolveOutputViewIndex(List<float> yaws, float outputYaw, int pitchBaseIndex, int fallbackIndex)
+    {
+        float normalizedOutputYaw = Mathf.Repeat(outputYaw, 360.0f);
+        for (int index = 0; index < yaws.Count; index++)
+        {
+            if (Mathf.Abs(Mathf.DeltaAngle(yaws[index], normalizedOutputYaw)) < 0.001f)
+            {
+                return pitchBaseIndex + index;
+            }
+        }
+        return fallbackIndex;
+    }
+
     private static float[] ToArray(Vector3 value)
     {
         return new float[] { value.x, value.y, value.z };
+    }
+
+    private static float[] ToArray(Quaternion value)
+    {
+        return new float[] { value.x, value.y, value.z, value.w };
     }
 
     [System.Serializable]
@@ -607,10 +902,12 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         public string outputFolder = string.Empty;
         public int imageWidth = 0;
         public int imageHeight = 0;
+        public float distanceScale = 0.0f;
+        public float minDistance = 0.0f;
         public bool transparentBackground = true;
         public bool useSilhouetteMaskAlpha = true;
         public bool keyBackgroundToAlpha = false;
-        public bool exportMask = true;
+        public bool exportMask = false;
         public float backgroundKeyTolerance = 0.0f;
         public float backgroundKeySoftness = 0.0f;
         public bool useCameraProjection = true;
@@ -621,7 +918,69 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
         public float orthographicSize = 0.0f;
         public float[] targetCenter = new float[3];
         public float[] targetSize = new float[3];
+        public ModelGeometryMetadata modelGeometry = new ModelGeometryMetadata();
         public List<CaptureView> views = new List<CaptureView>();
+    }
+
+    [System.Serializable]
+    private class ModelGeometryMetadata
+    {
+        public string schemaVersion = "material_fit_model_geometry_v1";
+        public string targetName = string.Empty;
+        public string coordinateSystem = string.Empty;
+        public string boundsSpace = string.Empty;
+        public string poseSource = string.Empty;
+        public float[] targetPivot = new float[3];
+        public float[] pivotToBoundsCenter = new float[3];
+        public GeometryBoundsMetadata actualBounds = new GeometryBoundsMetadata();
+        public int rendererCount = 0;
+        public int visibleRendererCount = 0;
+        public int exactBoundsRendererCount = 0;
+        public int fallbackBoundsRendererCount = 0;
+        public int materialSlotCount = 0;
+        public int totalVertexCount = 0;
+        public long totalTriangleCount = 0;
+        public int totalSubMeshCount = 0;
+        public int boneCount = 0;
+        public List<RendererGeometryMetadata> renderers = new List<RendererGeometryMetadata>();
+        public List<BoneGeometryMetadata> bones = new List<BoneGeometryMetadata>();
+    }
+
+    [System.Serializable]
+    private class GeometryBoundsMetadata
+    {
+        public bool valid = false;
+        public float[] min = new float[3];
+        public float[] max = new float[3];
+        public float[] center = new float[3];
+        public float[] size = new float[3];
+    }
+
+    [System.Serializable]
+    private class RendererGeometryMetadata
+    {
+        public string path = string.Empty;
+        public string rendererType = string.Empty;
+        public bool enabled = false;
+        public bool activeInHierarchy = false;
+        public bool includedInActualBounds = false;
+        public string boundsSource = string.Empty;
+        public string meshName = string.Empty;
+        public string meshAssetPath = string.Empty;
+        public int vertexCount = 0;
+        public long triangleCount = 0;
+        public int subMeshCount = 0;
+        public int materialSlotCount = 0;
+    }
+
+    [System.Serializable]
+    private class BoneGeometryMetadata
+    {
+        public string path = string.Empty;
+        public string parentPath = string.Empty;
+        public float[] localPosition = new float[3];
+        public float[] localRotation = new float[4];
+        public float[] localScale = new float[3];
     }
 
     [System.Serializable]
@@ -629,6 +988,7 @@ public class MaterialFitUnityMultiViewCapture : EditorWindow
     {
         public int index = 0;
         public float yaw = 0.0f;
+        public float captureYaw = 0.0f;
         public float pitch = 0.0f;
         public string imagePath = string.Empty;
         public string fileName = string.Empty;

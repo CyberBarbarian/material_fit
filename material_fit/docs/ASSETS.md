@@ -8,6 +8,12 @@ The repository contains runtime-only Laya projects for three models:
 - `examples/turtle_laya_project/`
 - `examples/crocodile_laya_project/`
 
+Direct Unity Stage 2 references for the same model IDs are stored separately:
+
+- `examples/stage2_unity_refs/1503/`
+- `examples/stage2_unity_refs/1504/`
+- `examples/stage2_unity_refs/1506/`
+
 They contain source assets, the required compiled project bundle, and no IDE
 cache or experiment output. The fish Unity reference PNGs are in
 `examples/fish_unity_refs/`. Stage 1 start and target materials live with each
@@ -17,6 +23,9 @@ project, except the fish start/target copies, which are versioned under
 Profiles under `material_fit/assets/profiles/` identify the scene, target node,
 material node, viewport, and runtime compatibility options. The asset adapter
 normalizes every profile to the shared static eight-view contract before use.
+Stage 2 reference metadata is loaded by
+`material_fit.assets.stage2_unity_references`; it does not alter the Laya asset
+adapter or the Stage 1 target material.
 
 ## Adding an asset
 

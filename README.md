@@ -74,7 +74,8 @@ Rerun the environment check at any time:
 ```
 
 The check verifies Python, Node.js, Playwright 1.61.1, Chromium, the vendored
-LayaAir files, all three example assets, and the Stage 1 policy hashes.
+LayaAir files, all three example assets, the Stage 1 policy hashes, and all
+three Stage 2 Unity reference sets.
 
 The installation and fish Stage 1 command were verified from dependency-free
 source trees on Windows 11 and Linux x86-64. Exact run records are in
@@ -143,6 +144,18 @@ against the packaged Unity reference PNGs. `scripts/run_fish_zero_start.*` is a
 hard-start research variant: it zeros only the 16 searchable appearance
 parameters and preserves textures, UV transforms, alpha state, shader toggles,
 and render state.
+
+Real Unity Stage 2 reference sets for fish, turtle, and crocodile are isolated
+under `examples/stage2_unity_refs/`. Audit a set before material optimization:
+
+```bash
+python -m material_fit.experiments.material_cross_engine_stage2_intake \
+  --asset fish \
+  --output-dir artifacts/stage2_fish_intake
+```
+
+The Stage 2 geometry and scoring contract is documented in
+[`material_fit/docs/STAGE2.md`](material_fit/docs/STAGE2.md).
 
 Phase 0.5 material-recovery experiments remain available through
 `material_fit.experiments.material_phase05_recovery`. They are validation tools,

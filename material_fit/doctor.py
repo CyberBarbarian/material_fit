@@ -13,6 +13,10 @@ from typing import Any
 
 from material_fit.assets.fish_scene import resolve_fish_scene_assets
 from material_fit.assets.material_stage1 import resolve_material_stage1_asset
+from material_fit.assets.stage2_unity_references import (
+    audit_stage2_unity_references,
+    resolve_stage2_unity_references,
+)
 from material_fit.experiments.stage1_profiles import (
     JOINT_PROFILE_V30,
     JOINT_PROFILE_V42,
@@ -151,6 +155,25 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
         profile_detail = str(exc)
         profile_ok = False
     checks.append(_check("stage1-policy", profile_ok, profile_detail))
+
+    stage2_reports: list[dict[str, Any]] = []
+    stage2_errors: list[str] = []
+    for asset_id in ("crocodile", "fish", "turtle"):
+        try:
+            reference_set = resolve_stage2_unity_references(root, asset_id)
+            report = audit_stage2_unity_references(reference_set)
+            stage2_reports.append(report)
+            if not report["passed"]:
+                stage2_errors.extend(str(value) for value in report["structural_errors"])
+        except Exception as exc:  # noqa: BLE001 - doctor reports every failed contract
+            stage2_errors.append(f"{asset_id}: {exc}")
+    geometry_ready_count = sum(bool(report["geometry_ready"]) for report in stage2_reports)
+    stage2_detail = (
+        ", ".join(stage2_errors)
+        if stage2_errors
+        else f"3 structurally valid sets; {geometry_ready_count}/3 geometry-ready"
+    )
+    checks.append(_check("stage2-unity-references", not stage2_errors and len(stage2_reports) == 3, stage2_detail))
     return {
         "schema_version": 1,
         "repo_root": str(root),

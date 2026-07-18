@@ -1,0 +1,943 @@
+{
+  "exporterVersion": "1.1.0",
+  "exportedAtUtc": "2026-07-15T09:04:32.3874826Z",
+  "unityVersion": "2020.3.47f1c1",
+  "targetName": "1503",
+  "targetAssetPath": "Assets/Fishes/FishBoss/Prefab/boss_1503/1503.prefab",
+  "outputFolder": ".",
+  "imageWidth": 900,
+  "imageHeight": 700,
+  "distanceScale": 2.200000047683716,
+  "minDistance": 1.0,
+  "transparentBackground": true,
+  "useSilhouetteMaskAlpha": true,
+  "keyBackgroundToAlpha": false,
+  "exportMask": false,
+  "backgroundKeyTolerance": 0.019999999552965164,
+  "backgroundKeySoftness": 0.05999999865889549,
+  "useCameraProjection": false,
+  "captureMode": "rotate_target",
+  "useOrthographic": true,
+  "fieldOfView": 35.0,
+  "orthographicScale": 4.0,
+  "orthographicSize": 4.0,
+  "targetCenter": [
+    0.7439475059509277,
+    -0.2816280126571655,
+    4.994808673858643
+  ],
+  "targetSize": [
+    10.616443634033203,
+    3.249905586242676,
+    9.989617347717285
+  ],
+  "modelGeometry": {
+    "schemaVersion": "material_fit_model_geometry_v1",
+    "targetName": "1503",
+    "coordinateSystem": "laya_right_handed_x_flipped_from_unity",
+    "boundsSpace": "target_local_current_pose",
+    "poseSource": "visible_renderer_vertices",
+    "targetPivot": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pivotToBoundsCenter": [
+      -1.2686210870742798,
+      -0.2689988911151886,
+      -1.250300407409668
+    ],
+    "actualBounds": {
+      "valid": true,
+      "min": [
+        -4.714893817901611,
+        -1.2084243297576904,
+        -1.816817283630371
+      ],
+      "max": [
+        2.1776516437530518,
+        0.6704265475273132,
+        -0.6837834119796753
+      ],
+      "center": [
+        -1.2686210870742798,
+        -0.2689988911151886,
+        -1.250300407409668
+      ],
+      "size": [
+        6.892545700073242,
+        1.8788509368896484,
+        1.1330338716506958
+      ]
+    },
+    "rendererCount": 11,
+    "visibleRendererCount": 1,
+    "exactBoundsRendererCount": 1,
+    "fallbackBoundsRendererCount": 0,
+    "materialSlotCount": 16,
+    "totalVertexCount": 18218,
+    "totalTriangleCount": 10212,
+    "totalSubMeshCount": 1,
+    "boneCount": 25,
+    "renderers": [
+      {
+        "path": "1503/FishView/Adapt/DieAction/GameObject/glow",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/GameObject/smoke",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001/Bone005/lizi02_local_head",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012/Bone013/Bone014/smoke_world",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012/Bone013/smoke_local",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/lizi02_local_tail_02",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/lizi02_local_tail_01",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": false,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 2
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/lizi02_local_body_02",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/lizi02_local",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/lizi02_local_body_01",
+        "rendererType": "ParticleSystemRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": false,
+        "boundsSource": "excluded",
+        "meshName": "",
+        "meshAssetPath": "",
+        "vertexCount": 0,
+        "triangleCount": 0,
+        "subMeshCount": 0,
+        "materialSlotCount": 1
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/fish_eyu_001",
+        "rendererType": "SkinnedMeshRenderer",
+        "enabled": true,
+        "activeInHierarchy": true,
+        "includedInActualBounds": true,
+        "boundsSource": "current_pose_vertices",
+        "meshName": "fish_eyu_001",
+        "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1503/model/fish_eyu_001.FBX",
+        "vertexCount": 18218,
+        "triangleCount": 10212,
+        "subMeshCount": 1,
+        "materialSlotCount": 1
+      }
+    ],
+    "bones": [
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001/Bone003",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001",
+        "localPosition": [
+          1.0295790433883667,
+          0.2527986764907837,
+          -3.0517580285049917e-07
+        ],
+        "localRotation": [
+          -6.250562734066989e-08,
+          4.0548250979099976e-08,
+          -0.06797824054956436,
+          -0.9976868033409119
+        ],
+        "localScale": [
+          1.0000009536743164,
+          1.0000009536743164,
+          0.9999995827674866
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001/Bone005",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001",
+        "localPosition": [
+          1.3155269622802734,
+          -0.2729092836380005,
+          -7.629395071262479e-08
+        ],
+        "localRotation": [
+          -1.2146242056587653e-07,
+          -1.547196291085129e-07,
+          0.01448023784905672,
+          -0.9998951554298401
+        ],
+        "localScale": [
+          1.0000009536743164,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001/Bone005/Bone032",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001/Bone005",
+        "localPosition": [
+          0.36152592301368713,
+          0.3417271077632904,
+          3.235890062569524e-07
+        ],
+        "localRotation": [
+          2.3840171081701556e-07,
+          2.838906665303398e-09,
+          -0.011907235719263554,
+          -0.9999291300773621
+        ],
+        "localScale": [
+          0.9999998807907104,
+          0.999998927116394,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone001",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006",
+        "localPosition": [
+          -0.08235976845026016,
+          0.03716124966740608,
+          6.648587791424632e-10
+        ],
+        "localRotation": [
+          -1.1338738975519291e-10,
+          5.95704108263817e-09,
+          0.9998189210891724,
+          -0.019030733034014702
+        ],
+        "localScale": [
+          0.999998927116394,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone020",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006",
+        "localPosition": [
+          0.40309008955955505,
+          0.33560290932655334,
+          -0.7830002903938293
+        ],
+        "localRotation": [
+          -0.611290454864502,
+          -0.5315364599227905,
+          0.38237330317497253,
+          -0.4445038437843323
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007",
+        "localPosition": [
+          1.284147024154663,
+          2.914428841904737e-05,
+          -5.093169809511355e-13
+        ],
+        "localRotation": [
+          0.0,
+          0.0,
+          -0.021769987419247627,
+          -0.999763011932373
+        ],
+        "localScale": [
+          0.9999998211860657,
+          0.9999995827674866,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006",
+        "localPosition": [
+          1.3316799402236938,
+          1.724242974887602e-05,
+          -1.1768829466518582e-07
+        ],
+        "localRotation": [
+          -2.1994486093523946e-11,
+          -5.214898379790611e-08,
+          0.00042176246643066406,
+          -0.9999999403953552
+        ],
+        "localScale": [
+          0.9999992251396179,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008",
+        "localPosition": [
+          1.1651719808578491,
+          -7.62939453125e-06,
+          1.7362658866204583e-08
+        ],
+        "localRotation": [
+          -8.18721002104894e-09,
+          -9.849624449387306e-10,
+          -0.11944375187158585,
+          -0.9928410053253174
+        ],
+        "localScale": [
+          1.0000029802322388,
+          0.9999967813491821,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001",
+        "localPosition": [
+          -0.6187958121299744,
+          1.1565099811150503e-07,
+          0.14505769312381744
+        ],
+        "localRotation": [
+          0.7070627808570862,
+          0.007890229113399982,
+          0.007890229113399982,
+          -0.7070627808570862
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009",
+        "localPosition": [
+          1.3185850381851196,
+          7.934569111966994e-06,
+          7.337371954463379e-08
+        ],
+        "localRotation": [
+          0.0,
+          0.0,
+          -0.0007941545336507261,
+          -0.9999997019767761
+        ],
+        "localScale": [
+          1.0000079870224,
+          0.9999938011169434,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010",
+        "localPosition": [
+          1.2588050365447998,
+          -3.0517580853484105e-06,
+          6.921678874505233e-08
+        ],
+        "localRotation": [
+          0.0,
+          0.0,
+          0.06729964166879654,
+          -0.9977328181266785
+        ],
+        "localScale": [
+          0.9999936819076538,
+          1.0000109672546387,
+          0.9999989867210388
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone024",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009",
+        "localPosition": [
+          0.8046984672546387,
+          0.03128905966877937,
+          -0.8968438506126404
+        ],
+        "localRotation": [
+          -0.524272620677948,
+          -0.021420707926154137,
+          0.8283162117004395,
+          0.19639700651168823
+        ],
+        "localScale": [
+          1.0,
+          0.9999998807907104,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone020/Bone021",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone020",
+        "localPosition": [
+          0.7985047698020935,
+          2.1977269781814357e-08,
+          -1.367664026474813e-07
+        ],
+        "localRotation": [
+          -0.08782919496297836,
+          -0.28242117166519165,
+          0.5980739593505859,
+          -0.7448703646659851
+        ],
+        "localScale": [
+          1.0,
+          0.9999998807907104,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone016",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006",
+        "localPosition": [
+          0.4727779030799866,
+          0.3371585011482239,
+          0.782532274723053
+        ],
+        "localRotation": [
+          -0.4107719957828522,
+          0.40411481261253357,
+          -0.5744354724884033,
+          -0.5813617706298828
+        ],
+        "localScale": [
+          0.9999998807907104,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone020/Bone021/Bone022",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone020/Bone021",
+        "localPosition": [
+          0.9884274005889893,
+          6.686150868517871e-07,
+          -7.949768132675672e-08
+        ],
+        "localRotation": [
+          -0.2733719050884247,
+          0.30922338366508484,
+          0.04802960529923439,
+          -0.909583330154419
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          0.9999998211860657
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012/Bone013",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012",
+        "localPosition": [
+          1.5985219478607178,
+          -1.716614065117028e-06,
+          1.429160931820661e-07
+        ],
+        "localRotation": [
+          0.0,
+          0.0,
+          0.012737022712826729,
+          -0.9999188780784607
+        ],
+        "localScale": [
+          0.9999740719795227,
+          1.000012993812561,
+          1.0000109672546387
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011",
+        "localPosition": [
+          1.609691858291626,
+          4.5776369006489404e-07,
+          8.41416110120008e-08
+        ],
+        "localRotation": [
+          0.0,
+          0.0,
+          0.053657952696084976,
+          -0.9985593557357788
+        ],
+        "localScale": [
+          0.9999824166297913,
+          1.000012993812561,
+          1.0000009536743164
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012/Bone013/Bone014",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone010/Bone011/Bone012/Bone013",
+        "localPosition": [
+          1.4832299947738647,
+          -2.960204983537551e-05,
+          3.5365579265089764e-07
+        ],
+        "localRotation": [
+          4.7647273504480836e-07,
+          -1.8638189658304327e-08,
+          0.039087116718292236,
+          -0.9992358088493347
+        ],
+        "localScale": [
+          1.0000089406967163,
+          0.9999868869781494,
+          1.0000040531158447
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone024/Bone025/Bone026",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone024/Bone025",
+        "localPosition": [
+          0.591012179851532,
+          -4.185444169024777e-08,
+          -1.5906408634691616e-07
+        ],
+        "localRotation": [
+          -0.29371321201324463,
+          0.16050830483436584,
+          -0.6179336905479431,
+          -0.7114265561103821
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone024/Bone025",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone024",
+        "localPosition": [
+          0.78238445520401,
+          1.5981498791006743e-08,
+          -8.823823094417094e-08
+        ],
+        "localRotation": [
+          -0.0601314902305603,
+          0.06454049795866013,
+          0.6059319376945496,
+          -0.7906107306480408
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone016/Bone017/Bone018",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone016/Bone017",
+        "localPosition": [
+          0.8467385768890381,
+          -3.38256398890735e-07,
+          4.6792358432412584e-08
+        ],
+        "localRotation": [
+          0.21884849667549133,
+          0.34897086024284363,
+          -0.0744953602552414,
+          -0.9081713557243347
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone016/Bone017",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone016",
+        "localPosition": [
+          0.7958293557167053,
+          -3.0103740300546633e-07,
+          -2.213894845226605e-07
+        ],
+        "localRotation": [
+          0.09691984206438065,
+          -0.2985548973083496,
+          -0.5365066528320312,
+          -0.7833468317985535
+        ],
+        "localScale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone028",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009",
+        "localPosition": [
+          0.7066847085952759,
+          0.09190574288368225,
+          0.8568980693817139
+        ],
+        "localRotation": [
+          0.15619097650051117,
+          0.8001464605331421,
+          0.034331146627664566,
+          -0.5780929327011108
+        ],
+        "localScale": [
+          0.9999998211860657,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone028/Bone029/Bone030",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone028/Bone029",
+        "localPosition": [
+          0.6901609897613525,
+          -1.089430952561088e-06,
+          5.045550892646133e-07
+        ],
+        "localRotation": [
+          -0.5096017718315125,
+          0.5076032876968384,
+          0.37654170393943787,
+          -0.5838333368301392
+        ],
+        "localScale": [
+          1.0,
+          0.9999998211860657,
+          1.0
+        ]
+      },
+      {
+        "path": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone028/Bone029",
+        "parentPath": "1503/FishView/Adapt/DieAction/fish_syje_prefab/fish_syje/Dummy001/Bone006/Bone007/Bone008/Bone009/Bone028",
+        "localPosition": [
+          0.6847776174545288,
+          -1.8583239125291584e-07,
+          -3.676865674151486e-07
+        ],
+        "localRotation": [
+          0.20341920852661133,
+          0.20419380068778992,
+          -0.5855364799499512,
+          -0.75767582654953
+        ],
+        "localScale": [
+          1.0,
+          0.9999998807907104,
+          1.0
+        ]
+      }
+    ]
+  },
+  "views": [
+    {
+      "index": 0,
+      "yaw": 0.0,
+      "captureYaw": 0.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v000_yaw0_pitch0.png",
+      "fileName": "unity_ref_v000_yaw0_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "index": 1,
+      "yaw": 45.0,
+      "captureYaw": 315.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v001_yaw45_pitch0.png",
+      "fileName": "unity_ref_v001_yaw45_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        45.000003814697266,
+        0.0
+      ]
+    },
+    {
+      "index": 2,
+      "yaw": 90.0,
+      "captureYaw": 270.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v002_yaw90_pitch0.png",
+      "fileName": "unity_ref_v002_yaw90_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        90.0,
+        0.0
+      ]
+    },
+    {
+      "index": 3,
+      "yaw": 135.0,
+      "captureYaw": 225.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v003_yaw135_pitch0.png",
+      "fileName": "unity_ref_v003_yaw135_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        135.00001525878906,
+        0.0
+      ]
+    },
+    {
+      "index": 4,
+      "yaw": 180.0,
+      "captureYaw": 180.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v004_yaw180_pitch0.png",
+      "fileName": "unity_ref_v004_yaw180_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        180.0,
+        0.0
+      ]
+    },
+    {
+      "index": 5,
+      "yaw": 225.0,
+      "captureYaw": 135.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v005_yaw225_pitch0.png",
+      "fileName": "unity_ref_v005_yaw225_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        225.0,
+        0.0
+      ]
+    },
+    {
+      "index": 6,
+      "yaw": 270.0,
+      "captureYaw": 90.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v006_yaw270_pitch0.png",
+      "fileName": "unity_ref_v006_yaw270_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        270.0,
+        0.0
+      ]
+    },
+    {
+      "index": 7,
+      "yaw": 315.0,
+      "captureYaw": 45.0,
+      "pitch": 0.0,
+      "imagePath": "unity_ref_v007_yaw315_pitch0.png",
+      "fileName": "unity_ref_v007_yaw315_pitch0.png",
+      "maskPath": "",
+      "maskFileName": "",
+      "cameraPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cameraRotationEuler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "targetLocalRotationEuler": [
+        0.0,
+        315.0,
+        0.0
+      ]
+    }
+  ]
+}
