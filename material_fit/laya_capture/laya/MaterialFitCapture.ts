@@ -68,6 +68,7 @@ type CaptureCommand = {
     background_color?: number[] | string;
     image_format?: "png" | "raw_rgba";
     settle_frames?: number;
+    animation_mode?: "disabled" | "fixed_pose";
     freeze_animators?: boolean;
     fixed_animation_state?: string;
     fixed_animation_layer?: number;
@@ -142,6 +143,9 @@ export class MaterialFitCapture extends Laya.Script3D {
     private _referenceCache: Map<string, Uint8ClampedArray> = new Map();
 
     public onEnable(): void {
+        if ((Laya.Browser.window as any).__MATERIAL_FIT_HEADLESS_RUNTIME__ === true) {
+            return;
+        }
         (Laya.Browser.window as any).__materialFitCapture = (command: CaptureCommand) => this.capture(command);
         if (this.autoPoll) {
             Laya.timer.loop(Math.max(100, this.pollIntervalMs), this, this.pollCommand);
@@ -525,9 +529,12 @@ export class MaterialFitCapture extends Laya.Script3D {
         const normalizedTime = Number.isFinite(command.fixed_animation_time as number)
             ? Math.max(0, Math.min(1, command.fixed_animation_time as number))
             : 0;
+        const animationDisabled = command.animation_mode === "disabled";
         const states: AnimatorState[] = [];
         for (const animator of animators) {
-            const stateName = configuredStateName || this.defaultAnimationStateName(animator, layerIndex);
+            const stateName = configuredStateName || (
+                animationDisabled ? "" : this.defaultAnimationStateName(animator, layerIndex)
+            );
             const state: AnimatorState = {
                 source: animator,
                 speed: typeof animator.speed === "number" ? animator.speed : null,
@@ -536,13 +543,13 @@ export class MaterialFitCapture extends Laya.Script3D {
             };
             states.push(state);
             try {
-                if (state.enabled !== null) {
-                    animator.enabled = true;
-                }
-                if (state.sleep !== null) {
-                    animator.sleep = false;
-                }
-                if (stateName && typeof animator.play === "function") {
+                if (animationDisabled) {
+                    animator.speed = 0;
+                    if (state.sleep !== null) animator.sleep = true;
+                    if (state.enabled !== null) animator.enabled = false;
+                } else if (stateName && typeof animator.play === "function") {
+                    if (state.enabled !== null) animator.enabled = true;
+                    if (state.sleep !== null) animator.sleep = false;
                     // Laya skips sampling at speed 0. Keep the one-frame pose
                     // evaluation independent of the current frame duration.
                     animator.speed = 1e-6;

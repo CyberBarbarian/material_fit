@@ -70,10 +70,8 @@
       "width": 900,
       "height": 700,
       "alpha_source": "render_alpha",
+      "animation_mode": "disabled",
       "freeze_animators": true,
-      "fixed_animation_state": "idle1",
-      "fixed_animation_layer": 0,
-      "fixed_animation_time": 0.0,
       "restore_animators_after_capture": false,
       "freeze_scene_scripts": true,
       "visual_quality_guard": {
@@ -142,10 +140,8 @@
     "mask_alpha_threshold": 1.0,
     "flip_y": false,
     "render_texture_srgb": true,
+    "animation_mode": "disabled",
     "freeze_animators": true,
-    "fixed_animation_state": "idle1",
-    "fixed_animation_layer": 0,
-    "fixed_animation_time": 0.0,
     "restore_animators_after_capture": false,
     "views": [
       {

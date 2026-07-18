@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -94,7 +95,7 @@ def test_runtime_renderer_patches_scene_materials_before_scene_ready() -> None:
     assert text.index(scene_patch) < text.index('console.log("[material-fit] loaded scene: " + sceneUrl);')
 
 
-def test_runtime_renderer_freezes_animation_pose_for_each_view() -> None:
+def test_runtime_renderer_disables_or_samples_animation_for_each_view() -> None:
     renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
     text = renderer.read_text(encoding="utf-8")
 
@@ -105,6 +106,14 @@ def test_runtime_renderer_freezes_animation_pose_for_each_view() -> None:
     assert "const FIXED_ANIMATION_SAMPLE_SPEED = 1e-6;" in text
     assert "animator.speed = FIXED_ANIMATION_SAMPLE_SPEED;" in text
     assert "animator.speed = 1;" not in text
+    disabled_branch = text[
+        text.index('if (animationMode === "disabled")') :
+        text.index("return;", text.index('if (animationMode === "disabled")'))
+    ]
+    assert "animator.speed = 0;" in disabled_branch
+    assert "animator.sleep = true" in disabled_branch
+    assert "animator.enabled = false" in disabled_branch
+    assert "animator.play(" not in disabled_branch
     scene_open = text.index("const scene = await Laya.Scene.open(sceneUrl, false);")
     startup_disable = text.index("prepareStartupAnimators(sceneRoot);", scene_open)
     startup_settle = text.index("await waitFrames(4);", scene_open)
@@ -304,13 +313,43 @@ def test_runtime_renderer_uses_asset_profile_without_hardcoded_model_contract() 
     assert "sourceExtensionByUuid[uuid] === '.exr'" in runner_text
 
 
-def test_profile_driven_runtime_samples_default_pose_before_startup_settle() -> None:
+def test_profile_driven_runtime_disables_animation_before_startup_settle() -> None:
     renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
     text = renderer.read_text(encoding="utf-8")
 
     assert 'configuredAnimationMode(null) !== "disabled"' in text
     assert "prepareStartupAnimators(prefab);" in text
     assert 'if (animationMode === "disabled")' in text
-    assert 'animator.play(stateName, layerIndex, 0);' in text
-    assert 'startup animators sampled-at-zero count=' in text
+    assert 'runtimeProfile.animation_mode || "disabled"' in text
+    assert 'startup animators disabled count=' in text
+    assert 'globalThis.__MATERIAL_FIT_HEADLESS_RUNTIME__ = true;' in text
     assert text.index("prepareStartupAnimators(prefab);") < text.index("await waitFrames(runtimeProfile.startup_settle_frames")
+
+
+def test_packaged_capture_bundles_skip_headless_pose_presets() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    bundles = [
+        repo_root / "examples/fish_laya_project/bin/js/bundles/bundle.js",
+        repo_root / "examples/fish_laya_project/bin/js/bundles/bundle.scene.js",
+        repo_root / "examples/crocodile_laya_project/bin/js/bundles/bundle.js",
+    ]
+
+    for bundle in bundles:
+        text = bundle.read_text(encoding="utf-8")
+        assert "__MATERIAL_FIT_HEADLESS_RUNTIME__ === true" in text
+        assert 'animation_mode: "disabled"' in text
+
+
+def test_maintained_profiles_do_not_sample_asset_specific_animation_poses() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    profile_paths = [
+        repo_root / "material_fit/assets/profiles/crocodile_1503.json",
+        repo_root / "material_fit/assets/profiles/turtle_1506.json",
+    ]
+
+    for profile_path in profile_paths:
+        profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
+        defaults = profile["capture_defaults"]
+        assert defaults["animation_mode"] == "disabled"
+        assert "fixed_animation_state" not in defaults
+        assert "fixed_animation_time" not in defaults

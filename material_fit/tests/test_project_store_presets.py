@@ -44,6 +44,8 @@ def test_default_project_derives_fast_persistent_browser_score_path(tmp_path):
     assert fit_config["laya_capture"]["persistent_queue"]["width"] == 900
     assert fit_config["laya_capture"]["persistent_queue"]["height"] == 700
     assert fit_config["laya_capture"]["persistent_queue"]["alpha_source"] == "render_alpha"
+    assert fit_config["laya_capture"]["persistent_queue"]["animation_mode"] == "disabled"
+    assert "fixed_animation_state" not in fit_config["laya_capture"]["persistent_queue"]
     assert Path(fit_config["laya_capture"]["persistent_queue"]["state_dir"]).name == "persistent_queue"
     assert fit_config["laya_capture"]["persistent_queue"]["ensure_command"]
     assert fit_config["laya_capture"]["persistent_queue"]["stop_command"]

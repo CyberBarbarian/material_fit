@@ -89,6 +89,9 @@
   let animatorDiscoveryLogged = false;
   const FIXED_ANIMATION_SAMPLE_SPEED = 1e-6;
 
+  // The profile-driven renderer owns capture and pose control. Project capture
+  // scripts must not apply historical animation presets during scene loading.
+  globalThis.__MATERIAL_FIT_HEADLESS_RUNTIME__ = true;
   await loadProjectBundles();
   await installAssetManifest();
   const runtime = await createRuntimeScene();
@@ -516,7 +519,7 @@
   }
 
   function configuredAnimationMode(command) {
-    return String(command && command.animation_mode || captureDefaults.animation_mode || runtimeProfile.animation_mode || "legacy");
+    return String(command && command.animation_mode || captureDefaults.animation_mode || runtimeProfile.animation_mode || "disabled");
   }
 
   function prepareStartupAnimators(root) {
@@ -528,7 +531,7 @@
     }
     const defaultStates = animators.map((animator) => defaultAnimationStateName(animator, 0));
     console.log(
-      "[material-fit] startup animators sampled-at-zero count=" + animators.length
+      "[material-fit] startup animators disabled count=" + animators.length
       + " default_states=" + defaultStates.join(","),
     );
   }
@@ -662,21 +665,12 @@
     const configuredStateName = command && typeof command.fixed_animation_state === "string"
       ? command.fixed_animation_state
       : "";
-    const stateName = configuredStateName || (
-      animationMode === "disabled" ? defaultAnimationStateName(animator, layerIndex) : ""
-    );
+    const stateName = configuredStateName;
     if (animationMode === "disabled") {
       try {
-        if (stateName && typeof animator.play === "function") {
-          if (typeof animator.enabled === "boolean") animator.enabled = true;
-          if (typeof animator.sleep === "boolean") animator.sleep = false;
-          animator.speed = FIXED_ANIMATION_SAMPLE_SPEED;
-          animator.play(stateName, layerIndex, 0);
-        } else {
-          animator.speed = 0;
-          if (typeof animator.sleep === "boolean") animator.sleep = true;
-          if (typeof animator.enabled === "boolean") animator.enabled = false;
-        }
+        animator.speed = 0;
+        if (typeof animator.sleep === "boolean") animator.sleep = true;
+        if (typeof animator.enabled === "boolean") animator.enabled = false;
       } catch (error) {
         console.warn("[material-fit] animator disable failed: " + error);
       }

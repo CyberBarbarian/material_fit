@@ -20,6 +20,10 @@ The capture contract is fixed for every asset:
 - animation disabled before startup settling
 - white comparison background
 
+`disabled` means that the renderer sets Animator speed to zero, sleeps it, and
+disables the component without calling `Animator.play`. It does not sample a
+named animation state at time zero.
+
 The hard-state space contains 16 legal combinations derived without target
 information. The continuous space contains 40 material coordinates and six
 scene/light coordinates. V86 chooses its policy from the initial PNG score, not
@@ -54,6 +58,20 @@ Each report passed the 500 ms stable-iteration gate and contained eight target,
 optimizer-target, start, and best renders. The small score difference is normal
 for separate browser and operating-system rendering stacks; the experiment
 contract and acceptance decision were identical.
+
+## Static-pose correction
+
+An audit on 2026-07-18 found that the old runtime interpreted
+`animation_mode=disabled` as “play the default state at normalized time zero,
+then pause.” The packaged fish capture bundle also contained an older
+`idle1@0.21875` pre-freeze. Those runs remain useful as optimizer and throughput
+history, but their images are not canonical static-pose evidence.
+
+The corrected runtime never plays an animation in disabled mode. A full Windows
+fish Stage 1 run, `stage1_fish_human_png_20260718_141032`, passed with an initial
+score of `0.774138`, a best score of `0.984523`, 1,475 scored materials, and
+stable iteration mean/P50/P95 of `274.2/248.0/284.2 ms`. It emitted eight target,
+start, and best renders and left zero owned processes.
 
 ## Phase 0.5
 

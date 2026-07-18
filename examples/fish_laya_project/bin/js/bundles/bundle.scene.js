@@ -3923,6 +3923,9 @@
       this._preFrozenAnimators = [];
     }
     onEnable() {
+      if (Laya.Browser.window.__MATERIAL_FIT_HEADLESS_RUNTIME__ === true) {
+        return;
+      }
       this.prefreezeSceneForCapture();
       Laya.Browser.window.__materialFitCapture = (command) => this.capture(command);
       if (this.autoPoll) {
@@ -3945,10 +3948,8 @@
       const root = this.sceneRoot();
       const command = {
         nonce: "prefreeze",
+        animation_mode: "disabled",
         freeze_animators: true,
-        fixed_animation_state: "idle1",
-        fixed_animation_layer: 0,
-        fixed_animation_time: 0.21875,
         freeze_scene_scripts: true
       };
       this._preFrozenScripts = this.freezeSceneScripts(command, root);
@@ -4325,6 +4326,7 @@
       }
       const animators = this.collectComponents(root, layaAny.Animator);
       const stateName = typeof command.fixed_animation_state === "string" && command.fixed_animation_state.length > 0 ? command.fixed_animation_state : "";
+      const animationDisabled = command.animation_mode === "disabled";
       const layerIndex = Number.isFinite(command.fixed_animation_layer) ? Math.max(0, Math.floor(command.fixed_animation_layer)) : 0;
       const normalizedTime = Number.isFinite(command.fixed_animation_time) ? Math.max(0, Math.min(1, command.fixed_animation_time)) : 0;
       const states = [];
@@ -4337,13 +4339,13 @@
         };
         states.push(state);
         try {
-          if (state.enabled !== null) {
-            animator.enabled = true;
-          }
-          if (state.sleep !== null) {
-            animator.sleep = false;
-          }
-          if (stateName && typeof animator.play === "function") {
+          if (animationDisabled) {
+            animator.speed = 0;
+            if (state.sleep !== null) animator.sleep = true;
+            if (state.enabled !== null) animator.enabled = false;
+          } else if (stateName && typeof animator.play === "function") {
+            if (state.enabled !== null) animator.enabled = true;
+            if (state.sleep !== null) animator.sleep = false;
             animator.speed = 1e-6;
             animator.play(stateName, layerIndex, normalizedTime);
           }
