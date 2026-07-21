@@ -1,5 +1,9 @@
 # material_fit_ui
 
+The canonical, cross-platform Stage 1 workflow is the command-line wrapper
+documented in the repository root `README.md`. This UI is an auxiliary surface
+for configuring projects, launching supported jobs, and inspecting results.
+
 This directory contains the local browser UI for Material Fit Inspector:
 
 - FastAPI backend for project configs, jobs, artifacts, and image serving.

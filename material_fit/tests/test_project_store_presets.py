@@ -13,6 +13,19 @@ from tools.material_fit_ui.backend.case_loader import LoaderConfig  # noqa: E402
 from tools.material_fit_ui.backend.project_store import create_project, derive_fit_config, patch_project  # noqa: E402
 
 
+def test_persistent_queue_lifecycle_scripts_are_packaged() -> None:
+    checkout_root = Path(__file__).resolve().parents[2]
+    scripts_dir = checkout_root / "scripts"
+
+    for name in (
+        "ensure_persistent_laya_queue.ps1",
+        "stop_persistent_laya_queue.ps1",
+        "ensure_persistent_laya_queue.sh",
+        "stop_persistent_laya_queue.sh",
+    ):
+        assert (scripts_dir / name).is_file(), f"missing UI persistent-queue lifecycle script: {name}"
+
+
 def test_default_project_derives_fast_persistent_browser_score_path(tmp_path):
     config = LoaderConfig(
         project_root=tmp_path,
