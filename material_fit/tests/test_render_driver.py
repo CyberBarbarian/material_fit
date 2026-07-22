@@ -21,6 +21,31 @@ from material_fit.laya import render_driver as render_driver_module  # noqa: E40
 RenderDriver = render_driver_module.RenderDriver
 
 
+def test_reference_url_rewrite_includes_frozen_confidence_mask(tmp_path: Path) -> None:
+    command = {
+        "browser_score": {
+            "reference_images": [
+                {
+                    "view_id": "v000_yaw0_pitch0",
+                    "path": str(tmp_path / "target.png"),
+                    "confidence_mask_path": str(tmp_path / "confidence.png"),
+                }
+            ]
+        }
+    }
+
+    rewritten = render_driver_module._with_reference_image_urls(
+        command,
+        "http://127.0.0.1:1234",
+    )
+    reference = rewritten["browser_score"]["reference_images"][0]
+
+    assert reference["url"].startswith("http://127.0.0.1:1234/material-fit/reference-image")
+    assert reference["confidence_mask_url"].startswith(
+        "http://127.0.0.1:1234/material-fit/reference-image"
+    )
+
+
 def _poll_runtime_bridge_and_post(base_url: str, *, expected_nonce: str, expected_value: float) -> None:
     deadline = time.monotonic() + 3.0
     last_nonce = ""

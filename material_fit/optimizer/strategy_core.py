@@ -86,6 +86,15 @@ class OptimizerStrategy(ABC):
         """
         return True
 
+    def allows_target_distance_stop(self) -> bool:
+        """Return whether a target-score hit may terminate the strategy now.
+
+        Composite strategies override this while mandatory structural search
+        or final refinement is still incomplete.
+        """
+
+        return True
+
     def research_summary(self) -> dict[str, Any]:
         """Optional optimizer-specific research diagnostics."""
 

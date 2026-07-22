@@ -282,11 +282,13 @@ def build_strategy(
             config=material_block_trust_region_config,
         )
     if optimizer == "material_coordinate_pattern":
+        pattern_config = material_coordinate_pattern_config or {}
         return MaterialCoordinatePatternStrategy(
             initial_params=initial_params,
             shader_params=shader_params,
             search_param_names=search_param_names,
-            config=material_coordinate_pattern_config,
+            discrete_candidates=pattern_config.get("candidates"),
+            config=pattern_config,
         )
     if optimizer == "material_secant_trust_region":
         return MaterialSecantTrustRegionStrategy(

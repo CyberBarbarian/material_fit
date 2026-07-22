@@ -50,7 +50,8 @@ class MaterialBlockTrustRegionStrategy(OptimizerStrategy):
         ]
         self._block_iterations = max(int(cfg.get("block_iterations", 60)), 1)
         self._full_iterations = max(int(cfg.get("full_iterations", 360)), 1)
-        self._jacobian_config = {
+        self._jacobian_config: dict[str, Any] = {
+            "shader_default_anchor_enabled": False,
             "difference_mode": str(cfg.get("difference_mode", "forward")),
             "probe_step": float(cfg.get("probe_step", 0.025)),
             "minimum_probe_step": float(cfg.get("minimum_probe_step", 0.006)),
@@ -60,6 +61,9 @@ class MaterialBlockTrustRegionStrategy(OptimizerStrategy):
             "max_axis_update": float(cfg.get("max_axis_update", 0.18)),
             "line_search_scales": cfg.get("line_search_scales", (1.0, 0.5, 0.25, 0.125)),
         }
+        raw_jacobian = cfg.get("jacobian")
+        if isinstance(raw_jacobian, dict):
+            self._jacobian_config.update(copy.deepcopy(raw_jacobian))
 
         self._best_params = copy.deepcopy(initial_params)
         self._best_fit_score = -math.inf
@@ -106,6 +110,7 @@ class MaterialBlockTrustRegionStrategy(OptimizerStrategy):
             "block_order": [name for name, _names in self._blocks],
             "block_iterations": self._block_iterations,
             "full_iterations": self._full_iterations,
+            "jacobian_config": copy.deepcopy(self._jacobian_config),
             "active_name": self._active_name,
             "active_proposals": self._active_proposals,
             "best_fit_score": self._best_fit_score,

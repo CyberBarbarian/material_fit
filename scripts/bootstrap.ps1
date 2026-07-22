@@ -40,7 +40,7 @@ if (-not (Test-Path -LiteralPath ".venv\Scripts\python.exe")) {
 $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 Write-Host "[2/5] Installing the Python package and test dependencies."
 Invoke-Checked -Command $python -Arguments @("-m", "pip", "install", "--upgrade", "pip") -Description "pip upgrade"
-Invoke-Checked -Command $python -Arguments @("-m", "pip", "install", "-e", ".[test]") -Description "Python dependency installation"
+Invoke-Checked -Command $python -Arguments @("-m", "pip", "install", "-e", ".[test,perceptual]") -Description "Python dependency installation"
 
 Write-Host "[3/5] Installing the locked Node.js dependencies."
 Invoke-Checked -Command "npm.cmd" -Arguments @("ci") -Description "Node.js dependency installation"

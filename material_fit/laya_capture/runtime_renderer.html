@@ -81,6 +81,7 @@
   let busy = false;
   let lastColor = [0.2, 0.6, 1.0, 1.0];
   const referencePixelCache = new Map();
+  const confidenceMaskPixelCache = new Map();
   const referenceV2FeatureCache = new WeakMap();
   const referenceV4FeatureCache = new WeakMap();
   const silhouetteAlphaCache = new Map();
@@ -483,6 +484,12 @@
   }
 
   function applySceneProfile(scene, camera) {
+    if (scene && runtimeProfile.ambient_mode === "solid") {
+      const solidColorMode = Laya.AmbientMode && Laya.AmbientMode.SolidColor != null
+        ? Laya.AmbientMode.SolidColor
+        : 0;
+      scene.ambientMode = solidColorMode;
+    }
     if (scene && runtimeProfile.ambient_color) {
       scene.ambientColor = normalizedColor(runtimeProfile.ambient_color, [0.42, 0.46, 0.53, 1]);
     }
@@ -1269,6 +1276,114 @@
     return canvas;
   }
 
+  function candidateRegistrationForView(command, view, pixelWidth, pixelHeight) {
+    const browserScore = command && command.browser_score;
+    const registration = browserScore && browserScore.candidate_registration;
+    if (!registration) return null;
+    if (registration.mode !== "frozen_per_view_similarity") {
+      throw new Error("unsupported browser score candidate registration mode");
+    }
+    const transforms = Array.isArray(registration.transforms) ? registration.transforms : [];
+    const viewId = String(view && view.view_id || "");
+    const transform = transforms.find((item) => String(item && item.view_id || "") === viewId);
+    if (!transform) {
+      throw new Error(`browser score candidate registration missing transform for ${viewId}`);
+    }
+    const outputSize = Array.isArray(registration.output_size) ? registration.output_size : [];
+    const sourceWidth = Math.max(1, numberOr(outputSize[0], pixelWidth));
+    const sourceHeight = Math.max(1, numberOr(outputSize[1], pixelHeight));
+    const scale = Number(transform.scale);
+    if (!Number.isFinite(scale) || scale <= 0) {
+      throw new Error(`browser score candidate registration scale must be positive for ${viewId}`);
+    }
+    return {
+      mode: registration.mode,
+      scale,
+      dx: numberOr(transform.dx, 0) * pixelWidth / sourceWidth,
+      dy: numberOr(transform.dy, 0) * pixelHeight / sourceHeight,
+      interpolation: String(registration.interpolation || "bilinear").toLowerCase(),
+    };
+  }
+
+  function cubicWeight(value) {
+    const x = Math.abs(value);
+    const a = -0.5;
+    if (x <= 1) return (a + 2) * x * x * x - (a + 3) * x * x + 1;
+    if (x < 2) return a * x * x * x - 5 * a * x * x + 8 * a * x - 4 * a;
+    return 0;
+  }
+
+  function registerCandidatePixelsBicubic(pixels, width, height, registration) {
+    const output = new Uint8ClampedArray(width * height * 4);
+    const inverse = 1 / registration.scale;
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
+    const offsetX = centerX - (centerX + registration.dx) * inverse;
+    const offsetY = centerY - (centerY + registration.dy) * inverse;
+    for (let y = 0; y < height; y += 1) {
+      const sourceY = inverse * (y + 0.5) + offsetY - 0.5;
+      const baseY = Math.floor(sourceY);
+      for (let x = 0; x < width; x += 1) {
+        const sourceX = inverse * (x + 0.5) + offsetX - 0.5;
+        const baseX = Math.floor(sourceX);
+        const sums = [0, 0, 0, 0];
+        let weightSum = 0;
+        for (let sampleY = baseY - 1; sampleY <= baseY + 2; sampleY += 1) {
+          const weightY = cubicWeight(sourceY - sampleY);
+          if (weightY === 0) continue;
+          for (let sampleX = baseX - 1; sampleX <= baseX + 2; sampleX += 1) {
+            const weight = weightY * cubicWeight(sourceX - sampleX);
+            if (weight === 0) continue;
+            const inBounds = sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height;
+            const sourceIndex = inBounds ? (sampleY * width + sampleX) * 4 : -1;
+            sums[0] += (inBounds ? pixels[sourceIndex] : 255) * weight;
+            sums[1] += (inBounds ? pixels[sourceIndex + 1] : 255) * weight;
+            sums[2] += (inBounds ? pixels[sourceIndex + 2] : 255) * weight;
+            sums[3] += (inBounds ? pixels[sourceIndex + 3] : 255) * weight;
+            weightSum += weight;
+          }
+        }
+        const outputIndex = (y * width + x) * 4;
+        const divisor = Math.abs(weightSum) > 1e-12 ? weightSum : 1;
+        output[outputIndex] = clampByte(sums[0] / divisor);
+        output[outputIndex + 1] = clampByte(sums[1] / divisor);
+        output[outputIndex + 2] = clampByte(sums[2] / divisor);
+        output[outputIndex + 3] = clampByte(sums[3] / divisor);
+      }
+    }
+    return output;
+  }
+
+  function registerCandidatePixels(command, view, pixels, pixelWidth, pixelHeight, background) {
+    const registration = candidateRegistrationForView(command, view, pixelWidth, pixelHeight);
+    if (!registration) return { pixels, registration: null };
+    if (registration.interpolation === "bicubic") {
+      return {
+        pixels: registerCandidatePixelsBicubic(pixels, pixelWidth, pixelHeight, registration),
+        registration,
+      };
+    }
+    const source = canvasFromPixels(pixels, pixelWidth, pixelHeight);
+    const output = document.createElement("canvas");
+    output.width = pixelWidth;
+    output.height = pixelHeight;
+    const context = output.getContext("2d", { willReadFrequently: true });
+    context.fillStyle = `rgb(${background.r}, ${background.g}, ${background.b})`;
+    context.fillRect(0, 0, pixelWidth, pixelHeight);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.translate(
+      pixelWidth * 0.5 + registration.dx,
+      pixelHeight * 0.5 + registration.dy,
+    );
+    context.scale(registration.scale, registration.scale);
+    context.drawImage(source, -pixelWidth * 0.5, -pixelHeight * 0.5);
+    return {
+      pixels: context.getImageData(0, 0, pixelWidth, pixelHeight).data,
+      registration,
+    };
+  }
+
   function silhouetteCacheKey(command, view) {
     const dimensions = scoreReadbackDimensions(command);
     return [
@@ -1403,6 +1518,69 @@
     }
   }
 
+  async function postPerceptualScore(command, view, pixels, width, height) {
+    const viewId = view.view_id || "view";
+    const query = new URLSearchParams({
+      nonce: command.nonce,
+      view_id: viewId,
+      width: String(width),
+      height: String(height),
+    });
+    const body = new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+    const url = `${serverBaseUrl}/material-fit/capture-perceptual-score?${query}`;
+    let lastNetworkError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body,
+        });
+      } catch (error) {
+        lastNetworkError = error;
+        if (attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+        continue;
+      }
+      if (response.ok) return response.json();
+      const text = await response.text().catch(() => "");
+      const failure = new Error(
+        `capture-perceptual-score rejected ${response.status}: ${text.slice(0, 300)}`,
+      );
+      if (response.status < 500 || attempt === 2) throw failure;
+      lastNetworkError = failure;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+    throw lastNetworkError || new Error("capture-perceptual-score request failed");
+  }
+
+  async function postJsonWithRetry(url, payload, label) {
+    let lastNetworkError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (error) {
+        lastNetworkError = error;
+        if (attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+        continue;
+      }
+      const text = await response.text();
+      if (response.ok) return text;
+      const failure = new Error(`${label} rejected ${response.status}: ${text.slice(0, 300)}`);
+      if (response.status < 500 || attempt === 2) throw failure;
+      lastNetworkError = failure;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+    throw lastNetworkError || new Error(`${label} request failed`);
+  }
+
   function shouldEmitCaptureArtifacts(command) {
     const browserScore = command && command.browser_score;
     return !browserScore || browserScore.enabled === false || browserScore.emit_artifacts === "always";
@@ -1429,19 +1607,58 @@
     return pixels;
   }
 
-  function scorePixels(candidate, reference, command, background, scoreWidth, scoreHeight) {
+  async function loadConfidenceMaskPixels(reference, command) {
+    if (!reference || !reference.confidence_mask_url) return null;
+    const dimensions = scoreReadbackDimensions(command);
+    const cacheKey = `${reference.confidence_mask_url}|${dimensions.width}x${dimensions.height}`;
+    const cached = confidenceMaskPixelCache.get(cacheKey);
+    if (cached) return cached;
+    const response = await fetch(reference.confidence_mask_url);
+    if (!response.ok) throw new Error("confidence mask fetch failed: " + response.status);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bitmap, 0, 0, dimensions.width, dimensions.height);
+    const pixels = ctx.getImageData(0, 0, dimensions.width, dimensions.height).data;
+    if (bitmap.close) bitmap.close();
+    confidenceMaskPixelCache.set(cacheKey, pixels);
+    return pixels;
+  }
+
+  function scorePixels(candidate, reference, command, background, scoreWidth, scoreHeight, confidenceMask = null) {
     void background;
     const rgbWeight = numberOr(command && command.browser_score && command.browser_score.rgb_weight, 0.85);
     const alphaWeight = numberOr(command && command.browser_score && command.browser_score.alpha_weight, 0.15);
     const metric = command && command.browser_score && command.browser_score.metric || "browser_fast_rgba_mae_v1";
-    const useMaterialComponentsV5Strict = metric === "cross_engine_foreground_components_v5_strict_core";
-    const useMaterialComponentsV4 = useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
+    const usePerceptualScore = metric === "foreground_dists_v1"
+      || metric === "foreground_dists_material_v1"
+      || metric === "foreground_dists_aligned_rgb_v3"
+      || metric === "foreground_dists_aligned_rgb_v4"
+      || metric === "foreground_dists_aligned_rgb_v5"
+      || metric === "foreground_dists_aligned_rgb_v6";
+    const useMaterialComponentsV16Conservative = metric === "cross_engine_foreground_components_v16_conservative";
+    const useMaterialComponentsV15Balanced = useMaterialComponentsV16Conservative || metric === "cross_engine_foreground_components_v15_balanced";
+    const useMaterialComponentsV14Highlight = useMaterialComponentsV15Balanced || metric === "cross_engine_foreground_components_v14_highlight_energy";
+    const useMaterialComponentsV13Radiance = useMaterialComponentsV14Highlight || metric === "cross_engine_foreground_components_v13_radiance";
+    const useMaterialComponentsV12Chromaticity = useMaterialComponentsV13Radiance || metric === "cross_engine_foreground_components_v12_chromaticity";
+    const useMaterialComponentsV11DarkChroma = useMaterialComponentsV12Chromaticity || metric === "cross_engine_foreground_components_v11_dark_chroma";
+    const useMaterialComponentsV10SpatialHue = useMaterialComponentsV11DarkChroma || metric === "cross_engine_foreground_components_v10_spatial_hue";
+    const useMaterialComponentsV9Spatial = useMaterialComponentsV10SpatialHue || metric === "cross_engine_foreground_components_v9_spatial_luminance";
+    const useMaterialComponentsV8Texture = useMaterialComponentsV9Spatial || metric === "cross_engine_foreground_components_v8_texture_detail";
+    const useMaterialComponentsV7Blend = metric === "cross_engine_foreground_components_v7_frozen_confidence_blend";
+    const useMaterialComponentsV6Frozen = useMaterialComponentsV7Blend || metric === "cross_engine_foreground_components_v6_frozen_confidence";
+    const useMaterialComponentsV5Strict = useMaterialComponentsV6Frozen || metric === "cross_engine_foreground_components_v5_strict_core";
+    const useMaterialComponentsV4 = usePerceptualScore || useMaterialComponentsV8Texture || useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
     const useMaterialComponentsV3 = useMaterialComponentsV4 || metric === "cross_engine_foreground_components_v3";
     const useMaterialComponents = useMaterialComponentsV3 || metric === "cross_engine_foreground_components_v2";
     if (useMaterialComponentsV4) {
       const residualGridSize = Math.max(1, Math.min(32, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_grid_size, 4))));
       const residualSketchSize = Math.max(16, Math.min(256, Math.floor(numberOr(command && command.browser_score && command.browser_score.residual_sketch_size, 128))));
-      return scoreMaterialComponentsV4(
+      const frozenScore = scoreMaterialComponentsV4(
         candidate,
         reference,
         scoreWidth,
@@ -1449,7 +1666,59 @@
         residualGridSize,
         residualSketchSize,
         useMaterialComponentsV5Strict,
+        useMaterialComponentsV6Frozen ? confidenceMask : null,
+        numberOr(command && command.browser_score && command.browser_score.minimum_confidence_coverage, 0.95),
+        useMaterialComponentsV8Texture,
+        useMaterialComponentsV9Spatial,
+        useMaterialComponentsV10SpatialHue,
+        useMaterialComponentsV11DarkChroma,
+        useMaterialComponentsV12Chromaticity,
+        useMaterialComponentsV13Radiance,
+        useMaterialComponentsV14Highlight,
+        useMaterialComponentsV15Balanced,
+        useMaterialComponentsV16Conservative,
       );
+      if (!useMaterialComponentsV7Blend) return frozenScore;
+      const fullScore = scoreMaterialComponentsV4(
+        candidate,
+        reference,
+        scoreWidth,
+        scoreHeight,
+        residualGridSize,
+        residualSketchSize,
+        true,
+        null,
+      );
+      const frozenWeight = 0.75;
+      const fullWeight = 0.25;
+      const fitScore = clamp01(
+        frozenWeight * frozenScore.fit_score + fullWeight * fullScore.fit_score,
+      );
+      const componentNames = [
+        "foreground_rgb",
+        "color_distribution",
+        "chroma_hue",
+        "luminance_structure",
+        "detail_texture",
+        "highlight_emission",
+      ];
+      const materialComponents = {};
+      for (const name of componentNames) {
+        materialComponents[name] = clamp01(
+          frozenWeight * numberOr(frozenScore.material_components && frozenScore.material_components[name], 0)
+          + fullWeight * numberOr(fullScore.material_components && fullScore.material_components[name], 0),
+        );
+      }
+      return {
+        ...frozenScore,
+        fit_score: fitScore,
+        diff_score: 1 - fitScore,
+        material_components: materialComponents,
+        frozen_confidence_fit_score: frozenScore.fit_score,
+        full_foreground_fit_score: fullScore.fit_score,
+        frozen_confidence_weight: frozenWeight,
+        full_foreground_weight: fullWeight,
+      };
     }
     const n = Math.min(candidate.length, reference.length);
     const preparedReference = useMaterialComponents ? prepareMaterialReference(reference) : null;
@@ -1842,6 +2111,17 @@
     residualGridSize = 4,
     residualSketchSize = 128,
     strictCanvasCore = false,
+    frozenConfidencePixels = null,
+    minimumFrozenCoverage = 0.95,
+    useTextureDetailDistribution = false,
+    useSpatialLuminanceLayout = false,
+    useSpatialHueMass = false,
+    useSpatialDarkChroma = false,
+    useSpatialChromaticity = false,
+    useSpatialRadiance = false,
+    useSpatialHighlight = false,
+    useBalancedMaterialScore = false,
+    useConservativeMaterialScore = false,
   ) {
     const referencePrepared = prepareExactMaterialPixels(reference, width, height, true);
     const candidatePrepared = prepareExactMaterialPixels(candidate, width, height, false);
@@ -1862,7 +2142,23 @@
       1,
       Math.min(referencePrepared.foregroundCount, candidatePrepared.foregroundCount),
     );
-    const core = erodeBinaryMask(intersection, width, height, 2);
+    let frozenConfidenceCount = 0;
+    let candidateConfidenceCount = 0;
+    let core;
+    if (frozenConfidencePixels) {
+      core = new Uint8Array(pixelCount);
+      for (let index = 0; index < pixelCount; index += 1) {
+        const confidenceIndex = index * 4;
+        if (frozenConfidencePixels[confidenceIndex] < 128) continue;
+        frozenConfidenceCount += 1;
+        if (referencePrepared.foreground[index] !== 0 && candidatePrepared.foreground[index] !== 0) {
+          core[index] = 1;
+          candidateConfidenceCount += 1;
+        }
+      }
+    } else {
+      core = erodeBinaryMask(intersection, width, height, 2);
+    }
     let coreCount = 0;
     let rgbErrorSum = 0;
     const referenceChromaOpponentSums = [0, 0, 0];
@@ -1914,14 +2210,23 @@
       referencePrepared.foregroundCount,
       candidatePrepared.foregroundCount,
     );
-    const minimumCoreBasisPixels = strictCanvasCore
-      ? pixelCount
-      : minimumForegroundPixels;
+    const minimumCoreBasisPixels = frozenConfidencePixels
+      ? frozenConfidenceCount
+      : strictCanvasCore
+        ? pixelCount
+        : minimumForegroundPixels;
     const minimumCorePixels = Math.max(
       256,
       Math.floor(0.02 * minimumCoreBasisPixels),
     );
-    if (coreCount < minimumCorePixels || overlapCoefficient < 0.75) {
+    const candidateConfidenceCoverage = frozenConfidencePixels
+      ? candidateConfidenceCount / Math.max(1, frozenConfidenceCount)
+      : null;
+    if (
+      coreCount < minimumCorePixels
+      || overlapCoefficient < 0.75
+      || (frozenConfidencePixels && candidateConfidenceCoverage < minimumFrozenCoverage)
+    ) {
       return {
         fit_score: 0,
         diff_score: 1,
@@ -1932,15 +2237,34 @@
         mask_iou: intersectionCount / Math.max(1, unionCount),
         trusted_core_pixels: coreCount,
         minimum_trusted_core_pixels: minimumCorePixels,
-        minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground",
+        minimum_core_basis: frozenConfidencePixels
+          ? "frozen_confidence"
+          : strictCanvasCore
+            ? "full_canvas"
+            : "minimum_foreground",
         minimum_core_basis_pixels: minimumCoreBasisPixels,
+        frozen_confidence_pixels: frozenConfidenceCount || null,
+        active_confidence_pixels: candidateConfidenceCount || null,
+        candidate_confidence_coverage: candidateConfidenceCoverage,
+        minimum_candidate_confidence_coverage: frozenConfidencePixels
+          ? minimumFrozenCoverage
+          : null,
         minimum_foreground_pixels: minimumForegroundPixels,
         reference_foreground_pixels: referencePrepared.foregroundCount,
         candidate_foreground_pixels: candidatePrepared.foregroundCount,
       };
     }
+    const referenceMaterialPrepared = frozenConfidencePixels
+      ? prepareMaskedExactMaterialPixels(referencePrepared, core)
+      : referencePrepared;
+    const candidateMaterialPrepared = frozenConfidencePixels
+      ? prepareMaskedExactMaterialPixels(candidatePrepared, core)
+      : candidatePrepared;
     const foregroundRgbError = rgbErrorSum / coreCount;
-    const colorDistributionError = exactColorDistributionError(referencePrepared, candidatePrepared);
+    const colorDistributionError = exactColorDistributionError(
+      referenceMaterialPrepared,
+      candidateMaterialPrepared,
+    );
     const luminanceStructureError = exactMultiscaleLuminanceError(
       referencePrepared.maskedLuma,
       candidatePrepared.maskedLuma,
@@ -1956,9 +2280,9 @@
       height,
     );
     const highlightEmissionError = exactHighlightError(
-      referencePrepared.foregroundLuma,
-      candidatePrepared.foregroundLuma,
-      referencePrepared.foregroundLumaSorted,
+      referenceMaterialPrepared.foregroundLuma,
+      candidateMaterialPrepared.foregroundLuma,
+      referenceMaterialPrepared.foregroundLumaSorted,
     );
     const referenceChromaOpponentMeans = referenceChromaOpponentSums.map((value) => value / coreCount);
     const candidateChromaOpponentMeans = candidateChromaOpponentSums.map((value) => value / coreCount);
@@ -1980,14 +2304,363 @@
       detail_texture: clamp01(1 - detailTextureError),
       highlight_emission: clamp01(1 - highlightEmissionError),
     };
-    const fitScore = clamp01(
-      0.30 * materialComponents.foreground_rgb
-      + 0.15 * materialComponents.color_distribution
-      + 0.25 * materialComponents.chroma_hue
-      + 0.12 * materialComponents.luminance_structure
-      + 0.08 * materialComponents.detail_texture
-      + 0.10 * materialComponents.highlight_emission,
-    );
+    let textureDetail = null;
+    let textureDetailResiduals = [];
+    if (useTextureDetailDistribution) {
+      const referenceDescriptor = exactTextureDetailDescriptor(referencePrepared, width, height);
+      const candidateDescriptor = exactTextureDetailDescriptor(candidatePrepared, width, height);
+      textureDetailResiduals = candidateDescriptor.map(
+        (value, index) => Math.log((value + 0.005) / (referenceDescriptor[index] + 0.005)),
+      );
+      const logRatioError = textureDetailResiduals.reduce(
+        (sum, value) => sum + Math.abs(value),
+        0,
+      ) / Math.max(textureDetailResiduals.length, 1);
+      materialComponents.texture_detail_distribution = clamp01(Math.exp(-1.2 * logRatioError));
+      textureDetail = {
+        metric: "foreground_texture_quantiles_v1",
+        log_ratio_error: logRatioError,
+        reference_descriptor: referenceDescriptor,
+        candidate_descriptor: candidateDescriptor,
+      };
+    }
+    let spatialLuminance = null;
+    if (useSpatialLuminanceLayout) {
+      const referenceSpatial = exactSpatialLuminanceDescriptor(referencePrepared, width, height);
+      const candidateSpatial = exactSpatialLuminanceDescriptor(candidatePrepared, width, height);
+      let darkDistributionError = 0;
+      for (let index = 0; index < referenceSpatial.dark_distribution.length; index += 1) {
+        darkDistributionError += Math.abs(
+          candidateSpatial.dark_distribution[index] - referenceSpatial.dark_distribution[index],
+        );
+      }
+      darkDistributionError *= 0.5;
+      let spatialLuminanceError = 0;
+      let spatialLuminanceValues = 0;
+      let validCellCount = 0;
+      for (let cell = 0; cell < referenceSpatial.occupancy.length; cell += 1) {
+        if (referenceSpatial.occupancy[cell] <= 0.15 || candidateSpatial.occupancy[cell] <= 0.15) continue;
+        validCellCount += 1;
+        const featureIndex = cell * 3;
+        for (let offset = 0; offset < 3; offset += 1) {
+          spatialLuminanceError += Math.abs(
+            candidateSpatial.luminance_quantiles[featureIndex + offset]
+            - referenceSpatial.luminance_quantiles[featureIndex + offset],
+          );
+          spatialLuminanceValues += 1;
+        }
+      }
+      spatialLuminanceError = spatialLuminanceValues > 0
+        ? spatialLuminanceError / spatialLuminanceValues
+        : 1;
+      const darkDistributionScore = clamp01(Math.exp(-4 * darkDistributionError));
+      const spatialLuminanceScore = clamp01(Math.exp(-3 * spatialLuminanceError));
+      materialComponents.spatial_luminance_layout = clamp01(
+        0.65 * darkDistributionScore + 0.35 * spatialLuminanceScore,
+      );
+      spatialLuminance = {
+        metric: "model_relative_spatial_luminance_v1",
+        grid: [4, 6],
+        dark_distribution_error: darkDistributionError,
+        spatial_luminance_error: spatialLuminanceError,
+        dark_distribution_score: darkDistributionScore,
+        spatial_luminance_score: spatialLuminanceScore,
+        valid_cell_count: validCellCount,
+        reference_dark_distribution: referenceSpatial.dark_distribution,
+        candidate_dark_distribution: candidateSpatial.dark_distribution,
+      };
+    }
+    let spatialHueMass = null;
+    let spatialHueResiduals = [];
+    if (useSpatialHueMass) {
+      const referenceHueMass = exactSpatialHueMassDescriptor(referencePrepared, width, height);
+      const candidateHueMass = exactSpatialHueMassDescriptor(candidatePrepared, width, height);
+      spatialHueResiduals = candidateHueMass.map(
+        (value, index) => value - referenceHueMass[index],
+      );
+      const hueMassError = 0.5 * spatialHueResiduals.reduce(
+        (sum, value) => sum + Math.abs(value),
+        0,
+      );
+      materialComponents.spatial_hue_mass = clamp01(Math.exp(-5 * hueMassError));
+      spatialHueMass = {
+        metric: "model_relative_spatial_hue_mass_v1",
+        grid: [4, 6],
+        hue_bins: 12,
+        hue_mass_error: hueMassError,
+        hue_mass_score: materialComponents.spatial_hue_mass,
+        reference_descriptor: referenceHueMass,
+        candidate_descriptor: candidateHueMass,
+      };
+    }
+    let spatialDarkChroma = null;
+    let spatialDarkChromaResiduals = [];
+    if (useSpatialDarkChroma) {
+      const referenceDarkChroma = exactSpatialDarkChromaDescriptor(referencePrepared, width, height);
+      const candidateDarkChroma = exactSpatialDarkChromaDescriptor(candidatePrepared, width, height);
+      spatialDarkChromaResiduals = candidateDarkChroma.map(
+        (value, index) => value - referenceDarkChroma[index],
+      );
+      const darkChromaError = spatialDarkChromaResiduals.reduce(
+        (sum, value) => sum + Math.abs(value),
+        0,
+      );
+      materialComponents.spatial_dark_chroma = clamp01(Math.exp(-8 * darkChromaError));
+      spatialDarkChroma = {
+        metric: "model_relative_spatial_dark_chroma_v1",
+        grid: [4, 6],
+        dark_chroma_error: darkChromaError,
+        dark_chroma_score: materialComponents.spatial_dark_chroma,
+        reference_descriptor: referenceDarkChroma,
+        candidate_descriptor: candidateDarkChroma,
+      };
+    }
+    let spatialChromaticity = null;
+    let spatialChromaticityResiduals = [];
+    if (useSpatialChromaticity) {
+      const referenceChromaticity = exactSpatialChromaticityDescriptor(referencePrepared, width, height);
+      const candidateChromaticity = exactSpatialChromaticityDescriptor(candidatePrepared, width, height);
+      let chromaticityError = 0;
+      let chromaticityValues = 0;
+      let validCellCount = 0;
+      for (let cell = 0; cell < referenceChromaticity.occupancy.length; cell += 1) {
+        if (referenceChromaticity.occupancy[cell] <= 0.15 || candidateChromaticity.occupancy[cell] <= 0.15) continue;
+        validCellCount += 1;
+        const featureIndex = cell * 9;
+        for (let offset = 0; offset < 9; offset += 1) {
+          const residual = candidateChromaticity.quantiles[featureIndex + offset]
+            - referenceChromaticity.quantiles[featureIndex + offset];
+          spatialChromaticityResiduals.push(residual);
+          chromaticityError += Math.abs(residual);
+          chromaticityValues += 1;
+        }
+      }
+      chromaticityError = chromaticityValues > 0 ? chromaticityError / chromaticityValues : 1;
+      materialComponents.spatial_chromaticity = clamp01(Math.exp(-6 * chromaticityError));
+      spatialChromaticity = {
+        metric: "model_relative_spatial_rgb_chromaticity_v1",
+        grid: [4, 6],
+        quantiles: [0.25, 0.50, 0.75],
+        chromaticity_error: chromaticityError,
+        chromaticity_score: materialComponents.spatial_chromaticity,
+        valid_cell_count: validCellCount,
+        reference_descriptor: referenceChromaticity.quantiles,
+        candidate_descriptor: candidateChromaticity.quantiles,
+      };
+    }
+    let spatialRadiance = null;
+    let spatialRadianceResiduals = [];
+    if (useSpatialRadiance) {
+      const referenceRadiance = exactSpatialRadianceDescriptor(referencePrepared, width, height);
+      const candidateRadiance = exactSpatialRadianceDescriptor(candidatePrepared, width, height);
+      let radianceError = 0;
+      let radianceValues = 0;
+      let validCellCount = 0;
+      for (let cell = 0; cell < referenceRadiance.occupancy.length; cell += 1) {
+        if (referenceRadiance.occupancy[cell] <= 0.15 || candidateRadiance.occupancy[cell] <= 0.15) continue;
+        validCellCount += 1;
+        const featureIndex = cell * 15;
+        for (let offset = 0; offset < 15; offset += 1) {
+          const residual = candidateRadiance.quantiles[featureIndex + offset]
+            - referenceRadiance.quantiles[featureIndex + offset];
+          spatialRadianceResiduals.push(residual);
+          radianceError += Math.abs(residual);
+          radianceValues += 1;
+        }
+      }
+      radianceError = radianceValues > 0 ? radianceError / radianceValues : 1;
+      materialComponents.spatial_radiance = clamp01(Math.exp(-4 * radianceError));
+      spatialRadiance = {
+        metric: "model_relative_spatial_rgb_radiance_v1",
+        grid: [4, 6],
+        quantiles: [0.50, 0.75, 0.90, 0.95, 0.99],
+        radiance_error: radianceError,
+        radiance_score: materialComponents.spatial_radiance,
+        valid_cell_count: validCellCount,
+        reference_descriptor: referenceRadiance.quantiles,
+        candidate_descriptor: candidateRadiance.quantiles,
+      };
+    }
+    let spatialHighlightEnergy = null;
+    let spatialHighlightResiduals = [];
+    if (useSpatialHighlight) {
+      const referenceSortedLuma = referencePrepared.foregroundLumaSorted
+        || [...referencePrepared.foregroundLuma].sort((a, b) => a - b);
+      const thresholds = [0.75, 0.90, 0.95].map(
+        (quantile) => linearQuantile(referenceSortedLuma, quantile),
+      );
+      const referenceHighlight = exactSpatialHighlightDescriptor(
+        referencePrepared,
+        width,
+        height,
+        thresholds,
+      );
+      const candidateHighlight = exactSpatialHighlightDescriptor(
+        candidatePrepared,
+        width,
+        height,
+        thresholds,
+      );
+      let areaError = 0;
+      let energyError = 0;
+      let featureCount = 0;
+      let validCellCount = 0;
+      for (let cell = 0; cell < referenceHighlight.occupancy.length; cell += 1) {
+        if (referenceHighlight.occupancy[cell] <= 0.15 || candidateHighlight.occupancy[cell] <= 0.15) continue;
+        validCellCount += 1;
+        const featureIndex = cell * 3;
+        for (let offset = 0; offset < 3; offset += 1) {
+          const areaResidual = candidateHighlight.area[featureIndex + offset]
+            - referenceHighlight.area[featureIndex + offset];
+          const energyResidual = candidateHighlight.energy[featureIndex + offset]
+            - referenceHighlight.energy[featureIndex + offset];
+          spatialHighlightResiduals.push(areaResidual, 2 * energyResidual);
+          areaError += Math.abs(areaResidual);
+          energyError += Math.abs(energyResidual);
+          featureCount += 1;
+        }
+      }
+      areaError = featureCount > 0 ? areaError / featureCount : 1;
+      energyError = featureCount > 0 ? energyError / featureCount : 1;
+      materialComponents.spatial_highlight_energy = clamp01(
+        Math.exp(-3 * areaError - 8 * energyError),
+      );
+      spatialHighlightEnergy = {
+        metric: "model_relative_target_adaptive_highlight_energy_v1",
+        grid: [4, 6],
+        reference_quantiles: [0.75, 0.90, 0.95],
+        thresholds,
+        area_error: areaError,
+        energy_error: energyError,
+        highlight_score: materialComponents.spatial_highlight_energy,
+        valid_cell_count: validCellCount,
+        reference_area: referenceHighlight.area,
+        candidate_area: candidateHighlight.area,
+        reference_energy: referenceHighlight.energy,
+        candidate_energy: candidateHighlight.energy,
+      };
+    }
+    let fitScore;
+    if (useConservativeMaterialScore) {
+      const balancedComponents = [
+        materialComponents.spatial_chromaticity,
+        materialComponents.spatial_dark_chroma,
+        materialComponents.spatial_highlight_energy,
+        materialComponents.spatial_luminance_layout,
+        materialComponents.texture_detail_distribution,
+      ];
+      const componentMean = balancedComponents.reduce((sum, value) => sum + value, 0)
+        / balancedComponents.length;
+      const componentVariance = balancedComponents.reduce(
+        (sum, value) => sum + (value - componentMean) ** 2,
+        0,
+      ) / balancedComponents.length;
+      fitScore = clamp01(componentMean - Math.sqrt(componentVariance));
+    } else if (useBalancedMaterialScore) {
+      fitScore = clamp01(Math.exp(
+        0.25 * Math.log(Math.max(1e-6, materialComponents.spatial_chromaticity))
+        + 0.25 * Math.log(Math.max(1e-6, materialComponents.spatial_dark_chroma))
+        + 0.30 * Math.log(Math.max(1e-6, materialComponents.spatial_highlight_energy))
+        + 0.15 * Math.log(Math.max(1e-6, materialComponents.spatial_luminance_layout))
+        + 0.05 * Math.log(Math.max(1e-6, materialComponents.texture_detail_distribution))
+      ));
+    } else {
+      fitScore = clamp01(useSpatialHighlight
+      ? (
+        0.0221 * materialComponents.foreground_rgb
+        + 0.0130 * materialComponents.color_distribution
+        + 0.0130 * materialComponents.chroma_hue
+        + 0.0104 * materialComponents.luminance_structure
+        + 0.0052 * materialComponents.detail_texture
+        + 0.0026 * materialComponents.highlight_emission
+        + 0.0325 * materialComponents.texture_detail_distribution
+        + 0.0312 * materialComponents.spatial_luminance_layout
+        + 0.3575 * materialComponents.spatial_chromaticity
+        + 0.1625 * materialComponents.spatial_dark_chroma
+        + 0.3500 * materialComponents.spatial_highlight_energy
+      )
+      : useSpatialRadiance
+      ? (
+        0.0221 * materialComponents.foreground_rgb
+        + 0.0130 * materialComponents.color_distribution
+        + 0.0130 * materialComponents.chroma_hue
+        + 0.0104 * materialComponents.luminance_structure
+        + 0.0052 * materialComponents.detail_texture
+        + 0.0026 * materialComponents.highlight_emission
+        + 0.0325 * materialComponents.texture_detail_distribution
+        + 0.0312 * materialComponents.spatial_luminance_layout
+        + 0.3575 * materialComponents.spatial_chromaticity
+        + 0.1625 * materialComponents.spatial_dark_chroma
+        + 0.3500 * materialComponents.spatial_radiance
+      )
+      : useSpatialChromaticity
+      ? (
+        0.034 * materialComponents.foreground_rgb
+        + 0.020 * materialComponents.color_distribution
+        + 0.020 * materialComponents.chroma_hue
+        + 0.016 * materialComponents.luminance_structure
+        + 0.008 * materialComponents.detail_texture
+        + 0.004 * materialComponents.highlight_emission
+        + 0.050 * materialComponents.texture_detail_distribution
+        + 0.048 * materialComponents.spatial_luminance_layout
+        + 0.550 * materialComponents.spatial_chromaticity
+        + 0.250 * materialComponents.spatial_dark_chroma
+      )
+      : useSpatialDarkChroma
+      ? (
+        0.051425 * materialComponents.foreground_rgb
+        + 0.03025 * materialComponents.color_distribution
+        + 0.03025 * materialComponents.chroma_hue
+        + 0.0242 * materialComponents.luminance_structure
+        + 0.0121 * materialComponents.detail_texture
+        + 0.00605 * materialComponents.highlight_emission
+        + 0.075625 * materialComponents.texture_detail_distribution
+        + 0.0726 * materialComponents.spatial_luminance_layout
+        + 0.2475 * materialComponents.spatial_hue_mass
+        + 0.45 * materialComponents.spatial_dark_chroma
+      )
+      : useSpatialHueMass
+      ? (
+        0.0935 * materialComponents.foreground_rgb
+        + 0.055 * materialComponents.color_distribution
+        + 0.055 * materialComponents.chroma_hue
+        + 0.044 * materialComponents.luminance_structure
+        + 0.022 * materialComponents.detail_texture
+        + 0.011 * materialComponents.highlight_emission
+        + 0.1375 * materialComponents.texture_detail_distribution
+        + 0.132 * materialComponents.spatial_luminance_layout
+        + 0.45 * materialComponents.spatial_hue_mass
+      )
+      : useSpatialLuminanceLayout
+      ? (
+        0.17 * materialComponents.foreground_rgb
+        + 0.10 * materialComponents.color_distribution
+        + 0.10 * materialComponents.chroma_hue
+        + 0.08 * materialComponents.luminance_structure
+        + 0.04 * materialComponents.detail_texture
+        + 0.02 * materialComponents.highlight_emission
+        + 0.25 * materialComponents.texture_detail_distribution
+        + 0.24 * materialComponents.spatial_luminance_layout
+      )
+      : useTextureDetailDistribution
+      ? (
+        0.22 * materialComponents.foreground_rgb
+        + 0.13 * materialComponents.color_distribution
+        + 0.15 * materialComponents.chroma_hue
+        + 0.10 * materialComponents.luminance_structure
+        + 0.05 * materialComponents.detail_texture
+        + 0.03 * materialComponents.highlight_emission
+        + 0.32 * materialComponents.texture_detail_distribution
+      )
+      : (
+        0.30 * materialComponents.foreground_rgb
+        + 0.15 * materialComponents.color_distribution
+        + 0.25 * materialComponents.chroma_hue
+        + 0.12 * materialComponents.luminance_structure
+        + 0.08 * materialComponents.detail_texture
+        + 0.10 * materialComponents.highlight_emission
+      ));
+    }
     const residualFeatures = Array.from(residualSums, (value, index) => {
       const weight = residualWeights[Math.floor(index / 3)];
       return weight > 0 ? value / weight : 0;
@@ -2002,21 +2675,47 @@
       rgb_mae: foregroundRgbError,
       alpha_mae: 0,
       material_components: materialComponents,
+      texture_detail: textureDetail,
+      spatial_luminance: spatialLuminance,
+      spatial_hue_mass: spatialHueMass,
+      spatial_dark_chroma: spatialDarkChroma,
+      spatial_chromaticity: spatialChromaticity,
+      spatial_radiance: spatialRadiance,
+      spatial_highlight_energy: spatialHighlightEnergy,
       chroma_opponent_residuals: chromaOpponentResiduals,
       geometry_valid: true,
       foreground_overlap_coefficient: overlapCoefficient,
       mask_iou: intersectionCount / Math.max(1, unionCount),
       trusted_core_pixels: coreCount,
       minimum_trusted_core_pixels: minimumCorePixels,
-      minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground",
+      minimum_core_basis: frozenConfidencePixels
+        ? "frozen_confidence"
+        : strictCanvasCore
+          ? "full_canvas"
+          : "minimum_foreground",
       minimum_core_basis_pixels: minimumCoreBasisPixels,
+      frozen_confidence_pixels: frozenConfidenceCount || null,
+      active_confidence_pixels: candidateConfidenceCount || null,
+      candidate_confidence_coverage: candidateConfidenceCoverage,
+      minimum_candidate_confidence_coverage: frozenConfidencePixels
+        ? minimumFrozenCoverage
+        : null,
       minimum_foreground_pixels: minimumForegroundPixels,
       reference_foreground_pixels: referencePrepared.foregroundCount,
       candidate_foreground_pixels: candidatePrepared.foregroundCount,
       foreground_weight_sum: coreCount,
       residual_grid_size: residualGridSize,
       residual_sketch_size: residualSketchSize,
-      residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals),
+      residual_features: residualFeatures.concat(
+        residualSketchFeatures,
+        chromaOpponentResiduals,
+        textureDetailResiduals,
+        spatialHueResiduals,
+        spatialDarkChromaResiduals,
+        spatialChromaticityResiduals,
+        spatialRadianceResiduals,
+        spatialHighlightResiduals,
+      ),
     };
   }
 
@@ -2111,6 +2810,462 @@
       current = next;
     }
     return current;
+  }
+
+  function exactTextureDetailDescriptor(prepared, width, height) {
+    if (prepared.textureDetailDescriptor) return prepared.textureDetailDescriptor;
+    let mask = erodeBinaryMask(prepared.foreground, width, height, 8);
+    let maskCount = 0;
+    for (const value of mask) maskCount += value;
+    if (maskCount < 256) mask = prepared.foreground;
+    const gradient = [];
+    const highPass = [];
+    const laplacian = [];
+    const luma = prepared.maskedLuma;
+    for (let y = 1; y < height - 1; y += 1) {
+      const row = y * width;
+      for (let x = 1; x < width - 1; x += 1) {
+        const index = row + x;
+        if (mask[index] === 0) continue;
+        const northWest = luma[index - width - 1];
+        const north = luma[index - width];
+        const northEast = luma[index - width + 1];
+        const west = luma[index - 1];
+        const center = luma[index];
+        const east = luma[index + 1];
+        const southWest = luma[index + width - 1];
+        const south = luma[index + width];
+        const southEast = luma[index + width + 1];
+        const gradientX = (
+          northEast + 2 * east + southEast - northWest - 2 * west - southWest
+        ) / 8;
+        const gradientY = (
+          southWest + 2 * south + southEast - northWest - 2 * north - northEast
+        ) / 8;
+        const gaussian = (
+          northWest + 2 * north + northEast
+          + 2 * west + 4 * center + 2 * east
+          + southWest + 2 * south + southEast
+        ) / 16;
+        gradient.push(Math.hypot(gradientX, gradientY));
+        highPass.push(Math.abs(center - gaussian));
+        laplacian.push(Math.abs(north + south + west + east - 4 * center) / 4);
+      }
+    }
+    const quantiles = [0.50, 0.75, 0.90, 0.95, 0.99];
+    const descriptor = [];
+    for (const values of [gradient, highPass, laplacian]) {
+      values.sort((a, b) => a - b);
+      for (const quantile of quantiles) descriptor.push(linearQuantile(values, quantile));
+    }
+    prepared.textureDetailDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialLuminanceDescriptor(prepared, width, height) {
+    if (prepared.spatialLuminanceDescriptor) return prepared.spatialLuminanceDescriptor;
+    const rows = 4;
+    const columns = 6;
+    const cellCount = rows * columns;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const sortedLuma = prepared.foregroundLumaSorted
+      || [...prepared.foregroundLuma].sort((a, b) => a - b);
+    const q10 = linearQuantile(sortedLuma, 0.10);
+    const q50 = linearQuantile(sortedLuma, 0.50);
+    const darkScale = Math.max(0.05, q50 - q10);
+    const darkDistribution = new Array(cellCount).fill(0);
+    const luminanceByCell = Array.from({ length: cellCount }, () => []);
+    const foregroundByCell = new Uint32Array(cellCount);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const cell = row * columns + column;
+      const luma = prepared.maskedLuma[index];
+      foregroundByCell[cell] += 1;
+      luminanceByCell[cell].push(luma);
+      darkDistribution[cell] += clamp01((q50 - luma) / darkScale);
+    }
+    const occupancy = new Array(cellCount).fill(0);
+    const luminanceQuantiles = new Array(cellCount * 3).fill(0);
+    let darkTotal = 0;
+    for (let row = 0; row < rows; row += 1) {
+      const cellY0 = y0 + Math.floor((y1 - y0) * row / rows);
+      const cellY1 = y0 + Math.floor((y1 - y0) * (row + 1) / rows);
+      for (let column = 0; column < columns; column += 1) {
+        const cellX0 = x0 + Math.floor((x1 - x0) * column / columns);
+        const cellX1 = x0 + Math.floor((x1 - x0) * (column + 1) / columns);
+        const cell = row * columns + column;
+        const area = Math.max(1, (cellY1 - cellY0) * (cellX1 - cellX0));
+        occupancy[cell] = foregroundByCell[cell] / area;
+        const values = luminanceByCell[cell];
+        if (values.length > 0) {
+          values.sort((a, b) => a - b);
+          const featureIndex = cell * 3;
+          luminanceQuantiles[featureIndex] = linearQuantile(values, 0.25);
+          luminanceQuantiles[featureIndex + 1] = linearQuantile(values, 0.50);
+          luminanceQuantiles[featureIndex + 2] = linearQuantile(values, 0.75);
+        }
+        darkTotal += darkDistribution[cell];
+      }
+    }
+    if (darkTotal > 0) {
+      for (let index = 0; index < darkDistribution.length; index += 1) {
+        darkDistribution[index] /= darkTotal;
+      }
+    }
+    const descriptor = {
+      dark_distribution: darkDistribution,
+      luminance_quantiles: luminanceQuantiles,
+      occupancy,
+    };
+    prepared.spatialLuminanceDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialHueMassDescriptor(prepared, width, height) {
+    if (prepared.spatialHueMassDescriptor) return prepared.spatialHueMassDescriptor;
+    const rows = 4;
+    const columns = 6;
+    const hueBins = 12;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const descriptor = new Array(rows * columns * hueBins).fill(0);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const rgbIndex = index * 3;
+      const red = prepared.rgb[rgbIndex];
+      const green = prepared.rgb[rgbIndex + 1];
+      const blue = prepared.rgb[rgbIndex + 2];
+      const maximum = Math.max(red, green, blue);
+      const minimum = Math.min(red, green, blue);
+      const chroma = maximum - minimum;
+      if (chroma <= 1e-6) continue;
+      let hue;
+      if (maximum === red) {
+        hue = ((green - blue) / chroma) % 6;
+        if (hue < 0) hue += 6;
+      } else if (maximum === green) {
+        hue = (blue - red) / chroma + 2;
+      } else {
+        hue = (red - green) / chroma + 4;
+      }
+      const huePosition = hue * hueBins / 6;
+      const lowerFloor = Math.floor(huePosition);
+      const lowerBin = lowerFloor % hueBins;
+      const upperFraction = huePosition - lowerFloor;
+      const base = (row * columns + column) * hueBins;
+      descriptor[base + lowerBin] += chroma * (1 - upperFraction);
+      descriptor[base + ((lowerBin + 1) % hueBins)] += chroma * upperFraction;
+    }
+    const denominator = Math.max(1, prepared.foregroundCount);
+    for (let index = 0; index < descriptor.length; index += 1) {
+      descriptor[index] /= denominator;
+    }
+    prepared.spatialHueMassDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialDarkChromaDescriptor(prepared, width, height) {
+    if (prepared.spatialDarkChromaDescriptor) return prepared.spatialDarkChromaDescriptor;
+    const rows = 4;
+    const columns = 6;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const descriptor = new Array(rows * columns).fill(0);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const rgbIndex = index * 3;
+      const red = prepared.rgb[rgbIndex];
+      const green = prepared.rgb[rgbIndex + 1];
+      const blue = prepared.rgb[rgbIndex + 2];
+      const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+      const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      descriptor[row * columns + column] += chroma * (1 - luminance) * (1 - luminance);
+    }
+    const denominator = Math.max(1, prepared.foregroundCount);
+    for (let index = 0; index < descriptor.length; index += 1) {
+      descriptor[index] /= denominator;
+    }
+    prepared.spatialDarkChromaDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialChromaticityDescriptor(prepared, width, height) {
+    if (prepared.spatialChromaticityDescriptor) return prepared.spatialChromaticityDescriptor;
+    const rows = 4;
+    const columns = 6;
+    const cellCount = rows * columns;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const channelsByCell = Array.from(
+      { length: cellCount },
+      () => [[], [], []],
+    );
+    const foregroundByCell = new Uint32Array(cellCount);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const cell = row * columns + column;
+      const rgbIndex = index * 3;
+      const red = prepared.rgb[rgbIndex];
+      const green = prepared.rgb[rgbIndex + 1];
+      const blue = prepared.rgb[rgbIndex + 2];
+      const denominator = Math.max(0.05, red + green + blue);
+      channelsByCell[cell][0].push(red / denominator);
+      channelsByCell[cell][1].push(green / denominator);
+      channelsByCell[cell][2].push(blue / denominator);
+      foregroundByCell[cell] += 1;
+    }
+    const occupancy = new Array(cellCount).fill(0);
+    const quantiles = new Array(cellCount * 9).fill(0);
+    const levels = [0.25, 0.50, 0.75];
+    for (let row = 0; row < rows; row += 1) {
+      const cellY0 = y0 + Math.floor((y1 - y0) * row / rows);
+      const cellY1 = y0 + Math.floor((y1 - y0) * (row + 1) / rows);
+      for (let column = 0; column < columns; column += 1) {
+        const cellX0 = x0 + Math.floor((x1 - x0) * column / columns);
+        const cellX1 = x0 + Math.floor((x1 - x0) * (column + 1) / columns);
+        const cell = row * columns + column;
+        const area = Math.max(1, (cellY1 - cellY0) * (cellX1 - cellX0));
+        occupancy[cell] = foregroundByCell[cell] / area;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const values = channelsByCell[cell][channel];
+          if (values.length === 0) continue;
+          values.sort((a, b) => a - b);
+          for (let level = 0; level < levels.length; level += 1) {
+            quantiles[cell * 9 + level * 3 + channel] = linearQuantile(values, levels[level]);
+          }
+        }
+      }
+    }
+    const descriptor = { quantiles, occupancy };
+    prepared.spatialChromaticityDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialRadianceDescriptor(prepared, width, height) {
+    if (prepared.spatialRadianceDescriptor) return prepared.spatialRadianceDescriptor;
+    const rows = 4;
+    const columns = 6;
+    const cellCount = rows * columns;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const histograms = Array.from(
+      { length: cellCount },
+      () => [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)],
+    );
+    const foregroundByCell = new Uint32Array(cellCount);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const cell = row * columns + column;
+      const rgbIndex = index * 3;
+      histograms[cell][0][Math.max(0, Math.min(255, Math.round(prepared.rgb[rgbIndex] * 255)))] += 1;
+      histograms[cell][1][Math.max(0, Math.min(255, Math.round(prepared.rgb[rgbIndex + 1] * 255)))] += 1;
+      histograms[cell][2][Math.max(0, Math.min(255, Math.round(prepared.rgb[rgbIndex + 2] * 255)))] += 1;
+      foregroundByCell[cell] += 1;
+    }
+    const occupancy = new Array(cellCount).fill(0);
+    const quantiles = new Array(cellCount * 15).fill(0);
+    const levels = [0.50, 0.75, 0.90, 0.95, 0.99];
+    for (let row = 0; row < rows; row += 1) {
+      const cellY0 = y0 + Math.floor((y1 - y0) * row / rows);
+      const cellY1 = y0 + Math.floor((y1 - y0) * (row + 1) / rows);
+      for (let column = 0; column < columns; column += 1) {
+        const cellX0 = x0 + Math.floor((x1 - x0) * column / columns);
+        const cellX1 = x0 + Math.floor((x1 - x0) * (column + 1) / columns);
+        const cell = row * columns + column;
+        const area = Math.max(1, (cellY1 - cellY0) * (cellX1 - cellX0));
+        const count = foregroundByCell[cell];
+        occupancy[cell] = count / area;
+        if (count === 0) continue;
+        for (let level = 0; level < levels.length; level += 1) {
+          for (let channel = 0; channel < 3; channel += 1) {
+            quantiles[cell * 15 + level * 3 + channel] = histogramLinearQuantile(
+              histograms[cell][channel],
+              count,
+              levels[level],
+            );
+          }
+        }
+      }
+    }
+    const descriptor = { quantiles, occupancy };
+    prepared.spatialRadianceDescriptor = descriptor;
+    return descriptor;
+  }
+
+  function exactSpatialHighlightDescriptor(prepared, width, height, thresholds) {
+    const cacheKey = thresholds.map((value) => Number(value).toFixed(8)).join("|");
+    if (!prepared.spatialHighlightDescriptorCache) prepared.spatialHighlightDescriptorCache = new Map();
+    const cached = prepared.spatialHighlightDescriptorCache.get(cacheKey);
+    if (cached) return cached;
+    const rows = 4;
+    const columns = 6;
+    const cellCount = rows * columns;
+    let x0 = width;
+    let y0 = height;
+    let x1 = 0;
+    let y1 = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x + 1);
+      y1 = Math.max(y1, y + 1);
+    }
+    const foregroundByCell = new Uint32Array(cellCount);
+    const area = new Float64Array(cellCount * thresholds.length);
+    const energy = new Float64Array(cellCount * thresholds.length);
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (prepared.foreground[index] === 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const column = Math.min(columns - 1, Math.floor((x - x0) * columns / Math.max(1, x1 - x0)));
+      const row = Math.min(rows - 1, Math.floor((y - y0) * rows / Math.max(1, y1 - y0)));
+      const cell = row * columns + column;
+      const luminance = prepared.maskedLuma[index];
+      foregroundByCell[cell] += 1;
+      for (let thresholdIndex = 0; thresholdIndex < thresholds.length; thresholdIndex += 1) {
+        const featureIndex = cell * thresholds.length + thresholdIndex;
+        const excess = Math.max(0, luminance - thresholds[thresholdIndex]);
+        if (luminance >= thresholds[thresholdIndex]) area[featureIndex] += 1;
+        energy[featureIndex] += excess;
+      }
+    }
+    const occupancy = new Array(cellCount).fill(0);
+    for (let row = 0; row < rows; row += 1) {
+      const cellY0 = y0 + Math.floor((y1 - y0) * row / rows);
+      const cellY1 = y0 + Math.floor((y1 - y0) * (row + 1) / rows);
+      for (let column = 0; column < columns; column += 1) {
+        const cellX0 = x0 + Math.floor((x1 - x0) * column / columns);
+        const cellX1 = x0 + Math.floor((x1 - x0) * (column + 1) / columns);
+        const cell = row * columns + column;
+        const count = foregroundByCell[cell];
+        const cellArea = Math.max(1, (cellY1 - cellY0) * (cellX1 - cellX0));
+        occupancy[cell] = count / cellArea;
+        if (count === 0) continue;
+        for (let thresholdIndex = 0; thresholdIndex < thresholds.length; thresholdIndex += 1) {
+          const featureIndex = cell * thresholds.length + thresholdIndex;
+          area[featureIndex] /= count;
+          energy[featureIndex] /= count;
+        }
+      }
+    }
+    const descriptor = { area: Array.from(area), energy: Array.from(energy), occupancy };
+    prepared.spatialHighlightDescriptorCache.set(cacheKey, descriptor);
+    return descriptor;
+  }
+
+  function prepareMaskedExactMaterialPixels(prepared, mask) {
+    const foregroundRgbHistograms = [
+      new Uint32Array(256),
+      new Uint32Array(256),
+      new Uint32Array(256),
+    ];
+    const foregroundRgbSums = [0, 0, 0];
+    const foregroundLuma = [];
+    let foregroundCount = 0;
+    for (let index = 0; index < prepared.pixelCount; index += 1) {
+      if (mask[index] === 0) continue;
+      const rgbIndex = index * 3;
+      const red = prepared.rgb[rgbIndex];
+      const green = prepared.rgb[rgbIndex + 1];
+      const blue = prepared.rgb[rgbIndex + 2];
+      const redByte = Math.max(0, Math.min(255, Math.round(red * 255)));
+      const greenByte = Math.max(0, Math.min(255, Math.round(green * 255)));
+      const blueByte = Math.max(0, Math.min(255, Math.round(blue * 255)));
+      foregroundCount += 1;
+      foregroundRgbHistograms[0][redByte] += 1;
+      foregroundRgbHistograms[1][greenByte] += 1;
+      foregroundRgbHistograms[2][blueByte] += 1;
+      foregroundRgbSums[0] += red;
+      foregroundRgbSums[1] += green;
+      foregroundRgbSums[2] += blue;
+      foregroundLuma.push(0.2126 * red + 0.7152 * green + 0.0722 * blue);
+    }
+    return {
+      foregroundCount,
+      foregroundRgbHistograms,
+      foregroundRgbSums,
+      foregroundLuma,
+      foregroundLumaSorted: [...foregroundLuma].sort((a, b) => a - b),
+    };
   }
 
   function exactColorDistributionError(referencePrepared, candidatePrepared) {
@@ -2284,8 +3439,25 @@
         ? command.browser_score.reference_images
         : [];
       const metric = command.browser_score && command.browser_score.metric || "runtime_laya_canvas_mae";
-      const useMaterialComponentsV5Strict = metric === "cross_engine_foreground_components_v5_strict_core";
-      const useMaterialComponentsV4 = useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
+      const usePerceptualScore = metric === "foreground_dists_v1"
+        || metric === "foreground_dists_material_v1"
+        || metric === "foreground_dists_aligned_rgb_v3"
+        || metric === "foreground_dists_aligned_rgb_v4"
+        || metric === "foreground_dists_aligned_rgb_v5"
+        || metric === "foreground_dists_aligned_rgb_v6";
+      const useMaterialComponentsV16Conservative = metric === "cross_engine_foreground_components_v16_conservative";
+      const useMaterialComponentsV15Balanced = useMaterialComponentsV16Conservative || metric === "cross_engine_foreground_components_v15_balanced";
+      const useMaterialComponentsV14Highlight = useMaterialComponentsV15Balanced || metric === "cross_engine_foreground_components_v14_highlight_energy";
+      const useMaterialComponentsV13Radiance = useMaterialComponentsV14Highlight || metric === "cross_engine_foreground_components_v13_radiance";
+      const useMaterialComponentsV12Chromaticity = useMaterialComponentsV13Radiance || metric === "cross_engine_foreground_components_v12_chromaticity";
+      const useMaterialComponentsV11DarkChroma = useMaterialComponentsV12Chromaticity || metric === "cross_engine_foreground_components_v11_dark_chroma";
+      const useMaterialComponentsV10SpatialHue = useMaterialComponentsV11DarkChroma || metric === "cross_engine_foreground_components_v10_spatial_hue";
+      const useMaterialComponentsV9Spatial = useMaterialComponentsV10SpatialHue || metric === "cross_engine_foreground_components_v9_spatial_luminance";
+      const useMaterialComponentsV8Texture = useMaterialComponentsV9Spatial || metric === "cross_engine_foreground_components_v8_texture_detail";
+      const useMaterialComponentsV7Blend = metric === "cross_engine_foreground_components_v7_frozen_confidence_blend";
+      const useMaterialComponentsV6Frozen = useMaterialComponentsV7Blend || metric === "cross_engine_foreground_components_v6_frozen_confidence";
+      const useMaterialComponentsV5Strict = useMaterialComponentsV6Frozen || metric === "cross_engine_foreground_components_v5_strict_core";
+      const useMaterialComponentsV4 = useMaterialComponentsV8Texture || useMaterialComponentsV5Strict || metric === "cross_engine_foreground_components_v4";
       const useMaterialComponentsV3 = useMaterialComponentsV4 || metric === "cross_engine_foreground_components_v3";
       const useWhiteArtifactScore = useMaterialComponentsV3 || metric === "cross_engine_foreground_components_v2";
       const views = command.views && command.views.length ? command.views : [{ view_id: "v000_yaw0_pitch0", yaw: 0, pitch: 0 }];
@@ -2304,10 +3476,26 @@
           applySilhouetteAlpha(staged.pixels, await cachedSilhouetteAlpha(command, view));
         }
         const background = visualBackgroundColor(command);
-        const scoreCandidatePixels = staged.pixels;
+        const registeredCandidate = registerCandidatePixels(
+          command,
+          view,
+          staged.pixels,
+          staged.width,
+          staged.height,
+          background,
+        );
+        const scoreCandidatePixels = registeredCandidate.pixels;
         const reference = refs.find((item) => item.view_id === view.view_id) || refs[i];
-        const referencePixels = await loadReferencePixels(reference, command);
-        const score = referencePixels
+        const referencePixels = usePerceptualScore
+          ? null
+          : await loadReferencePixels(reference, command);
+        const confidenceMaskPixels = useMaterialComponentsV6Frozen
+          ? await loadConfidenceMaskPixels(reference, command)
+          : null;
+        if (useMaterialComponentsV6Frozen && !confidenceMaskPixels) {
+          throw new Error(`frozen confidence metric requires a confidence mask for ${view.view_id}`);
+        }
+        let score = !usePerceptualScore && referencePixels
           ? scorePixels(
               scoreCandidatePixels,
               referencePixels,
@@ -2315,28 +3503,64 @@
               background,
               staged.width,
               staged.height,
+              confidenceMaskPixels,
             )
           : { diff_score: 1, fit_score: 0, rgb_mae: 1, alpha_mae: 1 };
+        if (usePerceptualScore) {
+          const perceptual = await postPerceptualScore(
+            command,
+            view,
+            scoreCandidatePixels,
+            staged.width,
+            staged.height,
+          );
+          score = perceptual;
+        }
         if (shouldEmitCaptureArtifacts(command)) {
           const artifactCanvas = command && command.preserve_artifact_alpha === true
-            ? canvasFromPixels(staged.pixels, staged.width, staged.height)
-            : canvasOnBackground(
-                canvasFromPixels(staged.pixels, staged.width, staged.height),
+              ? canvasFromPixels(scoreCandidatePixels, staged.width, staged.height)
+              : canvasOnBackground(
+                canvasFromPixels(scoreCandidatePixels, staged.width, staged.height),
                 background,
               );
           await postCaptureResult(command, view, artifactCanvas, score);
         }
         scoredViews.push({
           view_id: view.view_id || `v${i}`,
-          score_implementation: useWhiteArtifactScore
-            ? (useMaterialComponentsV5Strict
+          score_implementation: usePerceptualScore
+            ? metric
+            : useWhiteArtifactScore
+            ? (useMaterialComponentsV16Conservative
+              ? "cross_engine_components_v16_conservative_v1"
+              : useMaterialComponentsV15Balanced
+              ? "cross_engine_components_v15_balanced_v1"
+              : useMaterialComponentsV14Highlight
+              ? "cross_engine_components_v14_highlight_energy_v1"
+              : useMaterialComponentsV13Radiance
+              ? "cross_engine_components_v13_radiance_v1"
+              : useMaterialComponentsV12Chromaticity
+              ? "cross_engine_components_v12_chromaticity_v1"
+              : useMaterialComponentsV11DarkChroma
+              ? "cross_engine_components_v11_dark_chroma_v1"
+              : useMaterialComponentsV10SpatialHue
+              ? "cross_engine_components_v10_spatial_hue_v1"
+              : useMaterialComponentsV9Spatial
+              ? "cross_engine_components_v9_spatial_luminance_v1"
+              : useMaterialComponentsV8Texture
+              ? "cross_engine_components_v8_texture_detail_v1"
+              : useMaterialComponentsV7Blend
+              ? "cross_engine_components_v7_frozen_confidence_blend_v1"
+              : useMaterialComponentsV6Frozen
+              ? "cross_engine_components_v6_frozen_confidence_v1"
+              : useMaterialComponentsV5Strict
               ? "cross_engine_components_v5_strict_canvas_core_v1"
               : useMaterialComponentsV4
               ? "cross_engine_components_v4_python_parity_v1"
               : useMaterialComponentsV3
               ? "cross_engine_components_v3_raw_rgba_white_composite_v3"
               : "cross_engine_components_v2_raw_rgba_white_composite_v2")
-            : "legacy_raw_capture_pixels",
+              : "legacy_raw_capture_pixels",
+          candidate_registration: registeredCandidate.registration,
           ...score,
         });
       }
@@ -2363,7 +3587,9 @@
           scene_url: sceneUrl,
           project_root: projectRoot,
         },
-        score_implementation: useWhiteArtifactScore
+        score_implementation: usePerceptualScore
+          ? metric
+          : useWhiteArtifactScore
           ? (useMaterialComponentsV5Strict
             ? "cross_engine_components_v5_strict_canvas_core_v1"
             : useMaterialComponentsV4
@@ -2375,7 +3601,9 @@
         material_patch: materialPatch,
         views: scoredViews,
         structured_residual_features: {
-          profile: useMaterialComponentsV3
+          profile: usePerceptualScore
+            ? "signed_dists_feature_means_and_std_v1"
+            : useMaterialComponentsV3
             ? (useMaterialComponentsV5Strict
               ? "signed_rgb_grid_sketch_chroma_v5_strict_canvas_core"
               : useMaterialComponentsV4
@@ -2412,25 +3640,39 @@
 
   async function pollOnce() {
     if (busy) return;
-    const response = await fetch(`${serverBaseUrl}/material-fit/capture-command?last_nonce=${encodeURIComponent(lastNonce)}`);
-    if (!response.ok) return;
-    const command = commandWithProfileDefaults(await response.json());
-    if (!command || command.enabled === false || !command.nonce || command.nonce === lastNonce) return;
     busy = true;
     try {
-      lastNonce = command.nonce;
-      const browserScore = await renderAndScore(command);
-      await fetch(`${serverBaseUrl}/material-fit/capture-score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nonce: command.nonce, browser_score: browserScore }),
-      });
-    } catch (error) {
-      await fetch(`${serverBaseUrl}/material-fit/capture-log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: "error", message: String(error && error.stack || error) }),
-      }).catch(() => {});
+      let response;
+      try {
+        response = await fetch(
+          `${serverBaseUrl}/material-fit/capture-command?last_nonce=${encodeURIComponent(lastNonce)}`,
+        );
+      } catch (_) {
+        return;
+      }
+      if (!response.ok) return;
+      const command = commandWithProfileDefaults(await response.json());
+      if (!command || command.enabled === false || !command.nonce || command.nonce === lastNonce) return;
+      try {
+        const browserScore = await renderAndScore(command);
+        await postJsonWithRetry(
+          `${serverBaseUrl}/material-fit/capture-score`,
+          { nonce: command.nonce, browser_score: browserScore },
+          "capture-score",
+        );
+        lastNonce = command.nonce;
+      } catch (error) {
+        const message = String(error && error.stack || error);
+        if (message.includes("rejected 409") && message.includes("stale capture nonce")) {
+          lastNonce = command.nonce;
+          return;
+        }
+        await postJsonWithRetry(
+          `${serverBaseUrl}/material-fit/capture-log`,
+          { nonce: command.nonce, level: "error", message },
+          "capture-log",
+        ).catch(() => {});
+      }
     } finally {
       busy = false;
     }

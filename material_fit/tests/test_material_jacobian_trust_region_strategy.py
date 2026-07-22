@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from material_fit.optimizer.adjustment_algorithm import AdjustmentState
 from material_fit.optimizer.material_jacobian_trust_region_strategy import (
     MaterialJacobianTrustRegionStrategy,
@@ -82,6 +84,61 @@ def test_trust_region_evaluates_generic_shader_defaults_before_jacobian() -> Non
     assert candidate == target
     assert decision["material_jacobian_trust_region"]["role"] == "shader_default_anchor"
     assert decision["material_jacobian_trust_region"]["target_params_visible"] is False
+
+
+def test_log_coordinate_uses_multiplicative_probe_scale() -> None:
+    initial = {"u_EmissionPow": 0.0}
+    strategy = MaterialJacobianTrustRegionStrategy(
+        initial_params=initial,
+        shader_params=[ShaderParam("u_EmissionPow", "Float", default=0.0)],
+        search_param_names=["u_EmissionPow"],
+        config={"log_coordinate_ids": ["u_EmissionPow"]},
+    )
+    coordinate = strategy._coordinates[0]
+
+    candidate = strategy._write_coordinate_normalized_value(
+        coordinate,
+        initial,
+        0.05,
+    )
+
+    assert candidate["u_EmissionPow"] == pytest.approx(
+        math.expm1(0.05 * math.log1p(64.0))
+    )
+    assert candidate["u_EmissionPow"] < 0.25
+
+
+def test_linear_coordinate_preserves_legacy_probe_arithmetic() -> None:
+    initial = {"u_GammaPower": 1.0}
+    strategy = MaterialJacobianTrustRegionStrategy(
+        initial_params=initial,
+        shader_params=[
+            ShaderParam(
+                "u_GammaPower",
+                "Range",
+                default=1.0,
+                range_min=0.0001,
+                range_max=3.0,
+            )
+        ],
+        search_param_names=["u_GammaPower"],
+        config={"shader_default_anchor_enabled": False},
+    )
+    coordinate = strategy._round_coordinates[0]
+    span = max(coordinate.high - coordinate.low, 1.0e-12)
+    before = coordinate.read(initial)
+    positive_room = (coordinate.high - before) / span
+    negative_room = (before - coordinate.low) / span
+    direction = 1.0 if positive_room >= negative_room else -1.0
+    expected = coordinate.write(initial, before + direction * strategy._probe_step * span)
+    expected_delta = (coordinate.read(expected) - before) / span
+
+    candidate, decision = strategy._jacobian_probe_candidate()
+
+    assert candidate == expected
+    assert decision["material_jacobian_trust_region"]["delta_normalized"] == (
+        expected_delta
+    )
 
 
 def test_residual_merit_can_cross_a_temporary_score_valley() -> None:

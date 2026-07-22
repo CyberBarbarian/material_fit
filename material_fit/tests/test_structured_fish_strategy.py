@@ -812,6 +812,77 @@ def test_material_stage1_hybrid_skips_late_realign_above_threshold() -> None:
     assert strategy.stop_reason() == "material_stage1_hybrid_complete"
 
 
+def test_material_stage1_hybrid_can_use_secant_local_refiner() -> None:
+    pytest.importorskip("cmaes")
+    initial = {
+        "u_GammaPower": 1.0,
+        "u_RimIntensity": 1.0,
+        "u_RimWidth": 1.0,
+    }
+    shader_params = [
+        ShaderParam(name, "Float", default=float(value))
+        for name, value in initial.items()
+    ]
+    strategy = build_strategy(
+        optimizer="material_stage1_hybrid",
+        initial_params=initial,
+        shader_params=shader_params,
+        policies=build_adjustment_policies(shader_params),
+        unity_material_params={},
+        search_param_names=list(initial),
+        material_stage1_hybrid_config={
+            "block_order": ["rim"],
+            "warmup_iterations": 1,
+            "block_iterations": 1,
+            "refine_iterations": 1,
+            "late_realign_trigger_score": 0.0,
+            "local_jacobian_iterations": 1,
+            "local_jacobian_trigger_score": 1.0,
+            "local_refiner_strategy": "material_secant_trust_region",
+            "local_refiner": {
+                "design_size": 1,
+                "compressed_design": True,
+                "antithetic": False,
+            },
+            "population_size": 4,
+            "seed": 11,
+        },
+    )
+
+    current = initial
+    active_names: list[str | None] = []
+    for iteration in range(5):
+        score = 0.5 + 0.01 * iteration
+        current, decision = strategy.propose(
+            _context(
+                iteration,
+                current,
+                score,
+                {
+                    "structured_residual_features": {
+                        "features": [1.0 - score],
+                    }
+                },
+            )
+        )
+        active_names.append(decision["material_stage1_hybrid"]["active_name"])
+
+    assert active_names == [
+        "scene_and_material",
+        "rim",
+        "material_only",
+        "local_material_secant",
+        None,
+    ]
+    summary = strategy.research_summary()
+    assert summary["local_refiner_strategy"] == "material_secant_trust_region"
+    assert summary["local_jacobian_activated"] is True
+    assert summary["completed_stages"][-1]["kind"] == "local_material_refiner"
+    assert summary["completed_stages"][-1]["nested"]["profile"] == (
+        "material_secant_trust_region_v2"
+    )
+
+
 def test_material_stage1_hybrid_scalar_grid_scan_uses_online_score_only() -> None:
     pytest.importorskip("cmaes")
     initial = {

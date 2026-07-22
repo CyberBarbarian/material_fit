@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
+import importlib.util
 import json
 import platform
 import subprocess
@@ -63,6 +65,28 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
             "python",
             sys.version_info >= (3, 10),
             f"{platform.python_version()} at {sys.executable}",
+        )
+    )
+
+    perceptual_packages = ("DISTS_pytorch", "lpips", "torch", "torchvision")
+    missing_perceptual = [
+        package
+        for package in perceptual_packages
+        if importlib.util.find_spec(package) is None
+    ]
+    perceptual_detail = (
+        ", ".join(missing_perceptual)
+        if missing_perceptual
+        else ", ".join(
+            f"{package} {importlib.metadata.version(package)}"
+            for package in perceptual_packages
+        )
+    )
+    checks.append(
+        _check(
+            "stage2-perceptual",
+            not missing_perceptual,
+            perceptual_detail,
         )
     )
 

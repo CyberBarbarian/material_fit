@@ -23,6 +23,12 @@ test = [
 research = [
   "scikit-image>=0.22,<1",
 ]
+perceptual = [
+  "DISTS-pytorch==0.1",
+  "lpips>=0.1.4,<1",
+  "torch>=2.2,<3",
+  "torchvision>=0.17,<1",
+]
 ui = [
   "fastapi>=0.110,<1",
   "uvicorn[standard]>=0.27,<1",

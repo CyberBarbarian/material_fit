@@ -23,9 +23,15 @@ from material_fit.experiments.material_human_reference_stage1 import (
     _optimizer_score_resolution,
     _parse_args,
     _resolve_v86_initial_score_route,
+    _single_view_material_only_search,
+    _score_metric_after_route,
     _write_optimizer_profile,
     _write_profile,
 )
+from material_fit.experiments.single_view_v86_policy import (
+    adapt_v86_policy_for_material_only,
+)
+from material_fit.experiments.stage1_reporting import _discrete_recovery_report
 from material_fit.laya import lmat_io
 from material_fit.laya_capture.asset_profile import material_patch_from_lmat
 from material_fit.optimizer.material_discrete_space import (
@@ -36,9 +42,57 @@ from material_fit.optimizer.material_discrete_space import (
 from material_fit.optimizer.structured_material_space import (
     STRUCTURED_SCENE_PARAM_NAMES,
 )
+from material_fit.vision.dists_score import DISTS_METRIC
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_single_view_uses_requested_scene_scope() -> None:
+    assert _single_view_material_only_search(
+        view_count=1,
+        jacobian_search_scope="all",
+    ) is False
+    assert _single_view_material_only_search(
+        view_count=1,
+        jacobian_search_scope="material",
+    ) is True
+    assert _single_view_material_only_search(
+        view_count=8,
+        jacobian_search_scope="material",
+    ) is False
+
+
+def test_single_view_keeps_the_requested_unified_score_after_routing() -> None:
+    assert _score_metric_after_route(
+        single_view=True,
+        requested_metric="foreground_dists_material_v1",
+        routed_metric="cross_engine_foreground_components_v5_strict_core",
+    ) == "foreground_dists_material_v1"
+    assert _score_metric_after_route(
+        single_view=False,
+        requested_metric="foreground_dists_material_v1",
+        routed_metric="cross_engine_foreground_components_v5_strict_core",
+    ) == "cross_engine_foreground_components_v5_strict_core"
+
+
+def test_discrete_state_recovery_is_independent_of_image_threshold() -> None:
+    candidate = {
+        "candidate_id": "normal=legacy_y_invert_only|rim=0|blend_src=1",
+        "defines": {},
+        "render_states": {},
+    }
+    report = _discrete_recovery_report(
+        start_candidate=candidate,
+        target_candidate=candidate,
+        best_candidate=candidate,
+        best_score=0.99988,
+        target_discrete_audit_score=0.99988,
+        success_score=0.9999,
+    )
+
+    assert report["state_recovery_passed"] is True
+    assert report["passed"] is False
 
 
 def _write_material(path: Path, *, target: bool) -> None:
@@ -136,6 +190,21 @@ def test_v86_is_the_only_public_profile_and_routes_without_asset_names() -> None
     assert all(name not in serialized for name in ("fish", "turtle", "crocodile"))
 
 
+def test_stage1_cli_exposes_pattern_initial_grid_points() -> None:
+    args = _parse_args(
+        [
+            "--asset",
+            "fish",
+            "--pattern-initial-grid-points",
+            "5",
+            "--restrict-discrete-candidates-to-start",
+        ]
+    )
+
+    assert args.pattern_initial_grid_points == 5
+    assert args.restrict_discrete_candidates_to_start is True
+
+
 def test_v86_runtime_contract_rejects_more_than_1499_proposals() -> None:
     policy = _joint_profile_policy(JOINT_PROFILE_V86)
     with pytest.raises(ValueError, match="initial material render plus proposals"):
@@ -226,7 +295,6 @@ def test_v86_resolves_child_from_initial_png_score(
         residual_grid_size=16,
         residual_sketch_size=128,
     )
-
     assert selected_profile == expected_profile
     assert selected_iterations == 1499
     assert selected_metric == expected_metric
@@ -253,11 +321,6 @@ def test_materialized_medium_route_keeps_png_only_boundary(tmp_path: Path) -> No
     start_patch = material_patch_from_lmat(asset.start_material_path)
     candidates = build_legal_discrete_candidates(start_patch)
     start_candidate = find_candidate_for_patch(candidates, start_patch)
-    representatives, equivalence = compress_observationally_equivalent_candidates(
-        candidates,
-        start_candidate=start_candidate,
-        start_patch=start_patch,
-    )
     (
         selected_profile,
         selected_policy,
@@ -279,6 +342,10 @@ def test_materialized_medium_route_keeps_png_only_boundary(tmp_path: Path) -> No
         residual_grid_size=16,
         residual_sketch_size=128,
     )
+    selected_policy, _adaptation = adapt_v86_policy_for_material_only(
+        selected_policy,
+        scene_searchable=False,
+    )
 
     config = _build_fit_config(
         asset=asset,
@@ -287,8 +354,8 @@ def test_materialized_medium_route_keeps_png_only_boundary(tmp_path: Path) -> No
         start_material_path=asset.start_material_path,
         target_dir=tmp_path / "target_render",
         optimizer_start_patch=start_patch,
-        discrete_candidates=representatives,
-        discrete_equivalence_report=equivalence,
+        discrete_candidates=candidates,
+        discrete_equivalence_report={},
         start_candidate=start_candidate,
         target_score=0.995,
         optimizer="material_discrete_joint",
@@ -300,11 +367,12 @@ def test_materialized_medium_route_keeps_png_only_boundary(tmp_path: Path) -> No
         views=asset.profile["capture_defaults"]["views"],
         joint_profile=selected_profile,
         joint_policy_override=selected_policy,
-        optimization_score_metric=selected_metric,
+        optimization_score_metric=_adaptation["optimization_score_metric"],
         browser_score_width=selected_width,
         browser_score_height=selected_height,
         residual_grid_size=residual_grid,
         residual_sketch_size=residual_sketch,
+        material_only=True,
     )
     boundary = _optimizer_boundary_report(
         config,
@@ -313,10 +381,57 @@ def test_materialized_medium_route_keeps_png_only_boundary(tmp_path: Path) -> No
     )
 
     assert boundary["passed"] is True
-    assert tuple(config["search_param_names"]) == STAGE1_SEARCH_PARAM_NAMES
-    assert set(STRUCTURED_SCENE_PARAM_NAMES).issubset(config["search_param_names"])
-    assert len(config["material_discrete_joint"]["candidates"]) == 6
+    assert set(config["search_param_names"]).isdisjoint(STRUCTURED_SCENE_PARAM_NAMES)
+    assert len(config["material_discrete_joint"]["candidates"]) == 16
+    assert len(config["material_discrete_joint"]["initial_candidate_ids"]) == 16
     assert config["material_discrete_joint"]["max_scored_candidates"] == 1500
+    assert config["material_discrete_joint"]["activation_selects_initial_winner"] is True
+    assert config["material_discrete_joint"]["activation_commits_initial_seed"] is False
+    assert config["material_discrete_joint"][
+        "skip_initial_discrete_probes_when_activation_selects"
+    ] is True
+    assert config["material_discrete_joint"]["round_widths"] == [1]
+    assert config["material_discrete_joint"]["round_budgets"] == [1]
+    assert config["material_discrete_joint"]["round_sigmas"] == [0.18]
+    assert config["material_discrete_joint"]["branch_strategy"] == "cmaes"
+    assert config["material_discrete_joint"]["rescan_at"] == [110, 476]
+    assert config["material_discrete_joint"]["rescan_candidate_modes"] == [
+        "initial_representatives",
+        "initial_representatives",
+    ]
+    assert list(
+        config["material_discrete_joint"]["rescan_browser_score_overrides"]
+    ) == []
+    assert config["material_discrete_joint"]["minimum_final_refine_proposals"] == 0
+    assert config["material_discrete_joint"]["initial_score_rescan_schedule"] == {}
+    assert config["material_discrete_joint"]["restart_continuous_after_rescan"] is True
+    assert config["material_discrete_joint"][
+        "restart_continuous_after_first_rescan"
+    ] is False
+    warmup = config["material_discrete_joint"]["initial_continuous_warmup"]
+    assert warmup["max_proposals"] == 110
+    assert set(STRUCTURED_SCENE_PARAM_NAMES).issubset(
+        warmup["frozen_param_names"]
+    )
+    continuous = config["material_discrete_joint"]["continuous"]
+    assert set(STRUCTURED_SCENE_PARAM_NAMES).issubset(
+        continuous["frozen_param_names"]
+    )
+    final = config["material_discrete_joint"]["continuous_after_final_rescan"]
+    assert final["strategy"] == "material_coordinate_pattern"
+    assert set(STRUCTURED_SCENE_PARAM_NAMES).issubset(
+        final["frozen_param_names"]
+    )
+    assert final["pattern"]["active_coordinate_count"] == 16
+    for route in config["material_discrete_joint"][
+        "planned_proposal_budget"
+    ].values():
+        assert route["total"] == 1498
+    assert config["material_discrete_joint"]["post_rescan_axis_response_scan"][
+        "enabled"
+    ] is False
+    race = config["material_discrete_joint"]["post_rescan_branch_race"]
+    assert race["enabled"] is False
     assert config["stage1_optimizer_contract"]["target_params_visible_to_optimizer"] is False
     assert asset.target_material_path.name not in json.dumps(config)
 
@@ -328,6 +443,40 @@ def test_optimizer_score_resolution_preserves_asset_aspect_ratio() -> None:
     assert _optimizer_score_resolution(
         {"width": 800, "height": 484}, requested_width=400, requested_height=0
     ) == (400, 242)
+    assert _optimizer_score_resolution(
+        {"width": 800, "height": 484}, requested_width=450, requested_height=0
+    ) == (450, 272)
+
+
+def test_controlled_search_subset_is_not_overwritten_by_material_scope(
+    tmp_path: Path,
+) -> None:
+    asset = resolve_material_stage1_asset(REPO_ROOT, "fish")
+    profile = _write_profile(asset, tmp_path / "inputs/asset_profile.json")
+    start_patch = material_patch_from_lmat(asset.start_material_path)
+    config = _build_fit_config(
+        asset=asset,
+        profile_path=profile,
+        run_dir=tmp_path / "run",
+        start_material_path=asset.start_material_path,
+        target_dir=tmp_path / "target_render",
+        optimizer_start_patch=start_patch,
+        target_score=0.99999,
+        optimizer="material_coordinate_pattern",
+        warmup_iterations=1000,
+        block_iterations=400,
+        block_population_size=16,
+        refine_iterations=800,
+        node_modules=None,
+        views=[asset.profile["capture_defaults"]["views"][0]],
+        jacobian_search_scope="material",
+        material_only=True,
+        search_param_names_override=["u_EmissionPow"],
+    )
+
+    assert config["search_param_names"] == ["u_EmissionPow"]
+    assert config["search_param_space"] == "controlled_known_perturbation_subset_v1"
+    assert config["stage1_optimizer_contract"]["known_perturbation_search_subset"] is True
 
 
 def test_optimizer_profile_is_marked_as_proposal_only(tmp_path: Path) -> None:

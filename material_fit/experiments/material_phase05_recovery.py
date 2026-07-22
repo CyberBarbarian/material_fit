@@ -133,7 +133,7 @@ def run_recovery(
         width=PHASE05_SCORE_READBACK_WIDTH,
         height=PHASE05_SCORE_READBACK_HEIGHT,
     )
-    views = _profile_views(profile_file)
+    views = _profile_views(profile_file, expected_count=8)
 
     target_material = lmat_io.load_lmat(asset.target_material_path)
     target_params = lmat_io.extract_params(target_material)
@@ -620,6 +620,8 @@ def _build_artifact_capture_driver(
     render_states: dict[str, Any] | None = None,
     references: Path | None,
     node_modules: str | Path | None,
+    score_metric: str | None = None,
+    candidate_registration: dict[str, Any] | None = None,
 ) -> RenderDriver:
     views = _profile_views(profile_path)
     runtime: dict[str, Any] = {
@@ -639,13 +641,15 @@ def _build_artifact_capture_driver(
     if references is not None:
         browser_score = {
             "enabled": True,
-            "metric": VALIDATION_SCORE_METRIC,
+            "metric": score_metric or VALIDATION_SCORE_METRIC,
             "rgb_weight": 1.0,
             "alpha_weight": 0.0,
             "emit_artifacts": "always",
             "residual_grid_size": 16,
             "reference_images": _reference_images(references, views),
         }
+        if candidate_registration is not None:
+            browser_score["candidate_registration"] = copy.deepcopy(candidate_registration)
     return RenderDriver(
         output_dir=output_root,
         dry_run=False,
@@ -771,21 +775,29 @@ def _terminate_owned_process(proc: subprocess.Popen[Any]) -> None:
 
 def _cleanup_recorded_runtime(run_dir: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-    for record in run_dir.rglob("runtime_renderer_pid.json"):
+    for record in run_dir.rglob("fit.pid"):
         try:
-            pid = int(_read_json(record).get("pid"))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            pid = int(record.read_text(encoding="ascii").strip())
+        except (OSError, TypeError, ValueError):
             continue
         before = _pid_exists(pid)
         command_line = _process_command_line(pid)
-        if before and command_line and "run_runtime_renderer" not in command_line:
+        owned_fit = bool(
+            before
+            and command_line
+            and "material_fit.fit_material" in command_line
+            and str(run_dir) in command_line
+        )
+        if before and not owned_fit:
             checks.append(
                 {
                     "pid": pid,
                     "record": str(record),
                     "before": True,
                     "after": True,
-                    "action": "refused_non_renderer_pid",
+                    "owned_fit": False,
+                    "owned_renderer": False,
+                    "action": "pid_reused_or_identity_unverified_no_action",
                     "command_line": command_line,
                 }
             )
@@ -793,40 +805,104 @@ def _cleanup_recorded_runtime(run_dir: Path) -> dict[str, Any]:
         action = "already_stopped"
         if before:
             action = "terminated_owned_tree"
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
-            else:
-                try:
-                    os.killpg(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                _wait_for_pid_exit(pid, timeout_s=5.0)
-                if _pid_exists(pid):
-                    try:
-                        os.killpg(pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    _wait_for_pid_exit(pid, timeout_s=2.0)
+            _terminate_recorded_process(pid)
         checks.append(
             {
                 "pid": pid,
                 "record": str(record),
                 "before": before,
                 "after": _pid_exists(pid),
+                "owned_fit": owned_fit,
+                "owned_renderer": False,
+                "action": action,
+                "command_line": command_line,
+            }
+        )
+    for record in run_dir.rglob("runtime_renderer_pid.json"):
+        try:
+            pid = int(_read_json(record).get("pid"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        before = _pid_exists(pid)
+        command_line = _process_command_line(pid)
+        owned_renderer = bool(
+            before
+            and command_line
+            and "run_runtime_renderer" in command_line
+            and "material_fit" in command_line
+        )
+        if before and not owned_renderer:
+            checks.append(
+                {
+                    "pid": pid,
+                    "record": str(record),
+                    "before": True,
+                    "after": True,
+                    "owned_renderer": False,
+                    "action": "pid_reused_or_identity_unverified_no_action",
+                    "command_line": command_line,
+                }
+            )
+            continue
+        action = "already_stopped"
+        if before:
+            action = "terminated_owned_tree"
+            _terminate_recorded_process(pid)
+        checks.append(
+            {
+                "pid": pid,
+                "record": str(record),
+                "before": before,
+                "after": _pid_exists(pid),
+                "owned_renderer": owned_renderer,
                 "action": action,
                 "command_line": command_line,
             }
         )
     report_path = run_dir / "process_cleanup_report.json"
     previous = _read_json(report_path).get("checks", []) if report_path.is_file() else []
-    combined = [*previous, *checks]
+    latest_by_record: dict[str, dict[str, Any]] = {}
+    for row in [*previous, *checks]:
+        record = row.get("record")
+        if isinstance(record, str) and record:
+            latest_by_record[record] = row
+    combined = list(latest_by_record.values())
     report = {
         "contract": "owned_material_runtime_cleanup_v1",
         "checks": combined,
-        "remaining_owned_pid_count": sum(bool(row.get("after")) for row in combined),
+        "remaining_owned_pid_count": sum(
+            bool(row.get("after"))
+            and bool(row.get("owned_renderer") or row.get("owned_fit"))
+            for row in combined
+        ),
+        "pid_reuse_or_unverified_count": sum(
+            row.get("action") == "pid_reused_or_identity_unverified_no_action"
+            for row in combined
+        ),
     }
     _write_json(report_path, report)
     return report
+
+
+def _terminate_recorded_process(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True,
+            check=False,
+        )
+        return
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    _wait_for_pid_exit(pid, timeout_s=5.0)
+    if _pid_exists(pid):
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        _wait_for_pid_exit(pid, timeout_s=2.0)
 
 
 def _pid_exists(pid: int) -> bool:
@@ -855,7 +931,22 @@ def _wait_for_pid_exit(pid: int, *, timeout_s: float) -> None:
 
 def _process_command_line(pid: int) -> str:
     if os.name == "nt":
-        return ""
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = "
+                    f"{int(pid)}\" -ErrorAction SilentlyContinue; "
+                    "if ($null -ne $p) { [Console]::Out.Write($p.CommandLine) }"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return completed.stdout.strip()
     path = Path(f"/proc/{pid}/cmdline")
     if not path.is_file():
         return ""
@@ -896,7 +987,12 @@ def _scorer_sanity_report(
     }
 
 
-def _timing_report(path: Path, speed_gate_ms: float) -> dict[str, Any]:
+def _timing_report(
+    path: Path,
+    speed_gate_ms: float,
+    *,
+    stability_warmup_iterations: int = 0,
+) -> dict[str, Any]:
     payload = _read_json(path)
     rows = payload if isinstance(payload, list) else payload.get("iterations", [])
     values = [
@@ -909,17 +1005,25 @@ def _timing_report(path: Path, speed_gate_ms: float) -> dict[str, Any]:
     ]
     if not values:
         return {"count": 0, "gate_ms": speed_gate_ms, "gate_passed": False}
-    ordered = sorted(values)
+    warmup_count = min(max(int(stability_warmup_iterations), 0), max(len(values) - 1, 0))
+    stable_values = values[warmup_count:]
+    ordered = sorted(stable_values)
     return {
         "count": len(values),
-        "mean_ms": statistics.fmean(values),
-        "p50_ms": statistics.median(values),
+        "stable_count": len(stable_values),
+        "stability_warmup_iterations_excluded": warmup_count,
+        "all_iteration_mean_ms": statistics.fmean(values),
+        "mean_ms": statistics.fmean(stable_values),
+        "p50_ms": statistics.median(stable_values),
         "p95_ms": ordered[min(len(ordered) - 1, math.ceil(0.95 * len(ordered)) - 1)],
         "min_ms": ordered[0],
         "max_ms": ordered[-1],
         "gate_ms": speed_gate_ms,
-        "gate_passed": statistics.fmean(values) <= speed_gate_ms,
-        "scope": "isolated decision iteration_total_ms excluding initial context render",
+        "gate_passed": statistics.fmean(stable_values) <= speed_gate_ms,
+        "scope": (
+            "isolated stable decision iteration_total_ms excluding the initial "
+            "context render and configured scorer/runtime warmup"
+        ),
     }
 
 
@@ -1042,11 +1146,19 @@ def _profile_resolution(profile_path: Path) -> list[int]:
     return [int(profile.get("width", 0)), int(profile.get("height", 0))]
 
 
-def _profile_views(profile_path: Path) -> list[dict[str, Any]]:
+def _profile_views(
+    profile_path: Path,
+    *,
+    expected_count: int | None = None,
+) -> list[dict[str, Any]]:
     profile = _read_json(profile_path)
     views = profile.get("capture_defaults", {}).get("views")
-    if not isinstance(views, list) or len(views) != 8:
-        raise ValueError(f"Phase 0.5 requires exactly eight views: {profile_path}")
+    if not isinstance(views, list) or not views:
+        raise ValueError(f"capture profile has no views: {profile_path}")
+    if expected_count is not None and len(views) != int(expected_count):
+        raise ValueError(
+            f"expected exactly {int(expected_count)} capture views: {profile_path}"
+        )
     return copy.deepcopy(views)
 
 

@@ -444,6 +444,11 @@ def with_reference_image_urls(command: dict[str, Any], base_url: str) -> dict[st
         entry = dict(raw)
         if not entry.get("url") and entry.get("path"):
             entry["url"] = f"{base_url}/material-fit/reference-image?path={quote(str(entry['path']), safe='')}"
+        if not entry.get("confidence_mask_url") and entry.get("confidence_mask_path"):
+            entry["confidence_mask_url"] = (
+                f"{base_url}/material-fit/reference-image?"
+                f"path={quote(str(entry['confidence_mask_path']), safe='')}"
+            )
         rewritten.append(entry)
     score_cfg["reference_images"] = rewritten
     command["browser_score"] = score_cfg

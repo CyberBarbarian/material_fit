@@ -14,8 +14,17 @@ def _select_diverse_survivors(
     width: int,
     *,
     use_diversity: bool,
+    rank_by_selection_score: bool = False,
 ) -> list[_Branch]:
-    ranked = sorted(branches, key=lambda branch: branch.best_score, reverse=True)
+    ranked = sorted(
+        branches,
+        key=lambda branch: (
+            branch.selection_score
+            if rank_by_selection_score
+            else branch.best_score
+        ),
+        reverse=True,
+    )
     if width >= len(ranked):
         return ranked
     if not use_diversity or width < 3:

@@ -35,6 +35,8 @@ class _RuntimeCaptureState:
     errors: list[dict[str, Any]] = field(default_factory=list)
     capture_quality: dict[str, dict[str, Any]] = field(default_factory=dict)
     browser_score: dict[str, Any] | None = None
+    perceptual_scorer: Any | None = None
+    perceptual_scorer_config: tuple[str, int, str, int, bool] | None = None
 
 
 class RuntimeCaptureBridge:
@@ -170,9 +172,18 @@ class RuntimeCaptureBridge:
 
 def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def handle(self) -> None:
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+                self.close_connection = True
+
         def do_OPTIONS(self) -> None:  # noqa: N802
             self.send_response(204)
             self._send_cors_headers()
+            self.send_header("Content-Length", "0")
             self.end_headers()
 
         def do_GET(self) -> None:  # noqa: N802
@@ -211,6 +222,9 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                 if parsed.path == "/material-fit/capture-raw-rgba":
                     self._handle_capture_raw_rgba(parsed)
                     return
+                if parsed.path == "/material-fit/capture-perceptual-score":
+                    self._handle_capture_perceptual_score(parsed)
+                    return
                 payload = self._read_json_body()
                 if parsed.path == "/material-fit/capture-result":
                     self._handle_capture_result(payload)
@@ -221,6 +235,16 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                 if parsed.path == "/material-fit/capture-log":
                     with state.condition:
                         entry = dict(payload)
+                        raw_nonce = str(entry.get("nonce") or "")
+                        if raw_nonce and raw_nonce != state.active_nonce:
+                            self._write_json(
+                                {
+                                    "ok": True,
+                                    "ignored": True,
+                                    "reason": "stale capture nonce",
+                                }
+                            )
+                            return
                         state.logs.append(entry)
                         if str(entry.get("level") or "").lower() == "error":
                             state.errors.append(
@@ -310,6 +334,57 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
                     state.received.update(state.expected)
                 state.condition.notify_all()
                 self._write_json({"ok": True, "received": sorted(state.received), "browser_score": score_payload})
+
+        def _handle_capture_perceptual_score(self, parsed: Any) -> None:
+            query = parse_qs(parsed.query)
+            raw_nonce = str(_first_query_value(query, "nonce") or "")
+            view_id = _safe_name(str(_first_query_value(query, "view_id") or "view"))
+            width = int(_first_query_value(query, "width") or "0")
+            height = int(_first_query_value(query, "height") or "0")
+            if width <= 0 or height <= 0:
+                self._write_json({"ok": False, "error": "invalid perceptual score dimensions"}, status=400)
+                return
+
+            with state.condition:
+                if raw_nonce != state.active_nonce:
+                    self._write_json({"ok": False, "error": "stale capture nonce"}, status=409)
+                    return
+                command = copy_json(state.command) if isinstance(state.command, dict) else {}
+            score_config = command.get("browser_score")
+            if not isinstance(score_config, dict):
+                self._write_json({"ok": False, "error": "browser_score is not configured"}, status=409)
+                return
+            reference = _reference_for_view(score_config, view_id)
+            reference_path = reference.get("path") if isinstance(reference, dict) else None
+            if not reference_path:
+                self._write_json(
+                    {"ok": False, "error": f"reference path is missing for view {view_id}"},
+                    status=409,
+                )
+                return
+
+            length = int(self.headers.get("Content-Length") or "0")
+            image_bytes = self.rfile.read(length)
+            expected_len = width * height * 4
+            if len(image_bytes) != expected_len:
+                self._write_json(
+                    {
+                        "ok": False,
+                        "error": f"raw RGBA length {len(image_bytes)} != expected {expected_len}",
+                    },
+                    status=400,
+                )
+                return
+
+            scorer = _get_perceptual_scorer(state, score_config)
+            result = scorer.score_rgba(
+                reference_path,
+                image_bytes,
+                width=width,
+                height=height,
+            ).as_dict()
+            result["view_id"] = view_id
+            self._write_json({"ok": True, **result})
 
         def _handle_capture_raw_rgba(self, parsed: Any) -> None:
             query = parse_qs(parsed.query)
@@ -405,7 +480,11 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
         def log_message(self, format: str, *args: Any) -> None:
             return
 
-    return ThreadingHTTPServer((host, int(port)), Handler)
+    class Server(ThreadingHTTPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
+    return Server((host, int(port)), Handler)
 
 
 def _expected_view_ids(command: dict[str, Any]) -> list[str]:
@@ -437,10 +516,151 @@ def _with_reference_image_urls(command: dict[str, Any], base_url: str) -> dict[s
         entry = dict(raw)
         if not entry.get("url") and entry.get("path"):
             entry["url"] = f"{base_url}/material-fit/reference-image?path={quote(str(entry['path']), safe='')}"
+        if not entry.get("confidence_mask_url") and entry.get("confidence_mask_path"):
+            entry["confidence_mask_url"] = (
+                f"{base_url}/material-fit/reference-image?"
+                f"path={quote(str(entry['confidence_mask_path']), safe='')}"
+            )
         rewritten.append(entry)
     score_cfg["reference_images"] = rewritten
     command["browser_score"] = score_cfg
     return command
+
+
+def _reference_for_view(score_config: dict[str, Any], view_id: str) -> dict[str, Any] | None:
+    references = score_config.get("reference_images")
+    if not isinstance(references, list):
+        return None
+    for reference in references:
+        if isinstance(reference, dict) and str(reference.get("view_id") or "") == view_id:
+            return reference
+    if len(references) == 1 and isinstance(references[0], dict):
+        return references[0]
+    return None
+
+
+def _get_perceptual_scorer(state: _RuntimeCaptureState, score_config: dict[str, Any]) -> Any:
+    from material_fit.vision.dists_score import (
+        DEFAULT_DISTS_DEVICE,
+        DEFAULT_DISTS_IMAGE_SIZE,
+        DEFAULT_DISTS_RESIDUAL_SKETCH_SIZE,
+        DEFAULT_DISTS_RESIDUAL_SKETCH_TABLES,
+        DEFAULT_DISTS_TORCH_THREADS,
+    )
+
+    metric = str(score_config.get("metric") or "").strip()
+    image_size = int(score_config.get("perceptual_image_size") or DEFAULT_DISTS_IMAGE_SIZE)
+    device = str(score_config.get("perceptual_device") or DEFAULT_DISTS_DEVICE)
+    torch_threads = int(
+        score_config.get("perceptual_torch_threads") or DEFAULT_DISTS_TORCH_THREADS
+    )
+    emit_residual_features = bool(
+        score_config.get("perceptual_emit_residual_features", False)
+    )
+    residual_sketch_size = int(
+        score_config.get("perceptual_residual_sketch_size")
+        or DEFAULT_DISTS_RESIDUAL_SKETCH_SIZE
+    )
+    residual_sketch_tables = int(
+        score_config.get("perceptual_residual_sketch_tables")
+        or DEFAULT_DISTS_RESIDUAL_SKETCH_TABLES
+    )
+    scorer_class = _perceptual_scorer_class(metric)
+    signature = (
+        metric,
+        image_size,
+        device,
+        torch_threads,
+        emit_residual_features,
+        residual_sketch_size,
+        residual_sketch_tables,
+    )
+    with state.condition:
+        if state.perceptual_scorer is None or state.perceptual_scorer_config != signature:
+            scorer_kwargs = {
+                "image_size": image_size,
+                "device": device,
+                "torch_threads": torch_threads,
+            }
+            if metric in {
+                "foreground_dists_v1",
+                "foreground_dists_material_v1",
+                "foreground_dists_aligned_rgb_v3",
+                "foreground_dists_aligned_rgb_v4",
+                "foreground_dists_aligned_rgb_v5",
+                "foreground_dists_aligned_rgb_v6",
+            }:
+                scorer_kwargs["emit_residual_features"] = emit_residual_features
+                scorer_kwargs["residual_sketch_size"] = residual_sketch_size
+                scorer_kwargs["residual_sketch_tables"] = residual_sketch_tables
+            if metric == "foreground_dists_aligned_rgb_v3":
+                from material_fit.vision.dists_score import (
+                    DISTS_ALIGNED_RGB_V3_DISTS_WEIGHT,
+                    DISTS_ALIGNED_RGB_V3_DESCRIPTOR_WEIGHT,
+                    DISTS_ALIGNED_RGB_V3_PIXEL_WEIGHT,
+                )
+
+                scorer_kwargs.update(
+                    {
+                        "metric": metric,
+                        "dists_weight": DISTS_ALIGNED_RGB_V3_DISTS_WEIGHT,
+                        "aligned_rgb_weight": DISTS_ALIGNED_RGB_V3_PIXEL_WEIGHT,
+                        "local_contrast_weight": 0.0,
+                        "material_descriptor_weight": (
+                            DISTS_ALIGNED_RGB_V3_DESCRIPTOR_WEIGHT
+                        ),
+                        "residual_contract": (
+                            "weighted_dists_normalized_rgb_and_material_descriptor_v3"
+                        ),
+                    }
+                )
+            elif metric in {
+                "foreground_dists_aligned_rgb_v4",
+                "foreground_dists_aligned_rgb_v5",
+            }:
+                from material_fit.vision.dists_score import (
+                    DISTS_ALIGNED_RGB_V5_DISTS_WEIGHT,
+                    DISTS_ALIGNED_RGB_V5_PIXEL_WEIGHT,
+                )
+
+                scorer_kwargs.update(
+                    {
+                        "metric": metric,
+                        "dists_weight": DISTS_ALIGNED_RGB_V5_DISTS_WEIGHT,
+                        "aligned_rgb_weight": DISTS_ALIGNED_RGB_V5_PIXEL_WEIGHT,
+                        "local_contrast_weight": 0.0,
+                        "material_descriptor_weight": 4.0,
+                        "residual_contract": (
+                            "perceptual_first_dists_normalized_rgb_and_material_descriptor_v5"
+                        ),
+                    }
+                )
+            state.perceptual_scorer = scorer_class(
+                **scorer_kwargs,
+            )
+            state.perceptual_scorer_config = signature
+        return state.perceptual_scorer
+
+
+def _perceptual_scorer_class(metric: str) -> Any:
+    if metric == "foreground_dists_v1":
+        from material_fit.vision.dists_score import ForegroundDISTSScorer
+
+        return ForegroundDISTSScorer
+    if metric == "foreground_dists_material_v1":
+        from material_fit.vision.dists_score import ForegroundDISTSMaterialScorer
+
+        return ForegroundDISTSMaterialScorer
+    if metric in {
+        "foreground_dists_aligned_rgb_v3",
+        "foreground_dists_aligned_rgb_v4",
+        "foreground_dists_aligned_rgb_v5",
+        "foreground_dists_aligned_rgb_v6",
+    }:
+        from material_fit.vision.dists_score import ForegroundDISTSAlignedRGBScorer
+
+        return ForegroundDISTSAlignedRGBScorer
+    raise ValueError(f"unsupported server-side perceptual metric: {metric!r}")
 
 
 def copy_json(value: Any) -> Any:

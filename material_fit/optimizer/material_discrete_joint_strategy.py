@@ -46,6 +46,7 @@ class _Branch:
     last_params: dict[str, Any] | None = None
     last_score: float = -math.inf
     last_analysis: dict[str, Any] | None = None
+    selection_score: float = -math.inf
     optimizer: OptimizerStrategy | None = None
     proposals: int = 0
     exhausted: bool = False
@@ -56,6 +57,9 @@ class _Branch:
     race_base_params: dict[str, Any] | None = None
     race_restart_index: int = 0
     race_seeds: list[int] = field(default_factory=list)
+    race_continuous_seeds: list[dict[str, Any]] = field(default_factory=list)
+    race_continuous_seed_index: int = 0
+    race_continuous_seed_history: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def candidate_id(self) -> str:
@@ -93,7 +97,30 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         if len(ids) != len(set(ids)):
             raise ValueError("material_discrete_joint candidate ids must be unique")
 
+        raw_initial_candidate_ids = cfg.get("initial_candidate_ids")
+        if raw_initial_candidate_ids is None:
+            initial_candidate_ids = list(ids)
+        elif isinstance(raw_initial_candidate_ids, (list, tuple)):
+            initial_candidate_ids = list(
+                dict.fromkeys(str(value) for value in raw_initial_candidate_ids)
+            )
+            if not initial_candidate_ids:
+                raise ValueError(
+                    "material_discrete_joint initial_candidate_ids must not be empty"
+                )
+            unknown_initial_ids = sorted(set(initial_candidate_ids) - set(ids))
+            if unknown_initial_ids:
+                raise ValueError(
+                    "material_discrete_joint initial candidates are outside the legal "
+                    f"space: {unknown_initial_ids}"
+                )
+        else:
+            raise ValueError(
+                "material_discrete_joint initial_candidate_ids must be a list"
+            )
+
         continuous, initial_candidate = split_discrete_candidate(initial_params)
+        self._initial_continuous_params = copy.deepcopy(continuous)
         if initial_candidate is None:
             raw_start = cfg.get("start_candidate")
             if not isinstance(raw_start, dict):
@@ -115,6 +142,9 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             shader_params=self._shader_params,
             search_param_names=self._search_param_names,
         )
+        self._coordinates_by_id = {
+            coordinate.coordinate_id: coordinate for coordinate in coordinates
+        }
         self._axis_bounds = {
             coordinate.coordinate_id: (coordinate.low, coordinate.high)
             for coordinate in coordinates
@@ -131,6 +161,12 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             == len(self._round_sigmas)
         ):
             raise ValueError("material_discrete_joint round schedules must have equal length")
+        self._round_seed_mode = str(cfg.get("round_seed_mode") or "shared_best")
+        if self._round_seed_mode not in {"shared_best", "branch_best"}:
+            raise ValueError(
+                "material_discrete_joint round_seed_mode must be "
+                "'shared_best' or 'branch_best'"
+            )
         self._population_size = max(int(cfg.get("population_size", 16)), 2)
         self._seed = int(cfg.get("seed", 20260714))
         self._profile = str(cfg.get("profile") or "material_discrete_joint_v3_shared_seed_rescan")
@@ -238,6 +274,42 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             cfg.get("rescan_switch_min_margin_after_first"),
             0.0,
         )
+        raw_rescan_candidate_modes = cfg.get("rescan_candidate_modes", ())
+        if not isinstance(raw_rescan_candidate_modes, (list, tuple)):
+            raise ValueError("rescan_candidate_modes must be a list")
+        self._rescan_candidate_modes = tuple(
+            str(value) for value in raw_rescan_candidate_modes
+        )
+        standard_rescan_modes = {
+            "all",
+            "initial_representatives",
+            "current_winner",
+        }
+        invalid_rescan_modes = sorted(
+            mode
+            for mode in set(self._rescan_candidate_modes)
+            if mode not in standard_rescan_modes
+            and not (
+                mode.startswith("winner_axis:")
+                and mode.removeprefix("winner_axis:").strip()
+            )
+        )
+        if invalid_rescan_modes:
+            raise ValueError(
+                f"unsupported rescan candidate modes: {invalid_rescan_modes}"
+            )
+        raw_rescan_score_overrides = cfg.get("rescan_browser_score_overrides", ())
+        if not isinstance(raw_rescan_score_overrides, (list, tuple)):
+            raise ValueError("rescan_browser_score_overrides must be a list")
+        self._rescan_browser_score_overrides = tuple(
+            copy.deepcopy(value) if isinstance(value, dict) else {}
+            for value in raw_rescan_score_overrides
+        )
+        self._minimum_final_refine_proposals = max(
+            int(cfg.get("minimum_final_refine_proposals", 0)),
+            0,
+        )
+        self._final_rescan_continuous_proposal_start: int | None = None
         continuous_cfg = cfg.get("continuous")
         self._continuous_config = (
             copy.deepcopy(continuous_cfg) if isinstance(continuous_cfg, dict) else {}
@@ -303,10 +375,69 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             int(self._post_rescan_branch_config.get("budget_per_candidate", 0)),
             0,
         )
+        self._post_rescan_branch_ranking_signal = str(
+            self._post_rescan_branch_config.get("ranking_signal") or "rescan_score"
+        )
+        if self._post_rescan_branch_ranking_signal not in {
+            "rescan_score",
+            "conditional_activation_peak",
+        }:
+            raise ValueError(
+                "post-rescan branch ranking_signal must be 'rescan_score' or "
+                "'conditional_activation_peak'"
+            )
+        self._post_rescan_branch_allocation_order = str(
+            self._post_rescan_branch_config.get("allocation_order") or "round_robin"
+        )
+        if self._post_rescan_branch_allocation_order not in {
+            "round_robin",
+            "ranked_sequential",
+        }:
+            raise ValueError(
+                "post-rescan branch allocation_order must be 'round_robin' or "
+                "'ranked_sequential'"
+            )
+        raw_rank_budgets = self._post_rescan_branch_config.get("budgets_by_rank")
+        if raw_rank_budgets is None:
+            self._post_rescan_branch_budgets_by_rank: tuple[int, ...] = ()
+        elif isinstance(raw_rank_budgets, (list, tuple)):
+            self._post_rescan_branch_budgets_by_rank = tuple(
+                int(value) for value in raw_rank_budgets
+            )
+            if any(value <= 0 for value in self._post_rescan_branch_budgets_by_rank):
+                raise ValueError(
+                    "post-rescan branch budgets_by_rank values must be positive"
+                )
+        else:
+            raise ValueError("post-rescan branch budgets_by_rank must be a list")
         self._post_rescan_branch_sigma = _positive_float(
             self._post_rescan_branch_config.get("sigma"),
             0.10,
         )
+        raw_continuous_seed_modes = self._post_rescan_branch_config.get(
+            "continuous_seed_modes",
+            ("common_rescan",),
+        )
+        if not isinstance(raw_continuous_seed_modes, (list, tuple)):
+            raise ValueError(
+                "post-rescan branch continuous_seed_modes must be a list"
+            )
+        self._post_rescan_branch_continuous_seed_modes = tuple(
+            dict.fromkeys(str(value) for value in raw_continuous_seed_modes)
+        )
+        invalid_continuous_seed_modes = sorted(
+            set(self._post_rescan_branch_continuous_seed_modes)
+            - {"initial", "common_rescan"}
+        )
+        if invalid_continuous_seed_modes:
+            raise ValueError(
+                "unsupported post-rescan branch continuous seed modes: "
+                f"{invalid_continuous_seed_modes}"
+            )
+        if not self._post_rescan_branch_continuous_seed_modes:
+            raise ValueError(
+                "post-rescan branch continuous_seed_modes must not be empty"
+            )
         self._post_rescan_branch_restart_count = max(
             int(self._post_rescan_branch_config.get("restart_count", 1)),
             1,
@@ -366,6 +497,28 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             if isinstance(final_continuous_cfg, dict)
             else copy.deepcopy(self._continuous_config)
         )
+        self._post_rescan_confident_margin = _nonnegative_float(
+            self._post_rescan_branch_config.get("skip_race_if_score_margin_at_least"),
+            0.0,
+        )
+        self._post_rescan_confident_tie_tolerance = _nonnegative_float(
+            self._post_rescan_branch_config.get("confident_score_tie_tolerance"),
+            1.0e-8,
+        )
+        self._post_rescan_complexity_score_tolerance = _nonnegative_float(
+            self._post_rescan_branch_config.get(
+                "prefer_lower_complexity_within_score"
+            ),
+            0.0,
+        )
+        confident_continuous_cfg = self._post_rescan_branch_config.get(
+            "confident_winner_continuous"
+        )
+        self._post_rescan_confident_continuous_config = (
+            copy.deepcopy(confident_continuous_cfg)
+            if isinstance(confident_continuous_cfg, dict)
+            else copy.deepcopy(self._post_rescan_final_continuous_config)
+        )
         adaptive_fallback = self._post_rescan_branch_config.get("adaptive_fallback")
         self._post_rescan_adaptive_fallback_config = (
             copy.deepcopy(adaptive_fallback)
@@ -375,7 +528,21 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         self._post_rescan_effective_group_axes = self._post_rescan_group_axes
         self._post_rescan_effective_branch_width = self._post_rescan_branch_width
         self._post_rescan_effective_branch_budget = self._post_rescan_branch_budget
+        self._post_rescan_effective_ranking_signal = (
+            self._post_rescan_branch_ranking_signal
+        )
+        self._post_rescan_effective_allocation_order = (
+            self._post_rescan_branch_allocation_order
+        )
+        self._post_rescan_effective_budgets_by_rank = (
+            self._post_rescan_branch_budgets_by_rank
+        )
+        self._post_rescan_race_budget_limits: dict[str, int] = {}
+        self._post_rescan_ranking_evidence: dict[str, dict[str, Any]] = {}
         self._post_rescan_effective_branch_sigma = self._post_rescan_branch_sigma
+        self._post_rescan_effective_continuous_seed_modes = (
+            self._post_rescan_branch_continuous_seed_modes
+        )
         self._post_rescan_effective_restart_count = (
             self._post_rescan_branch_restart_count
         )
@@ -485,6 +652,14 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
                 "post-rescan axis-response continuous_seed_mode must be "
                 "'best_probe', 'common_rescan', or 'best_online'"
             )
+        raw_axis_response_continuous = self._post_rescan_axis_response_scan_config.get(
+            "continuous"
+        )
+        self._post_rescan_axis_response_continuous_config = (
+            copy.deepcopy(raw_axis_response_continuous)
+            if isinstance(raw_axis_response_continuous, dict)
+            else None
+        )
         if self._post_rescan_axis_response_scan_enabled:
             if not self._post_rescan_axis_response_param_name:
                 raise ValueError("post-rescan axis-response scan requires param_name")
@@ -533,6 +708,54 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         self._restart_continuous_after_rescan = bool(
             cfg.get("restart_continuous_after_rescan", False)
         )
+        self._restart_continuous_after_first_rescan = bool(
+            cfg.get("restart_continuous_after_first_rescan", False)
+        )
+        self._conditional_activation_queue = _build_conditional_activation_queue(
+            cfg.get("conditional_activation_probes"),
+            candidates=[
+                candidate
+                for candidate in candidates
+                if str(candidate["candidate_id"]) in set(initial_candidate_ids)
+            ],
+            base_params=continuous,
+            coordinates_by_id=self._coordinates_by_id,
+        )
+        self._conditional_activation_probe_count = len(
+            self._conditional_activation_queue
+        )
+        self._conditional_activation_rebased_after_initial_warmup = False
+        self._conditional_activation_pending: dict[str, Any] | None = None
+        self._conditional_activation_results: list[dict[str, Any]] = []
+        self._activation_selects_initial_winner = bool(
+            cfg.get("activation_selects_initial_winner", False)
+        )
+        self._activation_commits_initial_seed = bool(
+            cfg.get("activation_commits_initial_seed", False)
+        )
+        self._skip_initial_discrete_probes_when_activation_selects = bool(
+            cfg.get("skip_initial_discrete_probes_when_activation_selects", False)
+            and self._activation_selects_initial_winner
+            and self._conditional_activation_queue
+        )
+
+        raw_initial_warmup = cfg.get("initial_continuous_warmup")
+        self._initial_continuous_warmup_config = (
+            copy.deepcopy(raw_initial_warmup)
+            if isinstance(raw_initial_warmup, dict)
+            else {}
+        )
+        self._initial_continuous_warmup_budget = max(
+            int(self._initial_continuous_warmup_config.get("max_proposals", 0)),
+            0,
+        )
+        self._initial_continuous_warmup_enabled = bool(
+            self._initial_continuous_warmup_config.get("enabled", False)
+            and self._initial_continuous_warmup_budget > 0
+        )
+        self._initial_continuous_warmup_proposals = 0
+        self._initial_continuous_warmup_completed = False
+        self._initial_continuous_warmup_stop_reason: str | None = None
 
         self._branches = {
             str(candidate["candidate_id"]): _Branch(
@@ -542,8 +765,14 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             for candidate in candidates
         }
         self._candidate_order = ids
+        self._initial_candidate_order = initial_candidate_ids
         self._initial_continuous = copy.deepcopy(continuous)
         self._start_candidate_id = str(initial_candidate["candidate_id"])
+        if self._start_candidate_id not in set(self._initial_candidate_order):
+            raise ValueError(
+                "material_discrete_joint initial candidates must preserve the start "
+                f"candidate: {self._start_candidate_id}"
+            )
         self._probed_ids: set[str] = set()
         self._pending_branch_id: str | None = None
         self._phase = "discrete_probe"
@@ -567,6 +796,7 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         self._rescan_scores: dict[str, float] = {}
         self._rescan_analyses: dict[str, dict[str, Any]] = {}
         self._rescan_summaries: list[dict[str, Any]] = []
+        self._rescan_reset_global_score_domain = False
         self._post_rescan_branch_done = False
         self._post_rescan_branch_cursor = 0
         self._post_rescan_branch_summaries: list[dict[str, Any]] = []
@@ -588,9 +818,31 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         self._best_fit_score = -math.inf
         self._best_analysis: dict[str, Any] = {}
         self._finished = False
+        if self._initial_continuous_warmup_enabled:
+            self._start_initial_continuous_warmup()
 
     def wants_global_no_improve_check(self) -> bool:
         return False
+
+    def allows_target_distance_stop(self) -> bool:
+        if self._phase == "initial_continuous_warmup":
+            return True
+        if self._max_rescans == 0:
+            return True
+        if self._rescan_count < self._max_rescans:
+            return False
+        if self._minimum_final_refine_proposals == 0:
+            return True
+        if self._final_rescan_continuous_proposal_start is None:
+            return False
+        completed = (
+            self._continuous_proposals
+            - self._final_rescan_continuous_proposal_start
+        )
+        return bool(
+            completed >= self._minimum_final_refine_proposals
+            or (self._continuous is not None and self._continuous.stop_reason() is not None)
+        )
 
     def stop_reason(self) -> str | None:
         return "material_discrete_joint_complete" if self._finished else None
@@ -639,9 +891,38 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         self._select_initial_score_rescan_schedule(ctx.fit_score)
         self._observe(ctx)
 
+        if self._phase == "initial_continuous_warmup":
+            assert self._continuous is not None
+            winner = self._branches[self._start_candidate_id]
+            nested_stop = self._continuous.stop_reason()
+            if (
+                self._initial_continuous_warmup_proposals
+                >= self._initial_continuous_warmup_budget
+                or nested_stop is not None
+            ):
+                self._finish_initial_continuous_warmup(
+                    "budget_exhausted" if nested_stop is None else nested_stop
+                )
+            else:
+                winner_ctx = self._branch_context(winner, ctx)
+                candidate, nested = self._continuous.propose(winner_ctx)
+                continuous, _unused = split_discrete_candidate(candidate)
+                self._initial_continuous_warmup_proposals += 1
+                self._pending_branch_id = winner.candidate_id
+                return (
+                    attach_discrete_candidate(continuous, winner.candidate),
+                    self._decision(nested, candidate_id=winner.candidate_id),
+                )
+
         if self._phase == "discrete_probe":
+            if self._skip_initial_discrete_probes_when_activation_selects:
+                self._probed_ids.update(self._initial_candidate_order)
             next_id = next(
-                (candidate_id for candidate_id in self._candidate_order if candidate_id not in self._probed_ids),
+                (
+                    candidate_id
+                    for candidate_id in self._initial_candidate_order
+                    if candidate_id not in self._probed_ids
+                ),
                 None,
             )
             if next_id is not None:
@@ -651,7 +932,16 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
                     self._branches[next_id].candidate,
                 )
                 return candidate, self._decision({}, candidate_id=next_id)
-            self._start_round(0, list(self._branches))
+            if self._conditional_activation_queue:
+                self._phase = "conditional_activation_probe"
+            else:
+                self._start_round(0, self._initial_candidate_order)
+
+        if self._phase == "conditional_activation_probe":
+            candidate = self._propose_conditional_activation_candidate()
+            if candidate is not None:
+                return candidate
+            self._start_round(0, self._initial_candidate_order)
 
         if self._phase == "successive_halving":
             while True:
@@ -759,6 +1049,7 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
                     "candidate_id": branch.candidate_id,
                     "axes": copy.deepcopy(branch.candidate.get("axes", {})),
                     "best_fit_score": branch.best_score,
+                    "selection_fit_score": branch.selection_score,
                     "proposals": branch.proposals,
                     "observable_score_summary": _observable_score_summary(
                         branch.best_analysis
@@ -788,10 +1079,42 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             "asset_independent": True,
             "phase": self._phase,
             "legal_candidate_count": len(self._branches),
+            "initial_candidate_count": len(self._initial_candidate_order),
+            "initial_candidate_ids": list(self._initial_candidate_order),
             "start_candidate_id": self._start_candidate_id,
+            "initial_continuous_warmup": {
+                "enabled": self._initial_continuous_warmup_enabled,
+                "max_proposals": self._initial_continuous_warmup_budget,
+                "proposals": self._initial_continuous_warmup_proposals,
+                "completed": self._initial_continuous_warmup_completed,
+                "stop_reason": self._initial_continuous_warmup_stop_reason,
+                "strategy": str(
+                    self._initial_continuous_warmup_config.get(
+                        "strategy",
+                        "material_stage1_hybrid",
+                    )
+                ),
+                "target_information_used": False,
+                "start_hard_state_only": True,
+            },
             "round_widths": list(self._round_widths),
             "round_budgets": list(self._round_budgets),
             "round_sigmas": list(self._round_sigmas),
+            "round_seed_mode": self._round_seed_mode,
+            "conditional_activation": {
+                "target_information_used": False,
+                "selects_initial_winner": self._activation_selects_initial_winner,
+                "commits_initial_seed": self._activation_commits_initial_seed,
+                "skips_initial_discrete_probes": (
+                    self._skip_initial_discrete_probes_when_activation_selects
+                ),
+                "planned_probe_count": self._conditional_activation_probe_count,
+                "completed_probe_count": len(self._conditional_activation_results),
+                "rebased_after_initial_warmup": (
+                    self._conditional_activation_rebased_after_initial_warmup
+                ),
+                "results": copy.deepcopy(self._conditional_activation_results),
+            },
             "branch_strategy": self._branch_strategy,
             "winner_continuation_budget": self._winner_continuation_budget,
             "winner_continuation_sigma": self._winner_continuation_sigma,
@@ -802,10 +1125,18 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             "rescan_switch_min_margin_after_first": (
                 self._rescan_switch_min_margin_after_first
             ),
+            "rescan_candidate_modes": list(self._rescan_candidate_modes),
+            "rescan_browser_score_overrides": copy.deepcopy(
+                self._rescan_browser_score_overrides
+            ),
+            "minimum_final_refine_proposals": self._minimum_final_refine_proposals,
             "initial_score_rescan_schedule": copy.deepcopy(
                 self._initial_score_rescan_selection
             ),
             "restart_continuous_after_rescan": self._restart_continuous_after_rescan,
+            "restart_continuous_after_first_rescan": (
+                self._restart_continuous_after_first_rescan
+            ),
             "continuous_after_final_rescan": copy.deepcopy(
                 self._continuous_after_final_rescan_config
             ),
@@ -841,7 +1172,15 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
                 "group_axes": list(self._post_rescan_effective_group_axes),
                 "width": self._post_rescan_effective_branch_width,
                 "budget_per_candidate": self._post_rescan_effective_branch_budget,
+                "ranking_signal": self._post_rescan_effective_ranking_signal,
+                "allocation_order": self._post_rescan_effective_allocation_order,
+                "budgets_by_rank": list(
+                    self._post_rescan_effective_budgets_by_rank
+                ),
                 "sigma": self._post_rescan_effective_branch_sigma,
+                "continuous_seed_modes": list(
+                    self._post_rescan_effective_continuous_seed_modes
+                ),
                 "restart_count": self._post_rescan_effective_restart_count,
                 "restart_budget": self._post_rescan_effective_restart_budget,
                 "strategy": self._post_rescan_effective_branch_strategy,
@@ -857,6 +1196,15 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
                 ),
                 "final_continuous_score_override": copy.deepcopy(
                     self._post_rescan_effective_final_score_override
+                ),
+                "skip_race_if_score_margin_at_least": (
+                    self._post_rescan_confident_margin
+                ),
+                "confident_score_tie_tolerance": (
+                    self._post_rescan_confident_tie_tolerance
+                ),
+                "prefer_lower_complexity_within_score": (
+                    self._post_rescan_complexity_score_tolerance
                 ),
                 "frozen_param_names": sorted(
                     set(self._search_param_names)
@@ -916,14 +1264,38 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         if branch is None:
             raise ValueError(f"observed unknown discrete candidate: {candidate_id}")
         score = float(ctx.fit_score)
+        conditional_activation = self._phase == "conditional_activation_probe"
         branch.last_params = copy.deepcopy(continuous)
         branch.last_score = score
         branch.last_analysis = copy.deepcopy(ctx.analysis)
-        if math.isfinite(score) and score > branch.best_score:
+        if math.isfinite(score) and self._phase == "discrete_probe":
+            branch.selection_score = max(branch.selection_score, score)
+        if math.isfinite(score) and conditional_activation:
+            has_prior_activation = any(
+                row["candidate_id"] == candidate_id
+                for row in self._conditional_activation_results
+            )
+            branch.selection_score = (
+                max(branch.selection_score, score)
+                if has_prior_activation
+                else score
+            )
+            if self._activation_commits_initial_seed and score > branch.best_score:
+                branch.best_score = score
+                branch.best_params = copy.deepcopy(continuous)
+                branch.best_analysis = copy.deepcopy(ctx.analysis)
+                if score > self._best_fit_score:
+                    self._best_fit_score = score
+                    self._best_params = attach_discrete_candidate(
+                        continuous,
+                        branch.candidate,
+                    )
+                    self._best_analysis = copy.deepcopy(ctx.analysis)
+        if not conditional_activation and math.isfinite(score) and score > branch.best_score:
             branch.best_score = score
             branch.best_params = copy.deepcopy(continuous)
             branch.best_analysis = copy.deepcopy(ctx.analysis)
-        if math.isfinite(score) and score > self._best_fit_score:
+        if not conditional_activation and math.isfinite(score) and score > self._best_fit_score:
             self._best_fit_score = score
             self._best_params = attach_discrete_candidate(continuous, branch.candidate)
             self._best_analysis = copy.deepcopy(ctx.analysis)
@@ -932,6 +1304,24 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         if self._phase == "discrete_rescan":
             self._rescan_scores[candidate_id] = score
             self._rescan_analyses[candidate_id] = copy.deepcopy(ctx.analysis)
+        if self._phase == "conditional_activation_probe":
+            pending = self._conditional_activation_pending
+            if pending is None:
+                raise RuntimeError("conditional activation observation has no pending probe")
+            if candidate_id != str(pending["candidate_id"]):
+                raise RuntimeError(
+                    "conditional activation observation candidate mismatch: "
+                    f"expected {pending['candidate_id']}, got {candidate_id}"
+                )
+            self._conditional_activation_results.append(
+                {
+                    "probe_name": str(pending["probe_name"]),
+                    "normalized_value": float(pending["normalized_value"]),
+                    "candidate_id": candidate_id,
+                    "fit_score": score,
+                }
+            )
+            self._conditional_activation_pending = None
         if self._phase == "post_rescan_axis_response_scan":
             pending = self._post_rescan_axis_response_pending
             if pending is None:
@@ -971,38 +1361,75 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         if branch.awaiting_seed_observation:
             branch.awaiting_seed_observation = False
 
+    def _propose_conditional_activation_candidate(
+        self,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if self._conditional_activation_pending is not None:
+            raise RuntimeError("conditional activation observation was not consumed")
+        if not self._conditional_activation_queue:
+            return None
+        probe = self._conditional_activation_queue.pop(0)
+        candidate_id = str(probe["candidate_id"])
+        branch = self._branches[candidate_id]
+        self._conditional_activation_pending = copy.deepcopy(probe)
+        self._pending_branch_id = candidate_id
+        decision = self._decision({}, candidate_id=candidate_id)
+        decision["material_discrete_joint"]["conditional_activation_probe"] = {
+            "probe_name": str(probe["probe_name"]),
+            "normalized_value": float(probe["normalized_value"]),
+            "target_information_used": False,
+        }
+        return (
+            attach_discrete_candidate(probe["params"], branch.candidate),
+            decision,
+        )
+
     def _start_round(self, round_index: int, source_ids: Sequence[str]) -> None:
         self._phase = "successive_halving"
         self._round_index = round_index
         width = min(self._round_widths[round_index], len(source_ids))
         source = [self._branches[candidate_id] for candidate_id in source_ids]
-        selected = _select_diverse_survivors(
-            source,
-            width,
-            use_diversity=round_index < self._diversity_rounds,
+        use_activation_ranking = bool(
+            round_index == 0 and self._conditional_activation_results
         )
+        if use_activation_ranking and round_index >= self._diversity_rounds:
+            selected = sorted(
+                source,
+                key=lambda branch: branch.selection_score,
+                reverse=True,
+            )[:width]
+        else:
+            selected = _select_diverse_survivors(
+                source,
+                width,
+                use_diversity=round_index < self._diversity_rounds,
+                rank_by_selection_score=use_activation_ranking,
+            )
         self._active_ids = [branch.candidate_id for branch in selected]
         self._round_cursor = 0
         sigma = self._round_sigmas[round_index]
-        shared_seed = copy.deepcopy(
-            max(source, key=lambda branch: branch.best_score).best_params
-        )
+        shared_seed = copy.deepcopy(max(source, key=lambda branch: branch.best_score).best_params)
         for branch_index, branch in enumerate(selected):
             branch.proposals = 0
             branch.exhausted = False
-            branch.round_seed_params = copy.deepcopy(shared_seed)
+            branch.round_seed_params = copy.deepcopy(
+                branch.best_params
+                if self._round_seed_mode == "branch_best"
+                else shared_seed
+            )
             branch.round_seed_pending = True
             branch.awaiting_seed_observation = False
+            optimizer_seed = copy.deepcopy(branch.round_seed_params)
             if self._branch_strategy == "material_jacobian_trust_region":
                 branch.optimizer = MaterialJacobianTrustRegionStrategy(
-                    initial_params=copy.deepcopy(shared_seed),
+                    initial_params=optimizer_seed,
                     shader_params=self._shader_params,
                     search_param_names=self._search_param_names,
                     config=self._branch_jacobian_config,
                 )
             else:
                 branch.optimizer = CmaesStrategy(
-                    initial_params=copy.deepcopy(shared_seed),
+                    initial_params=optimizer_seed,
                     shader_params=self._shader_params,
                     config=CmaesStrategyConfig(
                         mode="cold",
@@ -1104,11 +1531,59 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
         )
 
     def _start_continuous_refine(self) -> None:
-        winner = max(
-            (self._branches[candidate_id] for candidate_id in self._active_ids),
-            key=lambda branch: branch.best_score,
-        )
+        branches = [self._branches[candidate_id] for candidate_id in self._active_ids]
+        if self._activation_selects_initial_winner and self._conditional_activation_results:
+            winner = max(
+                branches,
+                key=lambda branch: (branch.selection_score, branch.best_score),
+            )
+        else:
+            winner = max(branches, key=lambda branch: branch.best_score)
         self._start_continuous_from_winner(winner, self._continuous_config)
+
+    def _start_initial_continuous_warmup(self) -> None:
+        start_branch = self._branches[self._start_candidate_id]
+        self._start_continuous_from_winner(
+            start_branch,
+            self._initial_continuous_warmup_config,
+        )
+        self._phase = "initial_continuous_warmup"
+
+    def _finish_initial_continuous_warmup(self, reason: str) -> None:
+        start_branch = self._branches[self._start_candidate_id]
+        seed = copy.deepcopy(start_branch.best_params)
+        self._initial_continuous = copy.deepcopy(seed)
+        self._rebase_conditional_activation_queue(seed)
+        for candidate_id, branch in self._branches.items():
+            if candidate_id == self._start_candidate_id:
+                continue
+            branch.best_params = copy.deepcopy(seed)
+            branch.last_params = None
+            branch.last_score = -math.inf
+            branch.last_analysis = None
+        self._continuous = None
+        self._winner_id = None
+        self._initial_continuous_warmup_completed = True
+        self._initial_continuous_warmup_stop_reason = str(reason)
+        self._phase = "discrete_probe"
+
+    def _rebase_conditional_activation_queue(
+        self,
+        seed: dict[str, Any],
+    ) -> None:
+        if not self._conditional_activation_queue:
+            return
+        for probe in self._conditional_activation_queue:
+            params = copy.deepcopy(seed)
+            normalized_value = float(probe["normalized_value"])
+            for coordinate_id in probe["coordinate_ids"]:
+                coordinate = self._coordinates_by_id[str(coordinate_id)]
+                value = coordinate.low + normalized_value * (
+                    coordinate.high - coordinate.low
+                )
+                params = coordinate.write(params, value)
+            probe["params"] = params
+        self._conditional_activation_rebased_after_initial_warmup = True
 
     def _start_continuous_from_winner(
         self,
@@ -1289,3 +1764,66 @@ class MaterialDiscreteJointStrategy(MaterialDiscreteRescanMixin, OptimizerStrate
             if self._final_rescan_complete()
             else self._proposal_quantization_pre_final_step
         )
+
+
+def _build_conditional_activation_queue(
+    raw_probes: Any,
+    *,
+    candidates: Sequence[dict[str, Any]],
+    base_params: dict[str, Any],
+    coordinates_by_id: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if raw_probes is None:
+        return []
+    if not isinstance(raw_probes, list):
+        raise ValueError("conditional_activation_probes must be a list")
+    queue: list[dict[str, Any]] = []
+    for raw_probe in raw_probes:
+        if not isinstance(raw_probe, dict):
+            raise ValueError("conditional activation probe must be an object")
+        probe_name = str(raw_probe.get("name") or "").strip()
+        raw_coordinate_ids = raw_probe.get("coordinate_ids")
+        raw_values = raw_probe.get("normalized_values")
+        if not probe_name or not isinstance(raw_coordinate_ids, list) or not raw_coordinate_ids:
+            raise ValueError("conditional activation probe requires name and coordinate_ids")
+        if not isinstance(raw_values, list) or not raw_values:
+            raise ValueError("conditional activation probe requires normalized_values")
+        coordinate_ids = [str(value) for value in raw_coordinate_ids]
+        missing = [value for value in coordinate_ids if value not in coordinates_by_id]
+        if missing:
+            raise ValueError(
+                f"conditional activation probe {probe_name!r} has unknown coordinates: {missing}"
+            )
+        coordinates = [coordinates_by_id[value] for value in coordinate_ids]
+        if bool(raw_probe.get("only_if_all_at_lower_bound", False)) and not all(
+            math.isclose(coordinate.read(base_params), coordinate.low, abs_tol=1.0e-12)
+            for coordinate in coordinates
+        ):
+            continue
+        normalized_values = []
+        for raw_value in raw_values:
+            value = float(raw_value)
+            if not math.isfinite(value) or value <= 0.0 or value > 1.0:
+                raise ValueError(
+                    "conditional activation normalized values must be finite in (0, 1]"
+                )
+            if value not in normalized_values:
+                normalized_values.append(value)
+        for normalized_value in normalized_values:
+            params = copy.deepcopy(base_params)
+            for coordinate in coordinates:
+                value = coordinate.low + normalized_value * (
+                    coordinate.high - coordinate.low
+                )
+                params = coordinate.write(params, value)
+            for candidate in candidates:
+                queue.append(
+                    {
+                        "probe_name": probe_name,
+                        "normalized_value": normalized_value,
+                        "coordinate_ids": list(coordinate_ids),
+                        "candidate_id": str(candidate["candidate_id"]),
+                        "params": copy.deepcopy(params),
+                    }
+                )
+    return queue

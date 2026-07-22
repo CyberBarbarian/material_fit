@@ -13,6 +13,15 @@ def test_runtime_renderer_material_patch_preserves_vector_uniform_types() -> Non
     assert "COLOR_PARAM_NAMES.has(name)" in text
 
 
+def test_runtime_renderer_does_not_inject_experimental_ambient_lighting() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert "ambient_sh_coefficients" not in text
+    assert "ibl_material_texture" not in text
+    assert "MATERIAL_FIT_AMBIENT_DIFFUSE" not in text
+
+
 def test_runtime_renderer_material_patch_supports_strict_define_variants() -> None:
     renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
     text = renderer.read_text(encoding="utf-8")
@@ -161,8 +170,27 @@ def test_runtime_renderer_white_artifacts_use_the_scored_pixel_buffer() -> None:
     renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
     text = renderer.read_text(encoding="utf-8")
 
-    assert "canvasFromPixels(staged.pixels, staged.width, staged.height)" in text
+    assert "canvasFromPixels(scoreCandidatePixels, staged.width, staged.height)" in text
     assert "canvasOnBackground(staged.canvas, background)" not in text
+
+
+def test_runtime_renderer_supports_frozen_stage2_candidate_registration() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    render_body = text[text.index("async function renderAndScore(command)") :]
+
+    assert "function candidateRegistrationForView" in text
+    assert 'registration.mode !== "frozen_per_view_similarity"' in text
+    assert "browserScore.candidate_registration" in text
+    assert "transform.dx, 0) * pixelWidth / sourceWidth" in text
+    assert "transform.dy, 0) * pixelHeight / sourceHeight" in text
+    assert "function registerCandidatePixelsBicubic" in text
+    assert 'registration.interpolation === "bicubic"' in text
+    assert "function registerCandidatePixels" in text
+    assert 'context.imageSmoothingQuality = "high"' in text
+    assert "const registeredCandidate = registerCandidatePixels(" in render_body
+    assert "const scoreCandidatePixels = registeredCandidate.pixels;" in render_body
+    assert "candidate_registration: registeredCandidate.registration" in render_body
 
 
 def test_runtime_renderer_background_composite_preserves_opaque_black_pixels() -> None:
@@ -193,9 +221,74 @@ def test_runtime_renderer_caches_references_and_scores_one_pixel_buffer() -> Non
     assert "let scoreReadbackCanvas = null;" in text
     assert "scoreReadbackContext.clearRect(0, 0, dimensions.width, dimensions.height);" in text
     assert "? scorePixels(" in render_body
-    assert "const scoreCandidatePixels = staged.pixels;" in render_body
+    assert "const scoreCandidatePixels = registeredCandidate.pixels;" in render_body
     assert "canvasPixels(whiteArtifactCanvas)" not in render_body
     assert "canvasPixels(visualCanvas)" not in render_body
+
+
+def test_runtime_renderer_retries_transient_perceptual_score_posts() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    function_body = text[
+        text.index("async function postPerceptualScore") :
+        text.index("function shouldEmitCaptureArtifacts")
+    ]
+
+    assert "for (let attempt = 0; attempt < 3; attempt += 1)" in function_body
+    assert "response.status < 500" in function_body
+    assert "50 * (attempt + 1)" in function_body
+
+
+def test_runtime_renderer_routes_perceptual_metrics_to_server_scorer() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+
+    assert text.count('metric === "foreground_dists_v1"') == 2
+    assert text.count('metric === "foreground_dists_material_v1"') == 2
+    assert "foreground_aligned_pyramid_dists_v1" not in text
+
+
+def test_runtime_renderer_dists_skips_legacy_browser_pixel_score() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    render_body = text[text.index("async function renderAndScore(command)") :]
+
+    assert "const referencePixels = usePerceptualScore" in render_body
+    assert "let score = !usePerceptualScore && referencePixels" in render_body
+    assert "score = perceptual;" in render_body
+    assert "residual_fit_score" not in render_body
+    assert "signed_dists_feature_means_and_std_v1" in render_body
+
+
+def test_runtime_renderer_retries_transient_json_posts() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    function_body = text[
+        text.index("async function postJsonWithRetry") :
+        text.index("function shouldEmitCaptureArtifacts")
+    ]
+
+    assert "for (let attempt = 0; attempt < 3; attempt += 1)" in function_body
+    assert "response.status < 500" in function_body
+    assert "await response.text()" in function_body
+    poll_body = text[text.index("async function pollOnce") :]
+    assert '"capture-score"' in poll_body
+    assert '"capture-log"' in poll_body
+    assert 'message.includes("stale capture nonce")' in poll_body
+    assert "{ nonce: command.nonce, level: \"error\", message }" in poll_body
+
+
+def test_runtime_renderer_serializes_polling_and_consumes_post_responses() -> None:
+    renderer = Path(__file__).resolve().parents[1] / "laya_capture" / "runtime_renderer.html"
+    text = renderer.read_text(encoding="utf-8")
+    start = text.index("async function pollOnce")
+    function_body = text[start : text.index("window.__MATERIAL_FIT_READY__", start)]
+
+    assert function_body.index("busy = true") < function_body.index("capture-command")
+    assert "catch (_)" in function_body
+    assert "await postJsonWithRetry(" in function_body
+    assert '"capture-score"' in function_body
+    assert '"capture-log"' in function_body
 
 
 def test_runtime_renderer_browser_score_uses_foreground_weighted_rgba_objective() -> None:
@@ -224,15 +317,52 @@ def test_runtime_renderer_browser_score_uses_foreground_weighted_rgba_objective(
     assert "cross_engine_components_v3_raw_rgba_white_composite_v3" in render_body
     assert "cross_engine_components_v4_python_parity_v1" in render_body
     assert "cross_engine_components_v5_strict_canvas_core_v1" in render_body
+    assert "cross_engine_components_v6_frozen_confidence_v1" in render_body
+    assert "cross_engine_components_v7_frozen_confidence_blend_v1" in render_body
+    assert "cross_engine_components_v8_texture_detail_v1" in render_body
+    assert "cross_engine_components_v9_spatial_luminance_v1" in render_body
+    assert "cross_engine_components_v10_spatial_hue_v1" in render_body
+    assert "cross_engine_components_v11_dark_chroma_v1" in render_body
+    assert "cross_engine_components_v12_chromaticity_v1" in render_body
+    assert "cross_engine_components_v13_radiance_v1" in render_body
+    assert "cross_engine_components_v14_highlight_energy_v1" in render_body
+    assert "cross_engine_components_v15_balanced_v1" in render_body
+    assert "cross_engine_components_v16_conservative_v1" in render_body
     assert 'metric === "cross_engine_foreground_components_v3"' in score_body
     assert 'metric === "cross_engine_foreground_components_v4"' in score_body
     assert 'metric === "cross_engine_foreground_components_v5_strict_core"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v6_frozen_confidence"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v7_frozen_confidence_blend"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v8_texture_detail"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v9_spatial_luminance"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v10_spatial_hue"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v11_dark_chroma"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v12_chromaticity"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v13_radiance"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v14_highlight_energy"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v15_balanced"' in score_body
+    assert 'metric === "cross_engine_foreground_components_v16_conservative"' in score_body
+    assert "componentMean - Math.sqrt(componentVariance)" in text
     assert "materialComponents.chroma_hue" in score_body
     assert "function scoreMaterialComponentsV4" in text
     assert "if (useMaterialComponentsV4) {" in score_body
-    assert "return scoreMaterialComponentsV4(" in score_body
+    assert "const frozenScore = scoreMaterialComponentsV4(" in score_body
     assert "const residualSums = new Float64Array" in text
-    assert "residual_features: residualFeatures.concat(residualSketchFeatures, chromaOpponentResiduals)" in text
+    assert "textureDetailResiduals" in text
+    assert "function exactTextureDetailDescriptor" in text
+    assert "materialComponents.texture_detail_distribution" in text
+    assert "function exactSpatialLuminanceDescriptor" in text
+    assert "materialComponents.spatial_luminance_layout" in text
+    assert "function exactSpatialHueMassDescriptor" in text
+    assert "materialComponents.spatial_hue_mass" in text
+    assert "function exactSpatialDarkChromaDescriptor" in text
+    assert "materialComponents.spatial_dark_chroma" in text
+    assert "function exactSpatialChromaticityDescriptor" in text
+    assert "materialComponents.spatial_chromaticity" in text
+    assert "function exactSpatialRadianceDescriptor" in text
+    assert "materialComponents.spatial_radiance" in text
+    assert "function exactSpatialHighlightDescriptor" in text
+    assert "materialComponents.spatial_highlight_energy" in text
     assert "function exactColorDistributionError" in text
     assert "function exactMultiscaleLuminanceError" in text
     assert "function exactDetailError" in text
@@ -241,17 +371,23 @@ def test_runtime_renderer_browser_score_uses_foreground_weighted_rgba_objective(
         "const minimumForegroundPixels = Math.min("
         in text
     )
-    assert "const minimumCoreBasisPixels = strictCanvasCore" in text
+    assert "const minimumCoreBasisPixels = frozenConfidencePixels" in text
+    assert "? frozenConfidenceCount" in text
     assert "? pixelCount" in text
     assert ": minimumForegroundPixels" in text
     assert "Math.floor(0.02 * minimumCoreBasisPixels)" in text
-    assert "if (coreCount < minimumCorePixels || overlapCoefficient < 0.75)" in text
+    assert "candidateConfidenceCoverage < minimumFrozenCoverage" in text
     assert "minimum_trusted_core_pixels: minimumCorePixels" in text
-    assert 'minimum_core_basis: strictCanvasCore ? "full_canvas" : "minimum_foreground"' in text
+    assert '"frozen_confidence"' in text
     assert "minimum_core_basis_pixels: minimumCoreBasisPixels" in text
     assert "minimum_foreground_pixels: minimumForegroundPixels" in text
     assert "fit_score: 0" in text
     assert "geometry_valid: false" in text
+    assert "function loadConfidenceMaskPixels" in text
+    assert "function prepareMaskedExactMaterialPixels" in text
+    assert "confidence_mask_url" in text
+    assert "const frozenWeight = 0.75;" in text
+    assert "const fullWeight = 0.25;" in text
     assert "return Math.round(channel * weight + 255 * (1 - weight));" in text
 
 

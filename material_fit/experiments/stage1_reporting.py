@@ -175,10 +175,11 @@ def _discrete_recovery_report(
         else None
     )
     visually_equivalent = bool(scores_valid and score_delta <= 1.0e-5)
+    state_recovery_passed = bool(exact or visually_equivalent)
     passed = bool(
         scores_valid
         and float(best_score) >= success_score
-        and (exact or visually_equivalent)
+        and state_recovery_passed
     )
     return {
         "contract": "private_stage1_discrete_recovery_audit_v1",
@@ -189,6 +190,7 @@ def _discrete_recovery_report(
         "best_candidate": copy.deepcopy(best_candidate),
         "recovered_exact_target_state": exact,
         "recovered_target_visual_equivalence_class": visually_equivalent,
+        "state_recovery_passed": state_recovery_passed,
         "best_score": best_score,
         "best_continuous_with_target_discrete_score": target_discrete_audit_score,
         "score_delta": score_delta,

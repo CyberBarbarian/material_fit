@@ -142,6 +142,23 @@ class MaterialJacobianTrustRegionStrategy(OptimizerStrategy):
         self._model_reuse_frozen_param_names = {
             str(name) for name in raw_reuse_frozen_names
         }
+        raw_log_coordinate_ids = cfg.get("log_coordinate_ids", ())
+        if not isinstance(raw_log_coordinate_ids, (list, tuple)):
+            raise ValueError(
+                "material_jacobian_trust_region log_coordinate_ids must be a list"
+            )
+        self._log_coordinate_ids = {str(value) for value in raw_log_coordinate_ids}
+        invalid_log_coordinates = sorted(
+            coordinate.coordinate_id
+            for coordinate in self._coordinates
+            if coordinate.coordinate_id in self._log_coordinate_ids
+            and coordinate.low < 0.0
+        )
+        if invalid_log_coordinates:
+            raise ValueError(
+                "log1p coordinates require nonnegative bounds: "
+                f"{invalid_log_coordinates}"
+            )
 
         self._best_params = copy.deepcopy(initial_params)
         self._best_fit_score: float | None = None
@@ -244,6 +261,7 @@ class MaterialJacobianTrustRegionStrategy(OptimizerStrategy):
             "model_reuse_frozen_param_names": sorted(
                 self._model_reuse_frozen_param_names
             ),
+            "log_coordinate_ids": sorted(self._log_coordinate_ids),
             "model_reuse_activated": self._model_reuse_activated,
             "model_reuse_attempts": self._model_reuse_attempts,
             "model_reuse_accepts": self._model_reuse_accepts,
@@ -411,18 +429,52 @@ class MaterialJacobianTrustRegionStrategy(OptimizerStrategy):
 
     def _jacobian_probe_candidate(self) -> tuple[dict[str, Any], dict[str, Any]] | None:
         coordinate = self._round_coordinates[self._coordinate_index]
-        span = max(coordinate.high - coordinate.low, 1.0e-12)
-        before = coordinate.read(self._best_params)
+        if coordinate.coordinate_id not in self._log_coordinate_ids:
+            span = max(coordinate.high - coordinate.low, 1.0e-12)
+            before = coordinate.read(self._best_params)
+            if self._difference_mode == "central":
+                direction = (1.0, -1.0)[self._direction_index]
+            else:
+                positive_room = (coordinate.high - before) / span
+                negative_room = (before - coordinate.low) / span
+                direction = 1.0 if positive_room >= negative_room else -1.0
+            requested = direction * self._probe_step * span
+            candidate = coordinate.write(self._best_params, before + requested)
+            after = coordinate.read(candidate)
+            delta_normalized = (after - before) / span
+            if abs(delta_normalized) <= 1.0e-12:
+                self._advance_probe()
+                return None
+            self._pending = {
+                "role": "probe",
+                "coordinate_id": coordinate.coordinate_id,
+                "direction": direction,
+                "delta_normalized": delta_normalized,
+            }
+            return candidate, self._decision(
+                "jacobian_probe",
+                coordinate=coordinate,
+                direction=direction,
+                delta_normalized=delta_normalized,
+            )
+
+        before_normalized = self._coordinate_normalized_value(
+            coordinate,
+            self._best_params,
+        )
         if self._difference_mode == "central":
             direction = (1.0, -1.0)[self._direction_index]
         else:
-            positive_room = (coordinate.high - before) / span
-            negative_room = (before - coordinate.low) / span
+            positive_room = 1.0 - before_normalized
+            negative_room = before_normalized
             direction = 1.0 if positive_room >= negative_room else -1.0
-        requested = direction * self._probe_step * span
-        candidate = coordinate.write(self._best_params, before + requested)
-        after = coordinate.read(candidate)
-        delta_normalized = (after - before) / span
+        candidate = self._write_coordinate_normalized_value(
+            coordinate,
+            self._best_params,
+            before_normalized + direction * self._probe_step,
+        )
+        after_normalized = self._coordinate_normalized_value(coordinate, candidate)
+        delta_normalized = after_normalized - before_normalized
         if abs(delta_normalized) <= 1.0e-12:
             self._advance_probe()
             return None
@@ -704,14 +756,56 @@ class MaterialJacobianTrustRegionStrategy(OptimizerStrategy):
             delta = self._normalized_update.get(coordinate.coordinate_id)
             if delta is None:
                 continue
-            span = coordinate.high - coordinate.low
-            candidate = coordinate.write(candidate, coordinate.read(candidate) + scale * delta * span)
+            if coordinate.coordinate_id not in self._log_coordinate_ids:
+                span = coordinate.high - coordinate.low
+                candidate = coordinate.write(
+                    candidate,
+                    coordinate.read(candidate) + scale * delta * span,
+                )
+                continue
+            before_normalized = self._coordinate_normalized_value(coordinate, candidate)
+            candidate = self._write_coordinate_normalized_value(
+                coordinate,
+                candidate,
+                before_normalized + scale * delta,
+            )
         self._pending = {"role": "trial", "scale": scale}
         return candidate, self._decision(
             "trust_region_trial",
             scale=scale,
             changes=parameter_changes(self._best_params, candidate),
         )
+
+    def _coordinate_normalized_value(
+        self,
+        coordinate: FishSearchCoordinate,
+        params: dict[str, Any],
+    ) -> float:
+        value = coordinate.read(params)
+        if coordinate.coordinate_id in self._log_coordinate_ids:
+            value = min(max(value, coordinate.low), coordinate.high)
+            low = math.log1p(coordinate.low)
+            high = math.log1p(coordinate.high)
+            return (math.log1p(value) - low) / max(high - low, 1.0e-12)
+        return (value - coordinate.low) / max(
+            coordinate.high - coordinate.low,
+            1.0e-12,
+        )
+
+    def _write_coordinate_normalized_value(
+        self,
+        coordinate: FishSearchCoordinate,
+        params: dict[str, Any],
+        normalized: float,
+    ) -> dict[str, Any]:
+        unit = min(max(float(normalized), 0.0), 1.0)
+        if coordinate.coordinate_id in self._log_coordinate_ids:
+            low = math.log1p(coordinate.low)
+            high = math.log1p(coordinate.high)
+            value = math.expm1(low + unit * (high - low))
+        else:
+            value = coordinate.low + unit * (coordinate.high - coordinate.low)
+        return coordinate.write(params, value)
 
     def _reject_update(self) -> None:
         if self._accept_best_probe_center():

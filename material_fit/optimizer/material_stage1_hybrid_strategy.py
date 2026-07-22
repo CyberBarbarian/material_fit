@@ -10,6 +10,7 @@ from ..shared.models import ShaderParam
 from .cmaes_strategy import CmaesStrategy
 from .material_coordinate_pattern_strategy import MaterialCoordinatePatternStrategy
 from .material_jacobian_trust_region_strategy import MaterialJacobianTrustRegionStrategy
+from .material_secant_trust_region_strategy import MaterialSecantTrustRegionStrategy
 from .material_semantic_blocks import MATERIAL_SEMANTIC_BLOCK_BY_NAME
 from .strategy_core import CmaesStrategyConfig, OptimizerStrategy, StrategyContext
 from .structured_fish_strategy import StructuredFishStrategy
@@ -99,6 +100,23 @@ class MaterialStage1HybridStrategy(OptimizerStrategy):
             copy.deepcopy(raw_local_jacobian)
             if isinstance(raw_local_jacobian, dict)
             else {}
+        )
+        self._local_refiner_strategy = str(
+            cfg.get("local_refiner_strategy", "material_jacobian_trust_region")
+        )
+        if self._local_refiner_strategy not in {
+            "material_jacobian_trust_region",
+            "material_secant_trust_region",
+        }:
+            raise ValueError(
+                "unknown Stage 1 local refiner: "
+                f"{self._local_refiner_strategy}"
+            )
+        raw_local_refiner = cfg.get("local_refiner")
+        self._local_refiner_config = (
+            copy.deepcopy(raw_local_refiner)
+            if isinstance(raw_local_refiner, dict)
+            else copy.deepcopy(self._local_jacobian_config)
         )
         self._terminal_pattern_iterations = max(
             int(cfg.get("terminal_pattern_iterations", 0)),
@@ -420,6 +438,12 @@ class MaterialStage1HybridStrategy(OptimizerStrategy):
             "local_jacobian_iterations": self._local_jacobian_iterations,
             "local_jacobian_trigger_score": self._local_jacobian_trigger_score,
             "local_jacobian_activated": self._local_jacobian_activated,
+            "local_refiner_strategy": self._local_refiner_strategy,
+            "local_refiner": {
+                **copy.deepcopy(self._local_refiner_config),
+                "feedback_source": "online_target_png_score_and_residuals_only",
+                "target_params_visible": False,
+            },
             "local_jacobian": {
                 **copy.deepcopy(self._local_jacobian_config),
                 "feedback_source": "online_target_png_score_and_residuals_only",
@@ -693,6 +717,33 @@ class MaterialStage1HybridStrategy(OptimizerStrategy):
             self._finish_pipeline()
             return False
         self._local_jacobian_activated = True
+        if self._local_refiner_strategy == "material_secant_trust_region":
+            local_config = {
+                "design_size": 64,
+                "antithetic": False,
+                "probe_radius": 0.02,
+                "minimum_probe_radius": 0.003,
+                "maximum_probe_radius": 0.08,
+                "radius_growth": 1.20,
+                "radius_shrink": 0.70,
+                "ridge": 0.0001,
+                "trust_radius": 0.12,
+                "max_axis_update": 0.25,
+                "score_feature_weight": 20.0,
+                "maximum_score_drop": 0.01,
+                "line_search_scales": [1.0, 0.75, 0.5, 0.25, 0.125],
+            }
+            local_config.update(copy.deepcopy(self._local_refiner_config))
+            self._active = MaterialSecantTrustRegionStrategy(
+                initial_params=self._best_params,
+                shader_params=self._shader_params,
+                search_param_names=self._material_param_names,
+                config=local_config,
+            )
+            self._active_kind = "local_material_refiner"
+            self._active_name = "local_material_secant"
+            self._active_budget = self._local_jacobian_iterations
+            return True
         local_config = {
             "difference_mode": "central",
             "solve_mode": "full_least_squares",
@@ -818,7 +869,7 @@ class MaterialStage1HybridStrategy(OptimizerStrategy):
                 "nested": self._active.research_summary(),
             }
         )
-        if completed_kind == "local_material_jacobian":
+        if completed_kind in {"local_material_jacobian", "local_material_refiner"}:
             self._local_jacobian_completed = True
         elif completed_kind == "terminal_material_pattern":
             self._terminal_pattern_completed = True
@@ -855,6 +906,7 @@ class MaterialStage1HybridStrategy(OptimizerStrategy):
                 "late_realign_activated": self._late_realign_activated,
                 "local_jacobian_trigger_score": self._local_jacobian_trigger_score,
                 "local_jacobian_activated": self._local_jacobian_activated,
+                "local_refiner_strategy": self._local_refiner_strategy,
                 "feedback_source": "online_target_png_score_and_residuals_only",
                 "target_params_visible": False,
                 "nested": nested,

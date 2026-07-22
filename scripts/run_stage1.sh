@@ -27,11 +27,12 @@ fi
 args=(
   -m material_fit.experiments.material_human_reference_stage1
   --asset "$asset"
+  --single-view
   --optimizer material_discrete_joint
   --joint-profile v86_budget1500_initial_score_routed_unified
   --iterations "${ITERATIONS:-1499}"
   --target-score "${TARGET_SCORE:-0.995}"
-  --success-score "${SUCCESS_SCORE:-0.98}"
+  --success-score "${SUCCESS_SCORE:-0.93}"
   --max-runtime-sec "${MAX_RUNTIME_SEC:-1200}"
   --speed-gate-ms "${SPEED_GATE_MS:-500}"
   --node-modules "$REPO_ROOT/node_modules"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from material_fit.assets.material_stage1 import MaterialStage1AssetSpec
 from material_fit.experiments import material_phase05_recovery as phase05
@@ -15,13 +15,14 @@ from material_fit.optimizer.structured_material_space import (
     STRUCTURED_MATERIAL_PARAM_NAMES,
     STRUCTURED_SCENE_PARAM_NAMES,
 )
+from material_fit.vision.dists_score import DISTS_ALIGNED_RGB_METRIC
 
 
 STAGE1_SEARCH_PARAM_NAMES = (
     *STRUCTURED_MATERIAL_PARAM_NAMES,
     *STRUCTURED_SCENE_PARAM_NAMES,
 )
-STAGE1_OPTIMIZATION_SCORE_METRIC = "cross_engine_foreground_components_v3"
+STAGE1_OPTIMIZATION_SCORE_METRIC = DISTS_ALIGNED_RGB_METRIC
 STAGE1_VALIDATION_SCORE_METRIC = phase05.SCORE_METRIC
 STAGE1_SCORE_READBACK_WIDTH = 720
 STAGE1_SCORE_READBACK_HEIGHT = 0
@@ -67,6 +68,7 @@ def _build_fit_config(
     cma_population_size: int = 16,
     cma_seed: int = 20260715,
     pattern_initial_step_scale: float = 0.25,
+    pattern_initial_grid_points: int = 0,
     pattern_active_coordinate_count: int = 12,
     pattern_full_refresh_interval: int = 4,
     spsa_perturbation_scale: float = 0.01,
@@ -80,6 +82,8 @@ def _build_fit_config(
     browser_score_height: int | None = None,
     residual_grid_size: int = 16,
     residual_sketch_size: int = 128,
+    material_only: bool = False,
+    search_param_names_override: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     if optimizer_start_patch is None:
         optimizer_start_patch = target_patch
@@ -99,8 +103,31 @@ def _build_fit_config(
         node_modules=node_modules,
         views=views,
     )
-    config["search_param_names"] = list(STAGE1_SEARCH_PARAM_NAMES)
-    config["search_param_space"] = "structured_material_stage1_40_plus_6_v1"
+    config["search_param_names"] = list(
+        STRUCTURED_MATERIAL_PARAM_NAMES if material_only else STAGE1_SEARCH_PARAM_NAMES
+    )
+    config["search_param_space"] = (
+        "structured_material_single_view_40_v1"
+        if material_only
+        else "structured_material_stage1_40_plus_6_v1"
+    )
+    if search_param_names_override is not None:
+        allowed = set(
+            STRUCTURED_MATERIAL_PARAM_NAMES
+            if material_only
+            else STAGE1_SEARCH_PARAM_NAMES
+        )
+        requested = list(
+            dict.fromkeys(str(name) for name in search_param_names_override)
+        )
+        invalid = sorted(set(requested) - allowed)
+        if invalid or not requested:
+            raise ValueError(
+                "invalid explicit Stage 1 search parameter names: "
+                f"{invalid or requested}"
+            )
+        config["search_param_names"] = requested
+        config["search_param_space"] = "controlled_known_perturbation_subset_v1"
     config["optimizer"] = optimizer
     browser_score = config["laya_capture"]["browser_score"]
     browser_score["residual_grid_size"] = min(
@@ -183,11 +210,23 @@ def _build_fit_config(
                 "target_params_visible": False,
             }
         )
+        equivalence_groups = discrete_equivalence_report.get("groups", [])
+        initial_candidate_ids = [
+            str(group["representative_candidate_id"])
+            for group in equivalence_groups
+            if isinstance(group, dict) and group.get("representative_candidate_id")
+        ]
+        if not initial_candidate_ids:
+            initial_candidate_ids = [
+                str(candidate["candidate_id"])
+                for candidate in discrete_candidates
+            ]
         config["material_discrete_joint"] = {
             "profile": joint_policy["runtime_profile"],
             "budget_profile": joint_profile,
             "candidates": copy.deepcopy(discrete_candidates),
             "discrete_observation_equivalence": discrete_equivalence_report,
+            "initial_candidate_ids": initial_candidate_ids,
             "start_candidate": copy.deepcopy(start_candidate),
             "round_widths": list(
                 joint_policy.get("round_widths", discrete_round_widths)
@@ -197,6 +236,24 @@ def _build_fit_config(
             ),
             "round_sigmas": list(
                 joint_policy.get("round_sigmas", discrete_round_sigmas)
+            ),
+            "round_seed_mode": str(
+                joint_policy.get("round_seed_mode", "shared_best")
+            ),
+            "conditional_activation_probes": copy.deepcopy(
+                joint_policy.get("conditional_activation_probes", [])
+            ),
+            "activation_selects_initial_winner": bool(
+                joint_policy.get("activation_selects_initial_winner", False)
+            ),
+            "activation_commits_initial_seed": bool(
+                joint_policy.get("activation_commits_initial_seed", False)
+            ),
+            "skip_initial_discrete_probes_when_activation_selects": bool(
+                joint_policy.get(
+                    "skip_initial_discrete_probes_when_activation_selects",
+                    False,
+                )
             ),
             "population_size": max(int(block_population_size), 2),
             "branch_strategy": joint_policy.get("branch_strategy", "cmaes"),
@@ -216,6 +273,15 @@ def _build_fit_config(
                     0.0,
                 )
             ),
+            "rescan_candidate_modes": list(
+                joint_policy.get("rescan_candidate_modes", ())
+            ),
+            "rescan_browser_score_overrides": copy.deepcopy(
+                joint_policy.get("rescan_browser_score_overrides", ())
+            ),
+            "minimum_final_refine_proposals": int(
+                joint_policy.get("minimum_final_refine_proposals", 0)
+            ),
             "initial_score_rescan_schedule": copy.deepcopy(
                 joint_policy.get("initial_score_rescan_schedule", {})
             ),
@@ -223,12 +289,18 @@ def _build_fit_config(
             "restart_continuous_after_rescan": bool(
                 joint_policy.get("restart_continuous_after_rescan", False)
             ),
+            "restart_continuous_after_first_rescan": bool(
+                joint_policy.get("restart_continuous_after_first_rescan", False)
+            ),
             "continuous_after_final_rescan": copy.deepcopy(
                 joint_policy.get("continuous_after_final_rescan", {})
             ),
             "max_scored_candidates": joint_policy.get("max_scored_candidates"),
             "planned_proposal_budget": copy.deepcopy(
                 joint_policy.get("planned_proposal_budget", {})
+            ),
+            "initial_continuous_warmup": copy.deepcopy(
+                joint_policy.get("initial_continuous_warmup", {})
             ),
             "post_rescan_branch_race": copy.deepcopy(
                 joint_policy.get("post_rescan_branch_race", {})
@@ -292,10 +364,11 @@ def _build_fit_config(
             "feedback_source": "target_png_score_and_signed_residuals_only",
             "target_params_visible": False,
         }
-    if optimizer in {
+    if search_param_names_override is None and optimizer in {
         "cma_cold",
         "fish_spsa",
         "material_coordinate_pattern",
+        "material_inverse_surrogate",
         "material_jacobian_trust_region",
         "material_secant_trust_region",
     }:
@@ -352,19 +425,45 @@ def _build_fit_config(
             "feedback_source": "target_png_score_and_signed_residuals_only",
             "target_params_visible": False,
         }
+    if optimizer == "material_inverse_surrogate":
+        config["material_inverse_surrogate"] = {
+            "profile": "material_inverse_surrogate_stage1_v1",
+            "sample_count": 512,
+            "local_probe_radius": 0.10,
+            "global_radii": [0.08, 0.16, 0.32, 0.55],
+            "feature_count": 256,
+            "feature_selection": "correlation",
+            "hidden_features": 128,
+            "ridge_values": [0.001, 0.01, 0.1],
+            "random_feature_scales": [0.35, 0.75, 1.5],
+            "prediction_blend_scales": [0.5, 1.0, 1.5],
+            "max_model_cycles": 1,
+            "seed": 20260721,
+            "feedback_source": "target_png_signed_residuals_only",
+            "target_params_visible": False,
+        }
     if optimizer == "material_coordinate_pattern":
-        config["material_coordinate_pattern"] = {
-            "profile": "material_coordinate_pattern_stage1_v1",
+        if discrete_candidates and start_candidate is None:
+            raise ValueError("material_coordinate_pattern candidates require a start state")
+        pattern_config = {
+            "profile": "mixed_coordinate_pattern_stage1_v2",
             "initial_step_scale": float(pattern_initial_step_scale),
-            "minimum_step_scale": 1.0 / 64.0,
+            "initial_grid_points": max(int(pattern_initial_grid_points), 0),
+            "minimum_step_scale": 1.0 / 512.0,
             "step_growth": 1.20,
             "step_shrink": 0.5,
             "minimum_score_gain": 1.0e-7,
             "active_coordinate_count": max(int(pattern_active_coordinate_count), 0),
             "full_refresh_interval": max(int(pattern_full_refresh_interval), 0),
+            "hard_state_refresh_interval": 4,
             "feedback_source": "target_png_score_only",
             "target_params_visible": False,
+            "target_discrete_state_visible": False,
         }
+        if discrete_candidates:
+            pattern_config["candidates"] = copy.deepcopy(discrete_candidates)
+            pattern_config["start_candidate"] = copy.deepcopy(start_candidate)
+        config["material_coordinate_pattern"] = pattern_config
     if optimizer == "fish_spsa":
         config["fish_spsa"] = {
             "seed": 20260715,
@@ -383,14 +482,21 @@ def _build_fit_config(
         for coordinate in STRUCTURED_MATERIAL_ONLY_COORDINATES
     )
     contract = {
-        "phase": "human_reference_stage1",
+        "phase": (
+            "single_view_material_fit" if material_only else "human_reference_stage1"
+        ),
         "asset_independent": True,
         "material_coordinate_count": active_material_count,
         "scene_coordinate_count": active_scene_count,
         "scene_coordinates_searchable": active_scene_count > 0,
+        "scene_coordinates_frozen_from_original_start": material_only,
+        "known_perturbation_search_subset": search_param_names_override is not None,
         "discrete_render_state": (
             "searched_from_original_start"
-            if optimizer == "material_discrete_joint"
+            if (
+                optimizer == "material_discrete_joint"
+                or (optimizer == "material_coordinate_pattern" and bool(discrete_candidates))
+            )
             else "copied_from_target_before_optimizer_start"
         ),
         "target_discrete_state_visible_to_optimizer": False,

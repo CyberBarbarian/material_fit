@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "contract": "material_fit_stage2_frozen_sampling_v2",
+  "asset_id": "turtle_1506",
+  "reference_asset_id": "1506",
+  "reference_metadata_sha256": "d1e6cb8017df3b4895ba4f23ff62ec338c06255dda755568d87b107ef76fdf68",
+  "capture_mode": "orbit_camera",
+  "projection": "perspective",
+  "field_of_view": 60.0,
+  "camera_distance": 10.293167752060222,
+  "camera_center": [1.2377265, -0.0549351, -0.0851226],
+  "yaw_offset": 0.0,
+  "pitch_offset": 0.0,
+  "camera_height_factor": 0.0,
+  "registration": {
+    "mode": "frozen_per_view_similarity",
+    "output_size": [900, 700],
+    "interpolation": "bicubic",
+    "transforms": [
+      {"view_id": "v000_yaw0_pitch0", "scale": 1.2467, "dx": 65.00, "dy": 4.67},
+      {"view_id": "v001_yaw45_pitch0", "scale": 1.4165, "dx": 37.19, "dy": 4.55},
+      {"view_id": "v002_yaw90_pitch0", "scale": 1.6737, "dx": 10.43, "dy": 5.97},
+      {"view_id": "v003_yaw135_pitch0", "scale": 1.5447, "dx": -19.06, "dy": 4.59},
+      {"view_id": "v004_yaw180_pitch0", "scale": 1.5632, "dx": -54.79, "dy": 4.69},
+      {"view_id": "v005_yaw225_pitch0", "scale": 1.3603, "dx": -60.95, "dy": 4.12},
+      {"view_id": "v006_yaw270_pitch0", "scale": 1.2560, "dx": -5.93, "dy": 5.73},
+      {"view_id": "v007_yaw315_pitch0", "scale": 1.1895, "dx": 58.84, "dy": 4.83}
+    ]
+  },
+  "calibration": {
+    "method": "preserve_stage1_renderer_then_freeze_per_view_canvas_similarity",
+    "changes_renderer_environment": false,
+    "uses_per_view_translation": true,
+    "uses_per_view_uniform_scale": true,
+    "uses_crop_flip_or_nonuniform_warp": false,
+    "material_independence_verified": true,
+    "raw_perspective": {
+      "mean_foreground_iou": 0.4560,
+      "min_foreground_overlap_coefficient": 0.8114,
+      "max_centroid_error_norm": 0.0631,
+      "max_bbox_scale_error": 0.4022,
+      "mean_symmetric_edge_distance_px": 29.90
+    },
+    "registered": {
+      "mean_foreground_iou": 0.7914,
+      "min_foreground_overlap_coefficient": 0.8700,
+      "max_centroid_error_norm": 0.0002,
+      "max_bbox_scale_error": 0.0593,
+      "mean_symmetric_edge_distance_px": 8.25
+    }
+  }
+}

@@ -470,7 +470,8 @@ def run_cma_batch_auto_adjustment(
     state.best_score = context_diff_score
     state.best_params = dict(current_params)
 
-    context_stop_reason = _target_stop_reason(
+    context_stop_reason, _context_deferred_target_stop = _strategy_target_stop_decision(
+        strategy,
         context_fit_score,
         target_score=target_score,
         score_ceiling=score_ceiling,
@@ -1654,11 +1655,19 @@ def run_cma_batch_auto_adjustment(
 
             decision_stage = decision.get("stage")
             selected_stage_name = decision_stage.get("name") if isinstance(decision_stage, dict) else None
-            target_stop_reason = _target_stop_reason(
-                fit_score,
-                target_score=target_score,
-                score_ceiling=score_ceiling,
+            target_stop_reason, deferred_target_stop_reason = (
+                _strategy_target_stop_decision(
+                    strategy,
+                    fit_score,
+                    target_score=target_score,
+                    score_ceiling=score_ceiling,
+                )
             )
+            if deferred_target_stop_reason:
+                decision["target_stop_deferred"] = {
+                    "reason": deferred_target_stop_reason,
+                    "strategy": str(getattr(strategy, "name", "")),
+                }
             if target_stop_reason:
                 decision["stop_reason"] = target_stop_reason
                 selected_stage_name = target_stop_reason

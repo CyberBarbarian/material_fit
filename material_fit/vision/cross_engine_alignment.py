@@ -12,8 +12,8 @@ def foreground_mask(image: Any, *, white_threshold: float = 8.0) -> tuple[np.nda
     alpha = rgba[:, :, 3]
     if int(alpha.max()) > int(alpha.min()):
         return alpha > 5, "alpha"
-    rgb = rgba[:, :, :3].astype(np.int16)
-    return np.abs(rgb - 255).max(axis=2) > white_threshold, "distance_from_white"
+    rgb = rgba[:, :, :3]
+    return rgb.min(axis=2) < 255.0 - white_threshold, "distance_from_white"
 
 
 def score_alignment_pair(reference: Any, candidate: Any) -> dict[str, Any]:

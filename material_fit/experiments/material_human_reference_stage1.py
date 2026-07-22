@@ -8,9 +8,10 @@ import json
 import os
 import shutil
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from material_fit.assets.material_stage1 import (
     resolve_material_stage1_asset,
@@ -46,6 +47,10 @@ from material_fit.experiments.stage1_profiles import (
     _joint_profile_scored_candidate_limit,
     _resolve_v86_initial_score_route,
 )
+from material_fit.experiments.single_view_v86_policy import (
+    adapt_v86_policy_for_material_only,
+)
+from material_fit.experiments.single_view_runtime import single_view_profile_payload
 from material_fit.laya import lmat_io
 from material_fit.laya_capture.asset_profile import material_patch_from_lmat
 from material_fit.optimizer.material_recovery import perturb_material_params
@@ -62,6 +67,14 @@ from material_fit.optimizer.structured_material_space import (
     STRUCTURED_SCENE_PARAM_NAMES,
 )
 from material_fit.vision.cross_engine_score import score_cross_engine_views_v3
+from material_fit.vision.dists_score import (
+    DEFAULT_DISTS_DEVICE,
+    DEFAULT_DISTS_IMAGE_SIZE,
+    DEFAULT_DISTS_TORCH_THREADS,
+    DISTS_ALIGNED_RGB_METRIC,
+    DISTS_METRIC,
+    DISTS_MATERIAL_METRIC,
+)
 
 
 STAGE1_SEARCH_PARAM_NAMES = (
@@ -76,12 +89,16 @@ STAGE1_OPTIMIZERS = (
     "material_stage1_hybrid",
     "material_block_hybrid",
     "material_jacobian_trust_region",
+    "material_inverse_surrogate",
     "material_secant_trust_region",
     "structured_fish",
 )
-STAGE1_OPTIMIZATION_SCORE_METRIC = "cross_engine_foreground_components_v3"
+STAGE1_OPTIMIZATION_SCORE_METRIC = DISTS_ALIGNED_RGB_METRIC
 STAGE1_OPTIMIZATION_SCORE_METRICS = (
     STAGE1_OPTIMIZATION_SCORE_METRIC,
+    DISTS_MATERIAL_METRIC,
+    DISTS_METRIC,
+    "cross_engine_foreground_components_v3",
     "cross_engine_foreground_components_v4",
     "cross_engine_foreground_components_v5_strict_core",
 )
@@ -90,6 +107,23 @@ STAGE1_SCORE_READBACK_WIDTH = 720
 STAGE1_SCORE_READBACK_HEIGHT = 0
 V83_MAX_SCORED_CANDIDATES = MAX_SCORED_CANDIDATES
 V83_MAX_OPTIMIZER_ITERATIONS = MAX_OPTIMIZER_ITERATIONS
+
+
+def _single_view_material_only_search(
+    *,
+    view_count: int,
+    jacobian_search_scope: str,
+) -> bool:
+    return int(view_count) == 1 and jacobian_search_scope == "material"
+
+
+def _score_metric_after_route(
+    *,
+    single_view: bool,
+    requested_metric: str,
+    routed_metric: str,
+) -> str:
+    return str(requested_metric if single_view else routed_metric)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -133,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             cma_population_size=args.cma_population_size,
             cma_seed=args.cma_seed,
             pattern_initial_step_scale=args.pattern_initial_step_scale,
+            pattern_initial_grid_points=args.pattern_initial_grid_points,
             pattern_active_coordinate_count=args.pattern_active_coordinate_count,
             pattern_full_refresh_interval=args.pattern_full_refresh_interval,
             spsa_perturbation_scale=args.spsa_perturbation_scale,
@@ -149,6 +184,10 @@ def main(argv: list[str] | None = None) -> int:
             residual_grid_size=args.residual_grid_size,
             residual_sketch_size=args.residual_sketch_size,
             joint_profile=args.joint_profile,
+            single_view=args.single_view,
+            restrict_discrete_candidates_to_start=(
+                args.restrict_discrete_candidates_to_start
+            ),
         )
     finally:
         phase05._cleanup_recorded_runtime(run_dir)
@@ -189,7 +228,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--jacobian-solve-mode",
-        choices=("full_least_squares", "diagonal_gauss_newton", "score_gradient"),
+        choices=(
+            "full_least_squares",
+            "groupwise_least_squares",
+            "diagonal_gauss_newton",
+            "score_gradient",
+        ),
         default="full_least_squares",
     )
     parser.add_argument(
@@ -207,13 +251,19 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--cma-population-size", type=int, default=16)
     parser.add_argument("--cma-seed", type=int, default=20260715)
     parser.add_argument("--pattern-initial-step-scale", type=float, default=0.25)
+    parser.add_argument("--pattern-initial-grid-points", type=int, default=0)
     parser.add_argument("--pattern-active-coordinate-count", type=int, default=12)
     parser.add_argument("--pattern-full-refresh-interval", type=int, default=4)
+    parser.add_argument(
+        "--restrict-discrete-candidates-to-start",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--spsa-perturbation-scale", type=float, default=0.01)
     parser.add_argument("--spsa-learning-rate", type=float, default=0.03)
     parser.add_argument("--spsa-directions-per-update", type=int, default=8)
     parser.add_argument("--target-score", type=float, default=0.995)
-    parser.add_argument("--success-score", type=float, default=0.98)
+    parser.add_argument("--success-score", type=float, default=0.93)
     parser.add_argument("--max-runtime-sec", type=float, default=3600.0)
     parser.add_argument("--speed-gate-ms", type=float, default=500.0)
     parser.add_argument("--score-width", type=int, default=STAGE1_SCORE_READBACK_WIDTH)
@@ -232,6 +282,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--node-modules", default="")
     parser.add_argument("--engine-libs", default="")
+    parser.add_argument(
+        "--single-view",
+        action="store_true",
+        help="Use the frozen top view and search only the 40 material coordinates.",
+    )
     args = parser.parse_args(argv)
     if args.iterations is None:
         max_scored_candidates = None
@@ -281,6 +336,7 @@ def run_stage1(
     cma_population_size: int = 16,
     cma_seed: int = 20260715,
     pattern_initial_step_scale: float = 0.25,
+    pattern_initial_grid_points: int = 0,
     pattern_active_coordinate_count: int = 12,
     pattern_full_refresh_interval: int = 4,
     spsa_perturbation_scale: float = 0.01,
@@ -295,7 +351,15 @@ def run_stage1(
     discrete_round_widths: tuple[int, ...] = (8, 4, 4),
     discrete_round_budgets: tuple[int, ...] = (64, 160, 320),
     discrete_round_sigmas: tuple[float, ...] = (0.18, 0.10, 0.05),
+    single_view: bool = False,
+    target_label: str = "Human target",
+    search_param_names_override: Sequence[str] | None = None,
+    restrict_discrete_candidates_to_start: bool = False,
 ) -> dict[str, Any]:
+    mixed_state_optimizer = optimizer in {
+        "material_discrete_joint",
+        "material_coordinate_pattern",
+    }
     joint_policy = _joint_profile_policy(joint_profile)
     selected_joint_profile = joint_profile
     selected_joint_policy = joint_policy
@@ -333,25 +397,54 @@ def run_stage1(
         target_material_path=target_material_path,
         shader_path=shader_path,
     )
+    if single_view:
+        asset = replace(
+            asset,
+            profile=single_view_profile_payload(
+                asset.profile,
+                project_root=asset.project_root,
+                scene_path=asset.scene_path,
+                width=int(asset.profile.get("width", 900)),
+                height=int(asset.profile.get("height", 700)),
+            ),
+        )
     score_width, score_height = _optimizer_score_resolution(
         asset.profile,
         requested_width=score_width,
         requested_height=score_height,
     )
+    if single_view:
+        unified_profile = copy.deepcopy(asset.profile)
+        unified_profile["width"] = int(score_width)
+        unified_profile["height"] = int(score_height)
+        asset = replace(asset, profile=unified_profile)
     optimizer_reference_width = int(score_width)
     optimizer_reference_height = int(score_height)
+    single_view_score_resolution = (
+        optimizer_reference_width,
+        optimizer_reference_height,
+    )
+    single_view_score_metric = str(score_metric)
+    single_view_acceptance_score_metric = str(score_metric)
     profile_file = _write_profile(asset, run_dir / "inputs/asset_profile.json")
     phase05._force_white_background(profile_file)
     optimizer_profile_file: Path | None = None
-    if joint_profile != JOINT_PROFILE_V86:
+    if optimizer != "material_discrete_joint" or joint_profile != JOINT_PROFILE_V86:
         optimizer_profile_file = _write_optimizer_profile(
             profile_file,
             run_dir / "inputs/optimizer_asset_profile.json",
             width=score_width,
             height=score_height,
         )
-    views = phase05._profile_views(profile_file)
-
+    views = phase05._profile_views(
+        profile_file,
+        expected_count=1 if single_view else 8,
+    )
+    single_view_mode = len(views) == 1
+    material_only_search = _single_view_material_only_search(
+        view_count=len(views),
+        jacobian_search_scope=jacobian_search_scope,
+    )
     private_dir = run_dir / "private_audit"
     inputs_dir = run_dir / "inputs"
     private_dir.mkdir(parents=True, exist_ok=True)
@@ -371,7 +464,7 @@ def run_stage1(
     optimizer_discrete_candidates: list[dict[str, Any]] = []
     discrete_equivalence_report: dict[str, Any] = {}
     start_candidate: dict[str, Any] | None = None
-    if optimizer == "material_discrete_joint":
+    if mixed_state_optimizer:
         optimizer_start_path = asset.start_material_path
         optimizer_start_params = original_start_params
         optimizer_start_patch = original_start_patch
@@ -379,17 +472,19 @@ def run_stage1(
         start_candidate = find_candidate_for_patch(discrete_candidates, original_start_patch)
         optimizer_discrete_candidates = discrete_candidates
         if (
-            joint_profile != JOINT_PROFILE_V86
+            optimizer == "material_discrete_joint"
+            and joint_profile != JOINT_PROFILE_V86
             and joint_policy.get("discrete_observation_equivalence", False)
         ):
             (
-                optimizer_discrete_candidates,
+                _initial_discrete_representatives,
                 discrete_equivalence_report,
             ) = compress_observationally_equivalent_candidates(
                 discrete_candidates,
                 start_candidate=start_candidate,
                 start_patch=original_start_patch,
             )
+            optimizer_discrete_candidates = discrete_candidates
             _write_json(
                 run_dir / "stage1_discrete_observation_equivalence_report.json",
                 discrete_equivalence_report,
@@ -456,19 +551,20 @@ def run_stage1(
     finally:
         target_driver.close()
 
-    if joint_profile == JOINT_PROFILE_V86:
-        if optimizer != "material_discrete_joint" or start_candidate is None:
-            raise ValueError("V86 requires material_discrete_joint and a start state")
+    if optimizer == "material_discrete_joint" and joint_profile == JOINT_PROFILE_V86:
+        if start_candidate is None:
+            raise ValueError("V86 requires a start state")
         router_driver = phase05._build_artifact_capture_driver(
             profile_path=profile_file,
             output_root=run_dir / "initial_score_router/runtime",
             defines=optimizer_start_patch["defines"],
             render_states=optimizer_start_patch["render_states"],
-            references=None,
+            references=target_dir if single_view_mode else None,
             node_modules=node_modules,
+            score_metric=score_metric if single_view_mode else None,
         )
         try:
-            phase05._capture_artifact_set(
+            router_result = phase05._capture_artifact_set(
                 driver=router_driver,
                 artifact_dir=router_start_dir,
                 params=attach_discrete_candidate(
@@ -480,15 +576,23 @@ def run_stage1(
             )
         finally:
             router_driver.close()
-        initial_score_payload = score_cross_engine_views_v3(
-            reference_dir=target_dir,
-            candidate_dir=router_start_dir,
-            views=views,
-        )
-        initial_score = _finite_score(initial_score_payload)
+        if single_view_mode:
+            initial_score = phase05._browser_fit_score(router_result)
+            initial_score_payload = {
+                "metric": score_metric,
+                "score": initial_score,
+                "source": "initial_full_resolution_browser_score",
+            }
+        else:
+            initial_score_payload = score_cross_engine_views_v3(
+                reference_dir=target_dir,
+                candidate_dir=router_start_dir,
+                views=views,
+            )
+            initial_score = _finite_score(initial_score_payload)
         if initial_score is None:
             raise RuntimeError(
-                "V86 initial-score route render did not produce a valid Python V3 score"
+                "V86 initial-score route render did not produce a valid score"
             )
         (
             selected_joint_profile,
@@ -511,17 +615,69 @@ def run_stage1(
             residual_grid_size=residual_grid_size,
             residual_sketch_size=residual_sketch_size,
         )
+        single_view_policy_report: dict[str, Any] = {}
+        if single_view_mode:
+            score_metric = _score_metric_after_route(
+                single_view=True,
+                requested_metric=single_view_score_metric,
+                routed_metric=score_metric,
+            )
+            selected_joint_policy, single_view_policy_report = (
+                adapt_v86_policy_for_material_only(
+                    selected_joint_policy,
+                    optimization_score_metric=score_metric,
+                    scene_searchable=not material_only_search,
+                    initial_score=initial_score,
+                )
+            )
+            single_view_acceptance_score_metric = str(score_metric)
+            score_metric = str(
+                single_view_policy_report["initial_optimization_score_metric"]
+            )
+            routed_joint_profile = selected_joint_profile
+            selected_joint_profile = str(
+                single_view_policy_report["selected_child_profile"]
+            )
+            initial_score_route_report.update(
+                {
+                    "routed_joint_profile": routed_joint_profile,
+                    "selected_joint_profile": selected_joint_profile,
+                    "selected_max_scored_candidates": (
+                        selected_joint_policy.get("max_scored_candidates")
+                    ),
+                    "budget_extension": single_view_policy_report[
+                        "unified_child_budget_extension"
+                    ],
+                }
+            )
+            score_width, score_height = single_view_score_resolution
+            optimizer_reference_width = score_width
+            optimizer_reference_height = score_height
+            initial_score_route_report["selected_score_resolution"] = [
+                score_width,
+                score_height,
+            ]
+            initial_score_route_report["selected_reference_resolution"] = [
+                optimizer_reference_width,
+                optimizer_reference_height,
+            ]
         initial_score_route_report.update(
             {
                 "target_render_dir": str(target_dir),
                 "start_render_dir": str(router_start_dir),
                 "score_payload": initial_score_payload,
+                "single_view_mode": single_view_mode,
+                "single_view_material_only": material_only_search,
+                "single_view_policy_adaptation": single_view_policy_report,
+                "selected_optimization_score_metric": score_metric,
+                "acceptance_score_metric": single_view_acceptance_score_metric,
             }
         )
-        (
-            optimizer_reference_width,
-            optimizer_reference_height,
-        ) = initial_score_route_report["selected_reference_resolution"]
+        if not single_view_mode:
+            (
+                optimizer_reference_width,
+                optimizer_reference_height,
+            ) = initial_score_route_report["selected_reference_resolution"]
         _write_json(
             run_dir / "initial_score_router/initial_score_route_report.json",
             initial_score_route_report,
@@ -533,13 +689,14 @@ def run_stage1(
         discrete_equivalence_report = {}
         if selected_joint_policy.get("discrete_observation_equivalence", False):
             (
-                optimizer_discrete_candidates,
+                _initial_discrete_representatives,
                 discrete_equivalence_report,
             ) = compress_observationally_equivalent_candidates(
                 discrete_candidates,
                 start_candidate=start_candidate,
                 start_patch=original_start_patch,
             )
+            optimizer_discrete_candidates = discrete_candidates
             _write_json(
                 run_dir / "stage1_discrete_observation_equivalence_report.json",
                 discrete_equivalence_report,
@@ -558,6 +715,15 @@ def run_stage1(
             width=optimizer_reference_width,
             height=optimizer_reference_height,
         )
+
+    if restrict_discrete_candidates_to_start:
+        if not mixed_state_optimizer or start_candidate is None:
+            raise ValueError(
+                "start-only discrete scope requires a mixed-state optimizer start"
+            )
+        optimizer_discrete_candidates = []
+        discrete_report["optimizer_candidate_scope"] = "original_start_state_frozen"
+        discrete_report["optimizer_candidate_count"] = 0
 
     if optimizer_profile_file is None:
         raise RuntimeError("Stage 1 optimizer profile was not resolved")
@@ -587,6 +753,11 @@ def run_stage1(
         render_states=target_patch["render_states"],
         references=optimizer_target_dir,
         node_modules=node_modules,
+        score_metric=(
+            single_view_acceptance_score_metric
+            if single_view_mode
+            else score_metric
+        ),
     )
     try:
         repeated = phase05._capture_artifact_set(
@@ -654,6 +825,7 @@ def run_stage1(
         cma_population_size=cma_population_size,
         cma_seed=cma_seed,
         pattern_initial_step_scale=pattern_initial_step_scale,
+        pattern_initial_grid_points=pattern_initial_grid_points,
         pattern_active_coordinate_count=pattern_active_coordinate_count,
         pattern_full_refresh_interval=pattern_full_refresh_interval,
         spsa_perturbation_scale=spsa_perturbation_scale,
@@ -669,7 +841,18 @@ def run_stage1(
         ),
         browser_score_width=score_width,
         browser_score_height=score_height,
+        material_only=material_only_search,
+        search_param_names_override=search_param_names_override,
     )
+    if single_view_mode:
+        fit_config["laya_capture"]["browser_score"].update(
+            {
+                "perceptual_image_size": DEFAULT_DISTS_IMAGE_SIZE,
+                "perceptual_device": DEFAULT_DISTS_DEVICE,
+                "perceptual_torch_threads": DEFAULT_DISTS_TORCH_THREADS,
+                "perceptual_emit_residual_features": True,
+            }
+        )
     if initial_score_route_report:
         fit_config["stage1_initial_score_router"] = copy.deepcopy(
             initial_score_route_report
@@ -704,9 +887,15 @@ def run_stage1(
         raise FileNotFoundError(f"Stage 1 optimizer did not produce best params: {best_params_path}")
     best_params_raw = _read_json(best_params_path)
     best_continuous_params, best_candidate = split_discrete_candidate(best_params_raw)
-    if optimizer == "material_discrete_joint":
+    if mixed_state_optimizer:
+        if best_candidate is None and restrict_discrete_candidates_to_start:
+            best_candidate = copy.deepcopy(start_candidate)
+            best_params_raw = attach_discrete_candidate(
+                best_continuous_params,
+                best_candidate,
+            )
         if best_candidate is None or start_candidate is None:
-            raise RuntimeError("joint Stage 1 best result is missing its discrete candidate")
+            raise RuntimeError("mixed-state Stage 1 best result is missing its discrete candidate")
         start_render_params = attach_discrete_candidate(optimizer_start_params, start_candidate)
         best_render_params = attach_discrete_candidate(
             best_continuous_params,
@@ -740,7 +929,13 @@ def run_stage1(
         render_states=final_base_patch["render_states"],
         references=target_dir,
         node_modules=node_modules,
+        score_metric=(
+            single_view_acceptance_score_metric
+            if single_view_mode
+            else score_metric
+        ),
     )
+    target_discrete_result: dict[str, Any] | None = None
     try:
         start_result = phase05._capture_artifact_set(
             driver=final_driver,
@@ -757,12 +952,12 @@ def run_stage1(
             iteration=1,
         )
         if (
-            optimizer == "material_discrete_joint"
+            mixed_state_optimizer
             and target_candidate is not None
             and best_candidate is not None
             and target_candidate["candidate_id"] != best_candidate["candidate_id"]
         ):
-            phase05._capture_artifact_set(
+            target_discrete_result = phase05._capture_artifact_set(
                 driver=final_driver,
                 artifact_dir=private_dir / "best_continuous_target_discrete_render",
                 params=attach_discrete_candidate(best_continuous_params, target_candidate),
@@ -782,7 +977,7 @@ def run_stage1(
     if len({tuple(value) for value in artifact_resolutions.values()}) != 1:
         raise RuntimeError(f"Stage 1 artifact resolutions differ: {artifact_resolutions}")
     artifact_render_resolution = artifact_resolutions["target"]
-    if optimizer == "material_discrete_joint":
+    if mixed_state_optimizer:
         write_candidate_lmat_with_discrete_state(
             optimizer_start_path,
             run_dir / "best_material.lmat",
@@ -796,7 +991,7 @@ def run_stage1(
             allow_missing_keys=True,
         )
 
-    scores = {
+    cross_engine_diagnostic_scores = {
         "start": score_cross_engine_views_v3(
             reference_dir=target_dir,
             candidate_dir=run_dir / "start_render",
@@ -808,28 +1003,68 @@ def run_stage1(
             views=views,
         ),
     }
-    if optimizer == "material_discrete_joint":
+    if single_view_mode:
+        scores = {
+            "metric": single_view_acceptance_score_metric,
+            "source": "final_full_resolution_browser_score",
+            "start": phase05._browser_fit_score(start_result),
+            "best": phase05._browser_fit_score(best_result),
+            "cross_engine_v3_diagnostic": cross_engine_diagnostic_scores,
+        }
+    else:
+        scores = {
+            "metric": "cross_engine_material_score_v3",
+            "source": "python_artifact_score",
+            "start": _finite_score(cross_engine_diagnostic_scores["start"]),
+            "best": _finite_score(cross_engine_diagnostic_scores["best"]),
+            "cross_engine_v3_diagnostic": cross_engine_diagnostic_scores,
+        }
+    if mixed_state_optimizer:
         assert start_candidate is not None
         assert target_candidate is not None
         assert best_candidate is not None
         if target_candidate["candidate_id"] == best_candidate["candidate_id"]:
-            target_discrete_audit_score = _finite_score(scores["best"])
+            target_discrete_audit_score = scores["best"]
         else:
-            target_discrete_audit_score = _finite_score(
-                score_cross_engine_views_v3(
-                    reference_dir=target_dir,
-                    candidate_dir=private_dir / "best_continuous_target_discrete_render",
-                    views=views,
+            if single_view_mode:
+                if target_discrete_result is None:
+                    raise RuntimeError("missing target-discrete audit capture result")
+                target_discrete_audit_score = phase05._browser_fit_score(
+                    target_discrete_result
                 )
-            )
+            else:
+                target_discrete_audit_score = _finite_score(
+                    score_cross_engine_views_v3(
+                        reference_dir=target_dir,
+                        candidate_dir=private_dir / "best_continuous_target_discrete_render",
+                        views=views,
+                    )
+                )
         discrete_recovery = _discrete_recovery_report(
             start_candidate=start_candidate,
             target_candidate=target_candidate,
             best_candidate=best_candidate,
-            best_score=_finite_score(scores["best"]),
+            best_score=scores["best"],
             target_discrete_audit_score=target_discrete_audit_score,
             success_score=success_score,
         )
+        if optimizer == "material_coordinate_pattern":
+            strict_target_state_diagnostic = copy.deepcopy(discrete_recovery)
+            discrete_recovery = {
+                "contract": "private_stage1_mixed_pattern_state_audit_v2",
+                "passed": bool(
+                    best_candidate["candidate_id"]
+                    in {candidate["candidate_id"] for candidate in discrete_candidates}
+                    and scores["best"] >= success_score
+                ),
+                "state_recovery_passed": bool(
+                    strict_target_state_diagnostic["state_recovery_passed"]
+                ),
+                "optimizer_visible": False,
+                "optimizer_selected_legal_state": True,
+                "acceptance_basis": "final target-PNG appearance from a legal searched state",
+                "strict_target_state_diagnostic": strict_target_state_diagnostic,
+            }
         _write_json(private_dir / "stage1_discrete_recovery_report.json", discrete_recovery)
     _write_json(run_dir / "stage1_image_score_report.json", scores)
     parameter_audit = _parameter_audit(
@@ -838,7 +1073,11 @@ def run_stage1(
         best_continuous_params,
     )
     _write_json(private_dir / "stage1_parameter_audit.json", parameter_audit)
-    timing = phase05._timing_report(run_dir / "output/auto_adjust/iteration_series.json", speed_gate_ms)
+    timing = phase05._timing_report(
+        run_dir / "output/auto_adjust/iteration_series.json",
+        speed_gate_ms,
+        stability_warmup_iterations=5 if single_view_mode else 0,
+    )
     _write_json(run_dir / "iteration_timing_report.json", timing)
     scored_candidate_count = int(timing["count"]) + 1
     budget_limit = (
@@ -851,7 +1090,7 @@ def run_stage1(
         "joint_profile": joint_profile if optimizer == "material_discrete_joint" else None,
         "selected_joint_profile": (
             selected_joint_profile
-            if optimizer == "material_discrete_joint"
+            if mixed_state_optimizer
             else None
         ),
         "optimizer_iterations_cli_requested": int(iterations),
@@ -870,8 +1109,12 @@ def run_stage1(
     _write_json(run_dir / "stage1_budget_report.json", budget_report)
     contact_sheet = phase05._write_contact_sheet(
         views=views,
-        columns=(("Human target", target_dir), ("Original material start", run_dir / "start_render"), ("Optimized best", run_dir / "best_render")),
-        output_path=run_dir / "human_target_start_best_eightview.png",
+        columns=((str(target_label), target_dir), ("Original material start", run_dir / "start_render"), ("Optimized best", run_dir / "best_render")),
+        output_path=run_dir / (
+            "human_target_start_best_single_view.png"
+            if single_view_mode
+            else "human_target_start_best_eightview.png"
+        ),
     )
     cleanup = phase05._cleanup_recorded_runtime(run_dir)
     view_counts = {
@@ -880,8 +1123,8 @@ def run_stage1(
         "start": phase05._view_count(run_dir / "start_render", views),
         "best": phase05._view_count(run_dir / "best_render", views),
     }
-    start_score = _finite_score(scores["start"])
-    best_score = _finite_score(scores["best"])
+    start_score = scores["start"]
+    best_score = scores["best"]
     runtime_patch = _runtime_patch_report(
         start_patch=optimizer_start_patch,
         best_candidate=best_candidate,
@@ -902,23 +1145,36 @@ def run_stage1(
         and timing["gate_passed"]
         and budget_report["passed"]
         and cleanup["remaining_owned_pid_count"] == 0
-        and all(count == 8 for count in view_counts.values())
+        and all(count == len(views) for count in view_counts.values())
     )
     report = {
-        "contract": "shared_material_human_reference_stage1_v2_joint_discrete",
+        "contract": "shared_material_human_reference_stage1_v3_mixed_state",
         "accepted": accepted,
         "asset_id": asset.asset_id,
         "run_dir": str(run_dir),
         "optimizer_runtime_id": optimizer,
         "optimization_score_metric": score_metric,
+        "acceptance_score_metric": (
+            single_view_acceptance_score_metric
+            if single_view_mode
+            else score_metric
+        ),
         "validation_score_metric": STAGE1_VALIDATION_SCORE_METRIC,
-        "artifact_score_metric": "cross_engine_material_score_v3",
-        "optimizer_visible_target": "eight target PNGs and online score/residuals only",
+        "artifact_score_metric": scores["metric"],
+        "diagnostic_score_metric": "cross_engine_material_score_v3",
+        "optimizer_visible_target": (
+            "one target PNG and online score/residuals only"
+            if single_view_mode
+            else "eight target PNGs and online score/residuals only"
+        ),
+        "view_count": len(views),
+        "single_view_mode": single_view_mode,
+        "single_view_material_only": material_only_search,
         "target_continuous_params_visible_to_optimizer": False,
         "target_discrete_state_visible_to_optimizer": False,
         "discrete_base": (
             "original discrete and continuous material state"
-            if optimizer == "material_discrete_joint"
+            if mixed_state_optimizer
             else "original continuous params plus copied target shader/hard state"
         ),
         "material_coordinate_count": int(
@@ -951,9 +1207,15 @@ def run_stage1(
         "success_score": success_score,
         "discrete_base_report": discrete_report,
         "discrete_recovery_passed": bool(discrete_recovery["passed"]),
+        "discrete_state_recovery_passed": bool(
+            discrete_recovery.get(
+                "state_recovery_passed",
+                discrete_recovery["passed"],
+            )
+        ),
         "discrete_recovery_private_audit_path": str(
             private_dir / "stage1_discrete_recovery_report.json"
-        ) if optimizer == "material_discrete_joint" else None,
+        ) if mixed_state_optimizer else None,
         "runtime_discrete_patch": runtime_patch,
         "scorer_sanity": scorer_report,
         "optimizer_input_boundary": boundary,

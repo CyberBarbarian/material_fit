@@ -84,6 +84,62 @@ The accepted 12-start robustness run is
 `phase05_multistart_v6_adaptive_12x600_20260710_234725`: all 12 starts reached
 at least 0.98, with mean/min/max `0.986467/0.980295/0.995001`.
 
+## Single-view three-stage evidence
+
+The current single-view policy uses the public
+`v86_budget1500_initial_score_routed_unified` contract. The early Stage 1/2
+search uses `foreground_dists_aligned_rgb_v3`; final refinement and every
+acceptance decision use `foreground_dists_aligned_rgb_v6`. V6 combines DISTS,
+aligned RGB, and a generic multi-scale local-contrast term. The switch is fixed
+before the run and does not depend on asset identity or target parameters.
+
+Accepted Linux Phase 0.5 campaign
+`linux_phase05_turtle_v52_v6_localcontrast_20260722` exercised two
+independent starts:
+
+| Case | Initial | Best | Decisions | Stable mean | Hard-state audit |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `joint_mild_seed53` | 0.781523 | 0.981888 | 268 | 450.6 ms | passed |
+| `mixed_mild_seed71` | 0.766466 | 0.980053 | 608 | 442.2 ms | passed |
+
+Both cases used only target PNGs at the optimizer boundary, recovered legal
+known coordinates, passed the `500 ms` speed gate, and left zero owned PIDs.
+
+Accepted Stage 1 run
+`linux_stage1_turtle_v52_v6_localcontrast_20260722` started from the
+original turtle material and fitted the privately rendered human target PNG:
+
+- V6 score `0.764382 -> 0.953396`;
+- 1 initial score plus 1,498 observed proposals, within the 1,500-material cap;
+- target hard-state recovery passed;
+- stable mean/P50/P95 `437.7/432.1/487.2 ms`;
+- target parameters and target hard-state values absent from optimizer input;
+- zero owned PIDs after cleanup.
+
+The preceding V5 wrapper and policy also passed on Windows 11 as
+`stage1_turtle_human_png_20260722_194936`: V5 score
+`0.811871 -> 0.935444`, 1,499 scored materials, correct hard-state recovery,
+stable mean/P50/P95 `474.9/423.0/744.5 ms`, and zero owned PIDs. The maintained
+cross-platform Stage 1 gate is `0.93`. The V6 implementation passes the Windows
+doctor and unit suite; the accepted V6 end-to-end evidence recorded here is
+Linux.
+
+Accepted Stage 2 run `linux_stage2_turtle_v52_v6_localcontrast_20260722` replaced the
+target with the tracked Unity top-view PNG while keeping the policy and budget:
+
+| Material | V6 score | DISTS distance | Local-contrast fit |
+| --- | ---: | ---: | ---: |
+| Original Laya start | 0.722325 | 0.252450 | 0.533847 |
+| Offline human-adjusted Laya | 0.830535 | 0.189697 | 0.878065 |
+| Optimized Laya best | 0.833833 | 0.189769 | 0.885981 |
+
+The best/start DISTS-distance ratio was `0.751708`, below the `0.85` gate. The
+run scored exactly 1,500 unique materials, had stable mean/P50/P95
+`412.9/409.0/454.6 ms`, reranked 20 existing archive elites without new
+proposals, and left zero owned PIDs. The human material was loaded only for the
+post-run comparison sheet and did not participate in routing, proposals,
+stopping, reranking, or acceptance.
+
 ## Pattern16
 
 Pattern16 is the retained cross-engine fish baseline. It searches 16 appearance

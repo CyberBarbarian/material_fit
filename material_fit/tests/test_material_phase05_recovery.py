@@ -25,6 +25,7 @@ from material_fit.experiments.material_phase05_multistart import (
     _payload_sha256,
 )
 from material_fit.experiments import material_phase05_multistart as multistart_module
+from material_fit.experiments import material_phase05_recovery as recovery_module
 from material_fit.optimizer.material_recovery import (
     material_parameter_distance,
     perturb_material_params,
@@ -64,6 +65,82 @@ def _params() -> dict:
         "u_RimOffet": [0.0, 0.0, 0.0, 0.0],
         **{name: 15.0 for name in STRUCTURED_SCENE_PARAM_NAMES},
     }
+
+
+def test_cleanup_report_replaces_stale_status_for_same_pid_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    record = tmp_path / "runtime_renderer_pid.json"
+    record.write_text(json.dumps({"pid": 12345}), encoding="utf-8")
+    (tmp_path / "process_cleanup_report.json").write_text(
+        json.dumps(
+            {
+                "checks": [
+                    {
+                        "pid": 12345,
+                        "record": str(record),
+                        "before": True,
+                        "after": True,
+                        "owned_renderer": True,
+                        "action": "terminated_owned_tree",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(recovery_module, "_pid_exists", lambda _pid: False)
+    monkeypatch.setattr(recovery_module, "_process_command_line", lambda _pid: "")
+
+    report = recovery_module._cleanup_recorded_runtime(tmp_path)
+
+    assert report["remaining_owned_pid_count"] == 0
+    assert len(report["checks"]) == 1
+    assert report["checks"][0]["action"] == "already_stopped"
+
+
+def test_cleanup_stops_owned_fit_before_renderer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case_dir = tmp_path / "cases" / "joint"
+    case_dir.mkdir(parents=True)
+    (case_dir / "fit.pid").write_text("101\n", encoding="ascii")
+    runtime_dir = case_dir / "runtime_renderer"
+    runtime_dir.mkdir()
+    (runtime_dir / "runtime_renderer_pid.json").write_text(
+        json.dumps({"pid": 202}),
+        encoding="utf-8",
+    )
+    alive = {101: True, 202: True}
+    terminated: list[int] = []
+
+    monkeypatch.setattr(
+        recovery_module,
+        "_pid_exists",
+        lambda pid: alive.get(pid, False),
+    )
+    monkeypatch.setattr(
+        recovery_module,
+        "_process_command_line",
+        lambda pid: (
+            f"python -m material_fit.fit_material --config {tmp_path}/config.json"
+            if pid == 101
+            else "node material_fit/laya_capture/run_runtime_renderer.js"
+        ),
+    )
+
+    def terminate(pid: int) -> None:
+        terminated.append(pid)
+        alive[pid] = False
+
+    monkeypatch.setattr(recovery_module, "_terminate_recorded_process", terminate)
+
+    report = recovery_module._cleanup_recorded_runtime(tmp_path)
+
+    assert terminated == [101, 202]
+    assert report["remaining_owned_pid_count"] == 0
 
 
 def test_shared_perturbation_changes_40_material_coordinates_only() -> None:

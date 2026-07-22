@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from material_fit.optimizer.adjustment_algorithm import AdjustmentState
@@ -144,6 +146,66 @@ def test_successive_halving_observes_all_states_before_selecting_winner() -> Non
     assert target_summary["component_means"]["detail_texture"] == 0.955
     assert len(shared_seeds) == 2
     assert shared_seeds[0] == shared_seeds[1]
+
+
+def test_initial_continuous_warmup_precedes_hard_state_search() -> None:
+    candidates, start, target = _space()
+    initial = attach_discrete_candidate(
+        {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+        start,
+    )
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=initial,
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "initial_continuous_warmup": {
+                "enabled": True,
+                "max_proposals": 2,
+                "strategy": "material_coordinate_pattern",
+                "pattern": {"active_coordinate_count": 1},
+            },
+        },
+    )
+
+    assert strategy.allows_target_distance_stop() is True
+    current = initial
+    warmup_phases: list[str] = []
+    for iteration in range(2):
+        current, decision = strategy.propose(
+            _context(iteration, current, target["candidate_id"])
+        )
+        _continuous, candidate = split_discrete_candidate(current)
+        assert candidate is not None
+        assert candidate["candidate_id"] == start["candidate_id"]
+        warmup_phases.append(decision["material_discrete_joint"]["phase"])
+
+    current, decision = strategy.propose(
+        _context(2, current, target["candidate_id"])
+    )
+    summary = strategy.research_summary()
+
+    assert warmup_phases == [
+        "initial_continuous_warmup",
+        "initial_continuous_warmup",
+    ]
+    assert decision["material_discrete_joint"]["phase"] == "discrete_probe"
+    assert summary["initial_continuous_warmup"] == {
+        "enabled": True,
+        "max_proposals": 2,
+        "proposals": 2,
+        "completed": True,
+        "stop_reason": "budget_exhausted",
+        "strategy": "material_coordinate_pattern",
+        "target_information_used": False,
+        "start_hard_state_only": True,
+    }
+    assert strategy.allows_target_distance_stop() is False
 
 
 @pytest.mark.parametrize(
@@ -1374,6 +1436,654 @@ def test_post_rescan_cma_seeds_are_stable_by_hard_state_not_score_rank() -> None
     }
 
 
+def test_post_rescan_branch_race_can_use_initial_and_common_continuous_seeds() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+    common_continuous = {"u_GammaPower": 1.7, "u_Saturation": 0.4}
+    initial = attach_discrete_candidate(initial_continuous, start)
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=initial,
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_mode", "rim_smooth", "blend_src"],
+                "width": 1,
+                "budget_per_candidate": 2,
+                "strategy": "material_jacobian_trust_region",
+                "continuous_seed_modes": ["initial", "common_rescan"],
+                "jacobian": {
+                    "difference_mode": "forward",
+                    "shader_default_anchor_enabled": False,
+                },
+            },
+        },
+    )
+    scores = {
+        candidate["candidate_id"]: (
+            0.9 if candidate["candidate_id"] == target["candidate_id"] else 0.1
+        )
+        for candidate in candidates
+    }
+    analyses = {
+        candidate_id: {
+            "structured_residual_features": {
+                "profile": "synthetic_discrete",
+                "features": [1.0 - score, 0.0],
+            }
+        }
+        for candidate_id, score in scores.items()
+    }
+    strategy._start_post_rescan_branch_race(
+        common_params=common_continuous,
+        scores=scores,
+        analyses=analyses,
+    )
+
+    current = initial
+    for iteration in range(8):
+        current, _decision = strategy.propose(
+            _context(iteration, current, target["candidate_id"])
+        )
+        if strategy.research_summary()["post_rescan_branch_race"]["summaries"]:
+            break
+
+    race = strategy.research_summary()["post_rescan_branch_race"]
+    candidate_summary = race["summaries"][0]["candidates"][0]
+    assert race["continuous_seed_modes"] == ["initial", "common_rescan"]
+    assert candidate_summary["proposals"] == 2
+    assert candidate_summary["continuous_seed_history"] == [
+        {
+            "source": "initial",
+            "proposal_start": 0,
+            "seed_evaluation_required": True,
+        },
+        {
+            "source": "common_rescan",
+            "proposal_start": 1,
+            "seed_evaluation_required": False,
+        },
+    ]
+
+
+def test_post_rescan_race_prioritizes_png_activation_and_uses_rank_budgets() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(initial_continuous, start),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_activation", "rim_smooth"],
+                "width": 4,
+                "budget_per_candidate": 1,
+                "ranking_signal": "conditional_activation_peak",
+                "allocation_order": "ranked_sequential",
+                "budgets_by_rank": [2, 1, 1, 1],
+                "strategy": "cmaes",
+            },
+        },
+    )
+    scores = {
+        candidate["candidate_id"]: (
+            0.2 if candidate["candidate_id"] == target["candidate_id"] else 0.8
+        )
+        for candidate in candidates
+    }
+    strategy._conditional_activation_results = [
+        {
+            "probe_name": "rim_response_activation",
+            "normalized_value": 0.5,
+            "candidate_id": candidate["candidate_id"],
+            "fit_score": (
+                0.95 if candidate["candidate_id"] == target["candidate_id"] else 0.4
+            ),
+        }
+        for candidate in candidates
+    ]
+
+    strategy._start_post_rescan_branch_race(
+        common_params=initial_continuous,
+        scores=scores,
+        analyses={candidate_id: {} for candidate_id in scores},
+    )
+
+    assert strategy._active_ids[0] == target["candidate_id"]
+    first = strategy._next_post_rescan_branch()
+    assert first is not None
+    assert first.candidate_id == target["candidate_id"]
+    assert strategy._post_rescan_branch_budget_limit(first) == 2
+    first.proposals = 2
+    second = strategy._next_post_rescan_branch()
+    assert second is not None
+    assert second.candidate_id != target["candidate_id"]
+    assert strategy._post_rescan_branch_budget_limit(second) == 1
+    evidence = strategy._post_rescan_ranking_evidence[target["candidate_id"]]
+    assert evidence["source"] == "conditional_activation_peak"
+    assert evidence["fit_score"] == pytest.approx(0.95)
+
+
+def test_post_rescan_activation_ranking_falls_back_to_rescan_score() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(initial_continuous, start),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_mode", "rim_smooth", "blend_src"],
+                "width": 1,
+                "budget_per_candidate": 1,
+                "ranking_signal": "conditional_activation_peak",
+            },
+        },
+    )
+    scores = {
+        candidate["candidate_id"]: (
+            0.95 if candidate["candidate_id"] == target["candidate_id"] else 0.2
+        )
+        for candidate in candidates
+    }
+
+    strategy._start_post_rescan_branch_race(
+        common_params=initial_continuous,
+        scores=scores,
+        analyses={candidate_id: {} for candidate_id in scores},
+    )
+
+    assert strategy._active_ids == [target["candidate_id"]]
+    evidence = strategy._post_rescan_ranking_evidence[target["candidate_id"]]
+    assert evidence == {"source": "rescan_score", "fit_score": 0.95}
+
+
+def test_post_rescan_activation_ranking_does_not_mix_missing_rows_with_rescan() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(initial_continuous, start),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_activation", "rim_smooth"],
+                "width": 4,
+                "budget_per_candidate": 1,
+                "ranking_signal": "conditional_activation_peak",
+            },
+        },
+    )
+    unobserved_high_rescan = next(
+        candidate
+        for candidate in candidates
+        if candidate["candidate_id"] != target["candidate_id"]
+        and candidate["axes"]["rim_smooth"]
+    )
+    scores = {
+        candidate["candidate_id"]: (
+            0.99
+            if candidate["candidate_id"] == unobserved_high_rescan["candidate_id"]
+            else 0.2
+        )
+        for candidate in candidates
+    }
+    strategy._conditional_activation_results = [
+        {
+            "probe_name": "rim_response_activation",
+            "normalized_value": 0.5,
+            "candidate_id": target["candidate_id"],
+            "fit_score": 0.7,
+        }
+    ]
+    assert strategy._post_rescan_branch_ranking_score(
+        strategy._branches[unobserved_high_rescan["candidate_id"]],
+        scores,
+    ) == -math.inf
+
+    strategy._start_post_rescan_branch_race(
+        common_params=initial_continuous,
+        scores=scores,
+        analyses={candidate_id: {} for candidate_id in scores},
+    )
+
+    assert strategy._active_ids[0] == target["candidate_id"]
+
+
+def test_activation_score_can_select_initial_continuous_winner() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(initial_continuous, start),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "initial_candidate_ids": [
+                start["candidate_id"],
+                target["candidate_id"],
+            ],
+            "activation_selects_initial_winner": True,
+            "round_widths": [2],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "continuous": {
+                "strategy": "material_coordinate_pattern",
+                "pattern": {"active_coordinate_count": 1},
+            },
+        },
+    )
+    start_branch = strategy._branches[start["candidate_id"]]
+    target_branch = strategy._branches[target["candidate_id"]]
+    start_branch.best_score = 0.95
+    start_branch.selection_score = 0.5
+    target_branch.best_score = 0.75
+    target_branch.selection_score = 0.8
+    strategy._active_ids = [start["candidate_id"], target["candidate_id"]]
+    strategy._conditional_activation_results = [
+        {
+            "probe_name": "rim_response_activation",
+            "normalized_value": 0.5,
+            "candidate_id": target["candidate_id"],
+            "fit_score": 0.8,
+        }
+    ]
+
+    strategy._start_continuous_refine()
+
+    assert strategy.research_summary()["winner_candidate_id"] == target["candidate_id"]
+
+
+def test_activation_selection_can_skip_redundant_raw_discrete_probes() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {
+        "u_GammaPower": 0.7,
+        "u_Saturation": 1.4,
+        "u_RimIntensity": 0.0,
+        "u_RimWidth": 0.0,
+    }
+    shader_params = [
+        *_shader_params(),
+        ShaderParam("u_RimIntensity", "Float", default=0.0),
+        ShaderParam("u_RimWidth", "Float", default=0.0),
+    ]
+    initial = attach_discrete_candidate(initial_continuous, start)
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=initial,
+        shader_params=shader_params,
+        search_param_names=list(initial_continuous),
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "initial_candidate_ids": [
+                start["candidate_id"],
+                target["candidate_id"],
+            ],
+            "activation_selects_initial_winner": True,
+            "skip_initial_discrete_probes_when_activation_selects": True,
+            "conditional_activation_probes": [
+                {
+                    "name": "rim_response_activation",
+                    "coordinate_ids": ["u_RimIntensity", "u_RimWidth"],
+                    "normalized_values": [0.5],
+                    "only_if_all_at_lower_bound": True,
+                }
+            ],
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+        },
+    )
+
+    _candidate, decision = strategy.propose(
+        StrategyContext(
+            iteration=0,
+            current_params=initial,
+            analysis={},
+            diff_score=0.2,
+            fit_score=0.8,
+            state=AdjustmentState(),
+        )
+    )
+
+    assert decision["stage"]["name"] == (
+        "material_discrete_joint_conditional_activation_probe"
+    )
+    summary = strategy.research_summary()
+    assert summary["conditional_activation"]["skips_initial_discrete_probes"] is True
+    assert strategy._probed_ids == {
+        start["candidate_id"],
+        target["candidate_id"],
+    }
+
+
+def test_initial_warmup_rebases_conditional_activation_probes() -> None:
+    candidates, start, target = _space()
+    initial_continuous = {
+        "u_GammaPower": 0.7,
+        "u_Saturation": 1.4,
+        "u_RimIntensity": 0.0,
+        "u_RimWidth": 0.0,
+    }
+    shader_params = [
+        *_shader_params(),
+        ShaderParam("u_RimIntensity", "Float", default=0.0),
+        ShaderParam("u_RimWidth", "Float", default=0.0),
+    ]
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(initial_continuous, start),
+        shader_params=shader_params,
+        search_param_names=list(initial_continuous),
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "initial_candidate_ids": [
+                start["candidate_id"],
+                target["candidate_id"],
+            ],
+            "conditional_activation_probes": [
+                {
+                    "name": "rim_response_activation",
+                    "coordinate_ids": ["u_RimIntensity", "u_RimWidth"],
+                    "normalized_values": [0.25, 0.5],
+                    "only_if_all_at_lower_bound": True,
+                }
+            ],
+            "initial_continuous_warmup": {
+                "enabled": True,
+                "max_proposals": 1,
+                "strategy": "material_coordinate_pattern",
+                "pattern": {"active_coordinate_count": 1},
+            },
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+        },
+    )
+    warm_seed = attach_discrete_candidate(
+        {
+            **initial_continuous,
+            "u_GammaPower": 1.3,
+        },
+        start,
+    )
+    strategy._branches[start["candidate_id"]].best_params = warm_seed
+
+    strategy._finish_initial_continuous_warmup("budget_exhausted")
+
+    assert strategy.research_summary()["conditional_activation"][
+        "rebased_after_initial_warmup"
+    ] is True
+    assert strategy._conditional_activation_queue
+    for probe in strategy._conditional_activation_queue:
+        assert probe["params"]["u_GammaPower"] == pytest.approx(1.3)
+        for coordinate_id in ("u_RimIntensity", "u_RimWidth"):
+            coordinate = strategy._coordinates_by_id[coordinate_id]
+            expected = coordinate.low + probe["normalized_value"] * (
+                coordinate.high - coordinate.low
+            )
+            assert probe["params"][coordinate_id] == pytest.approx(expected)
+
+
+def test_post_rescan_skips_branch_race_for_a_confident_visual_state_tier() -> None:
+    candidates, start, _target = _space()
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(
+            {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+            start,
+        ),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_mode"],
+                "width": 4,
+                "budget_per_candidate": 10,
+                "strategy": "cmaes",
+                "skip_race_if_score_margin_at_least": 0.005,
+                "confident_score_tie_tolerance": 1.0e-8,
+                "confident_winner_continuous": {
+                    "strategy": "material_coordinate_pattern",
+                    "pattern": {"active_coordinate_count": 1},
+                },
+            },
+        },
+    )
+    mode_scores = {
+        "flat": 0.95,
+        "legacy_y_invert_only": 0.95,
+        "normal": 0.93,
+        "normal_y_invert": 0.92,
+    }
+    scores = {
+        candidate["candidate_id"]: mode_scores[candidate["axes"]["normal_mode"]]
+        for candidate in candidates
+    }
+
+    strategy._start_post_rescan_branch_race(
+        common_params={"u_GammaPower": 0.7, "u_Saturation": 1.4},
+        scores=scores,
+        analyses={candidate_id: {} for candidate_id in scores},
+    )
+
+    race = strategy.research_summary()["post_rescan_branch_race"]
+    assert strategy._phase == "continuous_refine"
+    assert race["completed"] is True
+    assert race["summaries"][0]["skipped_due_to_confident_margin"] is True
+    assert race["summaries"][0]["confidence_margin"] == pytest.approx(0.02)
+    assert race["summaries"][0]["winner_candidate_id"].startswith("normal=flat|")
+
+
+def test_post_rescan_race_prefers_simpler_hard_state_within_score_tolerance() -> None:
+    candidates, start, _target = _space()
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(
+            {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+            start,
+        ),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_mode"],
+                "width": 4,
+                "budget_per_candidate": 1,
+                "prefer_lower_complexity_within_score": 0.002,
+            },
+        },
+    )
+    representatives = {}
+    for candidate in candidates:
+        mode = candidate["axes"]["normal_mode"]
+        representatives.setdefault(mode, candidate)
+    scores = {
+        "flat": 0.95745,
+        "legacy_y_invert_only": 0.95745,
+        "normal": 0.95877,
+        "normal_y_invert": 0.954,
+    }
+    strategy._active_ids = []
+    for mode, score in scores.items():
+        branch = strategy._branches[representatives[mode]["candidate_id"]]
+        branch.best_score = score
+        branch.best_params = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+        strategy._active_ids.append(branch.candidate_id)
+
+    strategy._finish_post_rescan_branch_race(
+        _context(0, strategy._best_params, start["candidate_id"])
+    )
+
+    summary = strategy.research_summary()["post_rescan_branch_race"]["summaries"][0]
+    assert summary["raw_winner_candidate_id"] == representatives["normal"]["candidate_id"]
+    assert summary["winner_candidate_id"] == representatives["flat"]["candidate_id"]
+    assert summary["complexity_regularization"]["changed_winner"] is True
+
+
+def test_post_rescan_group_representative_prefers_simpler_near_tie() -> None:
+    candidates, start, _target = _space()
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(
+            {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+            start,
+        ),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["rim_smooth"],
+                "width": 2,
+                "budget_per_candidate": 1,
+                "prefer_lower_complexity_within_score": 0.002,
+            },
+        },
+    )
+    rim_off = [
+        branch
+        for branch in strategy._branches.values()
+        if branch.candidate["axes"]["rim_smooth"] is False
+        and branch.candidate["axes"]["blend_src"] == 0
+    ]
+    scores = {
+        branch.candidate_id: {
+            "flat": 0.909,
+            "legacy_y_invert_only": 0.908,
+            "normal": 0.907,
+            "normal_y_invert": 0.910,
+        }[branch.candidate["axes"]["normal_mode"]]
+        for branch in rim_off
+    }
+
+    selected = strategy._post_rescan_group_representative(rim_off, scores)
+
+    assert selected.candidate["axes"]["normal_mode"] == "flat"
+
+
+def test_post_rescan_normal_activation_groups_equivalent_normal_modes() -> None:
+    candidates, start, _target = _space()
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(
+            {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+            start,
+        ),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+        },
+    )
+    grouped = {}
+    for branch in strategy._branches.values():
+        key = (
+            strategy._post_rescan_group_axis_value(branch, "normal_activation"),
+            strategy._post_rescan_group_axis_value(branch, "rim_smooth"),
+        )
+        grouped.setdefault(key, set()).add(
+            branch.candidate["axes"]["normal_mode"]
+        )
+
+    assert grouped[(False, False)] == {"flat", "legacy_y_invert_only"}
+    assert grouped[(True, False)] == {"normal", "normal_y_invert"}
+    assert len(grouped) == 4
+
+
+def test_post_rescan_race_keeps_materially_better_complex_hard_state() -> None:
+    candidates, start, _target = _space()
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=attach_discrete_candidate(
+            {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+            start,
+        ),
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "post_rescan_branch_race": {
+                "enabled": True,
+                "group_axes": ["normal_mode"],
+                "width": 4,
+                "budget_per_candidate": 1,
+                "prefer_lower_complexity_within_score": 0.002,
+            },
+        },
+    )
+    representatives = {}
+    for candidate in candidates:
+        mode = candidate["axes"]["normal_mode"]
+        representatives.setdefault(mode, candidate)
+    scores = {
+        "flat": 0.957,
+        "legacy_y_invert_only": 0.956,
+        "normal": 0.961,
+        "normal_y_invert": 0.954,
+    }
+    strategy._active_ids = []
+    for mode, score in scores.items():
+        branch = strategy._branches[representatives[mode]["candidate_id"]]
+        branch.best_score = score
+        branch.best_params = {"u_GammaPower": 0.7, "u_Saturation": 1.4}
+        strategy._active_ids.append(branch.candidate_id)
+
+    strategy._finish_post_rescan_branch_race(
+        _context(0, strategy._best_params, start["candidate_id"])
+    )
+
+    summary = strategy.research_summary()["post_rescan_branch_race"]["summaries"][0]
+    assert summary["raw_winner_candidate_id"] == representatives["normal"]["candidate_id"]
+    assert summary["winner_candidate_id"] == representatives["normal"]["candidate_id"]
+    assert summary["complexity_regularization"]["changed_winner"] is False
+
+
 def test_observed_mapped_normal_value_uses_the_specialized_fallback() -> None:
     candidates, start, _target = _space()
     strategy = MaterialDiscreteJointStrategy(
@@ -1847,3 +2557,63 @@ def test_final_rescan_can_switch_to_a_dedicated_continuous_strategy() -> None:
     assert summary["rescan_count"] == 2
     assert summary["continuous"]["active_coordinate_count"] == 1
     assert summary["continuous"]["full_refresh_interval"] == 2
+
+
+def test_only_rescan_can_restart_with_dedicated_continuous_strategy() -> None:
+    candidates, start, target = _space()
+    initial = attach_discrete_candidate(
+        {"u_GammaPower": 0.7, "u_Saturation": 1.4},
+        start,
+    )
+    strategy = MaterialDiscreteJointStrategy(
+        initial_params=initial,
+        shader_params=_shader_params(),
+        search_param_names=["u_GammaPower", "u_Saturation"],
+        config={
+            "candidates": candidates,
+            "start_candidate": start,
+            "round_widths": [1],
+            "round_budgets": [1],
+            "round_sigmas": [0.05],
+            "diversity_rounds": 0,
+            "rescan_interval": 0,
+            "rescan_at": [1],
+            "max_rescans": 1,
+            "restart_continuous_after_rescan": True,
+            "restart_continuous_after_first_rescan": True,
+            "continuous": {
+                "structured_only": True,
+                "warmup_iterations": 100,
+                "block_iterations": 1,
+                "refine_iterations": 1,
+                "late_scene_realign_iterations": 1,
+                "late_material_polish_iterations": 1,
+                "local_jacobian_iterations": 1,
+            },
+            "continuous_after_final_rescan": {
+                "strategy": "material_jacobian_trust_region",
+                "jacobian": {
+                    "difference_mode": "forward",
+                    "active_coordinate_count": 1,
+                    "full_refresh_interval": 2,
+                    "shader_default_anchor_enabled": False,
+                },
+            },
+        },
+    )
+
+    current = initial
+    for iteration in range(120):
+        current, _decision = strategy.propose(
+            _context(iteration, current, target["candidate_id"])
+        )
+        summary = strategy.research_summary()
+        if summary["rescan_count"] == 1 and summary["continuous"].get(
+            "active_coordinate_count"
+        ) == 1:
+            break
+
+    summary = strategy.research_summary()
+    assert summary["rescan_count"] == 1
+    assert summary["restart_continuous_after_first_rescan"] is True
+    assert summary["continuous"]["active_coordinate_count"] == 1

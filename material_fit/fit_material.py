@@ -217,16 +217,25 @@ def main() -> int:
     param_policy_audit["initial_params_mode"] = initial_params_mode
     if initial_params_override_path is not None:
         param_policy_audit["initial_params_override_path"] = str(initial_params_override_path)
-    if configured_optimizer == "material_discrete_joint":
-        discrete_cfg = config.get("material_discrete_joint")
+    if configured_optimizer in {"material_discrete_joint", "material_coordinate_pattern"}:
+        config_key = (
+            "material_discrete_joint"
+            if configured_optimizer == "material_discrete_joint"
+            else "material_coordinate_pattern"
+        )
+        discrete_cfg = config.get(config_key)
         start_candidate = (
             discrete_cfg.get("start_candidate")
             if isinstance(discrete_cfg, dict)
             else None
         )
-        if not isinstance(start_candidate, dict):
-            raise ValueError("material_discrete_joint config is missing start_candidate")
-        initial_params = attach_discrete_candidate(initial_params, start_candidate)
+        if configured_optimizer == "material_discrete_joint" and not isinstance(
+            start_candidate,
+            dict,
+        ):
+            raise ValueError(f"{configured_optimizer} config is missing start_candidate")
+        if isinstance(start_candidate, dict):
+            initial_params = attach_discrete_candidate(initial_params, start_candidate)
     adjustment_policies = build_adjustment_policies(laya_shader.params)
     adjustment_policies = _filter_policies_by_effect_graph(
         adjustment_policies,
@@ -990,6 +999,26 @@ def _target_stop_reason(
         if fit_score >= effective:
             return "score_ceiling_reached"
     return None
+
+
+def _strategy_target_stop_decision(
+    strategy: Any,
+    fit_score: float,
+    *,
+    target_score: float,
+    score_ceiling: dict[str, Any] | None,
+) -> tuple[str | None, str | None]:
+    reason = _target_stop_reason(
+        fit_score,
+        target_score=target_score,
+        score_ceiling=score_ceiling,
+    )
+    if reason is None:
+        return None, None
+    allows_stop = getattr(strategy, "allows_target_distance_stop", None)
+    if callable(allows_stop) and not bool(allows_stop()):
+        return None, reason
+    return reason, None
 
 
 def _browser_score_context_render_enabled(config: dict[str, Any]) -> bool:

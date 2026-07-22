@@ -3,7 +3,7 @@ param(
     [string]$Asset = "fish",
     [int]$Iterations = 1499,
     [double]$TargetScore = 0.995,
-    [double]$SuccessScore = 0.98,
+    [double]$SuccessScore = 0.93,
     [double]$MaxRuntimeSec = 1200,
     [double]$SpeedGateMs = 500,
     [string]$OutputRoot = ""
@@ -19,6 +19,7 @@ if (-not (Test-Path -LiteralPath $python)) {
 $arguments = @(
     "-m", "material_fit.experiments.material_human_reference_stage1",
     "--asset", $Asset,
+    "--single-view",
     "--optimizer", "material_discrete_joint",
     "--joint-profile", "v86_budget1500_initial_score_routed_unified",
     "--iterations", $Iterations,

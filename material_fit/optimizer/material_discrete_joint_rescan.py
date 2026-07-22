@@ -32,8 +32,48 @@ class MaterialDiscreteRescanMixin:
     def _start_rescan(self, ctx: StrategyContext) -> None:
         continuous, _candidate = split_discrete_candidate(self._best_params)
         self._rescan_params = copy.deepcopy(continuous)
-        self._rescan_candidate_ids = list(self._candidate_order)
+        previous_browser_score_override = copy.deepcopy(
+            self._active_browser_score_override
+        )
+        candidate_mode = (
+            self._rescan_candidate_modes[self._rescan_count]
+            if self._rescan_count < len(self._rescan_candidate_modes)
+            else "all"
+        )
+        self._active_browser_score_override = (
+            copy.deepcopy(self._rescan_browser_score_overrides[self._rescan_count])
+            if self._rescan_count < len(self._rescan_browser_score_overrides)
+            else {}
+        )
         self._rescan_group_axes = ()
+        if candidate_mode == "current_winner" and self._winner_id is not None:
+            self._rescan_candidate_ids = [self._winner_id]
+        elif candidate_mode == "initial_representatives":
+            self._rescan_candidate_ids = list(self._initial_candidate_order)
+        elif candidate_mode.startswith("winner_axis:"):
+            if self._winner_id is None:
+                raise RuntimeError("winner-axis rescan requires a current winner")
+            varied_axis = candidate_mode.removeprefix("winner_axis:").strip()
+            winner_axes = self._branches[self._winner_id].candidate.get("axes", {})
+            if varied_axis not in winner_axes:
+                raise ValueError(
+                    f"winner-axis rescan references unknown axis: {varied_axis}"
+                )
+            fixed_axes = set(winner_axes) - {varied_axis}
+            self._rescan_candidate_ids = [
+                candidate_id
+                for candidate_id in self._candidate_order
+                if all(
+                    self._branches[candidate_id].candidate.get("axes", {}).get(axis)
+                    == winner_axes.get(axis)
+                    for axis in fixed_axes
+                )
+            ]
+            self._rescan_group_axes = (varied_axis,)
+            if not self._rescan_candidate_ids:
+                raise RuntimeError("winner-axis discrete rescan selected no candidates")
+        else:
+            self._rescan_candidate_ids = list(self._candidate_order)
         if (
             self._post_rescan_branch_done
             and self._final_grouped_rescan_axes
@@ -62,10 +102,14 @@ class MaterialDiscreteRescanMixin:
                 if self._final_grouped_rescan_override_applies_to_rescan
                 else {}
             )
-            if self._active_browser_score_override:
-                self._reset_score_domain(ctx)
             if not self._rescan_candidate_ids:
                 raise RuntimeError("final grouped discrete rescan selected no candidates")
+        self._rescan_reset_global_score_domain = bool(
+            self._active_browser_score_override
+            != previous_browser_score_override
+        )
+        if self._rescan_reset_global_score_domain:
+            self._reset_score_domain(ctx)
         self._rescan_scores = {}
         self._rescan_analyses = {}
         self._pending_branch_id = None
@@ -92,7 +136,13 @@ class MaterialDiscreteRescanMixin:
                 self._branches[next_id].candidate,
             )
         )
-        return candidate, self._decision({}, candidate_id=next_id)
+        reset_global_score_domain = self._rescan_reset_global_score_domain
+        self._rescan_reset_global_score_domain = False
+        return candidate, self._decision(
+            {},
+            candidate_id=next_id,
+            reset_global_score_domain=reset_global_score_domain,
+        )
 
     def _finish_rescan(self, ctx: StrategyContext) -> None:
         if self._pending_branch_id is not None:
@@ -137,6 +187,8 @@ class MaterialDiscreteRescanMixin:
         winner.last_analysis = copy.deepcopy(self._rescan_analyses[winner_id])
         self._winner_id = winner_id
         self._rescan_count += 1
+        if self._rescan_count >= self._max_rescans:
+            self._final_rescan_continuous_proposal_start = self._continuous_proposals
         self._rescan_summaries.append(
             {
                 "rescan_index": self._rescan_count - 1,
@@ -206,6 +258,7 @@ class MaterialDiscreteRescanMixin:
         elif self._restart_continuous_after_rescan and (
             self._rescan_count > 1
             or bool(self._post_rescan_branch_rescan_counts)
+            or self._restart_continuous_after_first_rescan
         ):
             winner.best_params = copy.deepcopy(rescan_params)
             winner.best_score = float(rescan_scores[winner_id])
@@ -238,6 +291,8 @@ class MaterialDiscreteRescanMixin:
         }
         grouped: dict[Any, list[_Branch]] = {}
         for candidate_id in self._candidate_order:
+            if candidate_id not in scores:
+                continue
             branch = self._branches[candidate_id]
             axes = branch.candidate.get("axes", {})
             if any(
@@ -249,7 +304,7 @@ class MaterialDiscreteRescanMixin:
                 axes[self._post_rescan_axis_response_group_axis], []
             ).append(branch)
         selected = [
-            max(rows, key=lambda branch: scores[branch.candidate_id])
+            self._post_rescan_group_representative(rows, scores)
             for rows in grouped.values()
         ]
         selected.sort(key=lambda branch: self._candidate_order.index(branch.candidate_id))
@@ -529,10 +584,12 @@ class MaterialDiscreteRescanMixin:
                 candidate_id=winner_id,
                 reset_global_score_domain=True,
             )
-        self._start_continuous_from_winner(
-            winner,
-            self._post_rescan_effective_final_continuous_config,
+        continuous_config = (
+            self._post_rescan_axis_response_continuous_config
+            if self._post_rescan_axis_response_continuous_config is not None
+            else self._post_rescan_effective_final_continuous_config
         )
+        self._start_continuous_from_winner(winner, continuous_config)
         return None
 
     def _start_post_rescan_branch_race(
@@ -546,13 +603,13 @@ class MaterialDiscreteRescanMixin:
         grouped: dict[tuple[Any, ...], list[_Branch]] = {}
         for candidate_id in self._candidate_order:
             branch = self._branches[candidate_id]
-            axes = branch.candidate.get("axes", {})
             group_value = tuple(
-                axes.get(axis) for axis in self._post_rescan_effective_group_axes
+                self._post_rescan_group_axis_value(branch, axis)
+                for axis in self._post_rescan_effective_group_axes
             )
             grouped.setdefault(group_value, []).append(branch)
         selected = [
-            max(rows, key=lambda branch: scores[branch.candidate_id])
+            self._post_rescan_group_representative(rows, scores)
             for rows in grouped.values()
         ]
         if self._post_rescan_effective_allowed_axis_values:
@@ -564,10 +621,67 @@ class MaterialDiscreteRescanMixin:
                     for axis, allowed_values in self._post_rescan_effective_allowed_axis_values.items()
                 )
             ]
-        selected.sort(key=lambda branch: scores[branch.candidate_id], reverse=True)
+        selected.sort(
+            key=lambda branch: (
+                self._post_rescan_branch_ranking_score(branch, scores),
+                float(scores[branch.candidate_id]),
+            ),
+            reverse=True,
+        )
         selected = selected[: self._post_rescan_effective_branch_width]
         if not selected:
             raise RuntimeError("post-rescan branch race selected no candidates")
+
+        top_score = float(scores[selected[0].candidate_id])
+        lower_scores = [
+            float(scores[branch.candidate_id])
+            for branch in selected[1:]
+            if top_score - float(scores[branch.candidate_id])
+            > self._post_rescan_confident_tie_tolerance
+        ]
+        confidence_margin = (
+            top_score - max(lower_scores) if lower_scores else math.inf
+        )
+        if (
+            self._post_rescan_confident_margin > 0.0
+            and confidence_margin >= self._post_rescan_confident_margin
+        ):
+            winner = selected[0]
+            winner.best_params = copy.deepcopy(common_params)
+            winner.best_score = top_score
+            winner.best_analysis = copy.deepcopy(analyses[winner.candidate_id])
+            winner.last_params = copy.deepcopy(common_params)
+            winner.last_score = top_score
+            winner.last_analysis = copy.deepcopy(analyses[winner.candidate_id])
+            self._active_ids = [winner.candidate_id]
+            self._post_rescan_branch_summaries.append(
+                {
+                    "race_index": len(self._post_rescan_branch_summaries),
+                    "group_axis": self._post_rescan_group_axis,
+                    "group_axes": list(self._post_rescan_effective_group_axes),
+                    "budget_per_candidate": 0,
+                    "strategy": "confident_winner_continuation",
+                    "skipped_due_to_confident_margin": True,
+                    "confidence_margin": confidence_margin,
+                    "confidence_threshold": self._post_rescan_confident_margin,
+                    "winner_candidate_id": winner.candidate_id,
+                    "candidates": [
+                        {
+                            "candidate_id": branch.candidate_id,
+                            "axes": copy.deepcopy(branch.candidate.get("axes", {})),
+                            "best_fit_score": float(scores[branch.candidate_id]),
+                            "proposals": 0,
+                        }
+                        for branch in selected
+                    ],
+                }
+            )
+            self._post_rescan_branch_done = True
+            self._start_continuous_from_winner(
+                winner,
+                self._post_rescan_confident_continuous_config,
+            )
+            return
 
         race_bounds = {
             name: bounds
@@ -575,8 +689,19 @@ class MaterialDiscreteRescanMixin:
             if name in self._post_rescan_branch_search_names
         }
         self._active_ids = [branch.candidate_id for branch in selected]
+        self._post_rescan_race_budget_limits = {
+            branch.candidate_id: self._post_rescan_rank_budget(rank)
+            for rank, branch in enumerate(selected)
+        }
+        self._post_rescan_ranking_evidence = {
+            branch.candidate_id: self._post_rescan_branch_ranking_evidence(
+                branch,
+                scores,
+            )
+            for branch in selected
+        }
         self._post_rescan_branch_cursor = 0
-        for branch_index, branch in enumerate(selected):
+        for branch in selected:
             candidate_id = branch.candidate_id
             branch.best_params = copy.deepcopy(common_params)
             branch.best_score = float(scores[candidate_id])
@@ -593,23 +718,202 @@ class MaterialDiscreteRescanMixin:
             branch.race_base_params = copy.deepcopy(common_params)
             branch.race_restart_index = 0
             branch.race_seeds = []
-            if self._post_rescan_effective_branch_strategy == "material_jacobian_trust_region":
-                branch.optimizer = MaterialJacobianTrustRegionStrategy(
-                    initial_params=copy.deepcopy(common_params),
-                    shader_params=self._shader_params,
-                    search_param_names=self._post_rescan_branch_search_names,
-                    config=self._post_rescan_effective_jacobian_config,
-                )
-            elif self._post_rescan_effective_branch_strategy == "material_stage1_hybrid":
-                branch.optimizer = MaterialStage1HybridStrategy(
-                    initial_params=copy.deepcopy(common_params),
-                    shader_params=self._shader_params,
-                    search_param_names=self._post_rescan_branch_search_names,
-                    config=self._post_rescan_effective_hybrid_config,
-                )
-            else:
-                self._restart_post_rescan_cma(branch, race_bounds)
+            branch.race_continuous_seeds = []
+            for source in self._post_rescan_effective_continuous_seed_modes:
+                if source == "initial":
+                    branch.race_continuous_seeds.append(
+                        {
+                            "source": source,
+                            "params": copy.deepcopy(self._initial_continuous_params),
+                            "fit_score": None,
+                            "analysis": None,
+                        }
+                    )
+                else:
+                    branch.race_continuous_seeds.append(
+                        {
+                            "source": source,
+                            "params": copy.deepcopy(common_params),
+                            "fit_score": float(scores[candidate_id]),
+                            "analysis": copy.deepcopy(analyses[candidate_id]),
+                        }
+                    )
+            branch.race_continuous_seed_index = 0
+            branch.race_continuous_seed_history = []
+            self._start_post_rescan_continuous_seed(
+                branch,
+                seed_index=0,
+                race_bounds=race_bounds,
+            )
         self._phase = "post_rescan_branch_race"
+
+    @staticmethod
+    def _post_rescan_group_axis_value(branch: _Branch, axis: str) -> Any:
+        axes = branch.candidate.get("axes", {})
+        if axis == "normal_activation":
+            return axes.get("normal_mode") in {"normal", "normal_y_invert"}
+        return axes.get(axis)
+
+    def _post_rescan_group_representative(
+        self,
+        branches: list[_Branch],
+        scores: dict[str, float],
+    ) -> _Branch:
+        raw_winner = max(
+            branches,
+            key=lambda branch: (
+                self._post_rescan_branch_ranking_score(branch, scores),
+                float(scores[branch.candidate_id]),
+            ),
+        )
+        tolerance = self._post_rescan_complexity_score_tolerance
+        eligible = [
+            branch
+            for branch in branches
+            if (
+                self._post_rescan_branch_ranking_score(raw_winner, scores)
+                == self._post_rescan_branch_ranking_score(branch, scores)
+                or self._post_rescan_branch_ranking_score(raw_winner, scores)
+                - self._post_rescan_branch_ranking_score(branch, scores)
+                <= tolerance
+            )
+        ]
+        return min(
+            eligible,
+            key=lambda branch: (
+                _candidate_define_complexity(branch.candidate),
+                -self._post_rescan_branch_ranking_score(branch, scores),
+                -float(scores[branch.candidate_id]),
+                branch.candidate_id,
+            ),
+        )
+
+    def _post_rescan_branch_ranking_score(
+        self,
+        branch: _Branch,
+        scores: dict[str, float],
+    ) -> float:
+        if (
+            self._post_rescan_effective_ranking_signal
+            == "conditional_activation_peak"
+            and any(
+                math.isfinite(float(row["fit_score"]))
+                for row in self._conditional_activation_results
+            )
+        ):
+            activation_scores = [
+                float(row["fit_score"])
+                for row in self._conditional_activation_results
+                if row.get("candidate_id") == branch.candidate_id
+                and math.isfinite(float(row["fit_score"]))
+            ]
+            if activation_scores:
+                return max(activation_scores)
+            return -math.inf
+        return float(scores[branch.candidate_id])
+
+    def _post_rescan_branch_ranking_evidence(
+        self,
+        branch: _Branch,
+        scores: dict[str, float],
+    ) -> dict[str, Any]:
+        activation_rows = [
+            row
+            for row in self._conditional_activation_results
+            if row.get("candidate_id") == branch.candidate_id
+            and math.isfinite(float(row["fit_score"]))
+        ]
+        if (
+            self._post_rescan_effective_ranking_signal
+            == "conditional_activation_peak"
+            and any(
+                math.isfinite(float(row["fit_score"]))
+                for row in self._conditional_activation_results
+            )
+        ):
+            if activation_rows:
+                winner = max(
+                    activation_rows,
+                    key=lambda row: float(row["fit_score"]),
+                )
+                return {
+                    "source": "conditional_activation_peak",
+                    "fit_score": float(winner["fit_score"]),
+                    "probe_name": str(winner["probe_name"]),
+                    "normalized_value": float(winner["normalized_value"]),
+                }
+            return {
+                "source": "conditional_activation_not_observed",
+                "fit_score": None,
+            }
+        return {
+            "source": "rescan_score",
+            "fit_score": float(scores[branch.candidate_id]),
+        }
+
+    def _post_rescan_rank_budget(self, rank: int) -> int:
+        if rank < len(self._post_rescan_effective_budgets_by_rank):
+            return self._post_rescan_effective_budgets_by_rank[rank]
+        return self._post_rescan_effective_branch_budget
+
+    def _post_rescan_branch_budget_limit(self, branch: _Branch) -> int:
+        return self._post_rescan_race_budget_limits.get(
+            branch.candidate_id,
+            self._post_rescan_effective_branch_budget,
+        )
+
+    def _start_post_rescan_continuous_seed(
+        self,
+        branch: _Branch,
+        *,
+        seed_index: int,
+        race_bounds: dict[str, tuple[float, float]],
+    ) -> None:
+        seed = branch.race_continuous_seeds[seed_index]
+        seed_params = copy.deepcopy(seed["params"])
+        seed_score = seed.get("fit_score")
+        seed_analysis = seed.get("analysis")
+        branch.race_continuous_seed_index = seed_index
+        branch.race_base_params = copy.deepcopy(seed_params)
+        branch.race_restart_index = 0
+        branch.exhausted = False
+        branch.round_seed_params = None
+        branch.round_seed_pending = False
+        branch.awaiting_seed_observation = False
+        branch.race_continuous_seed_history.append(
+            {
+                "source": str(seed["source"]),
+                "proposal_start": branch.proposals,
+                "seed_evaluation_required": seed_score is None,
+            }
+        )
+        if seed_score is None:
+            branch.round_seed_params = copy.deepcopy(seed_params)
+            branch.round_seed_pending = True
+            branch.last_params = copy.deepcopy(seed_params)
+            branch.last_score = -math.inf
+            branch.last_analysis = None
+        else:
+            branch.last_params = copy.deepcopy(seed_params)
+            branch.last_score = float(seed_score)
+            branch.last_analysis = copy.deepcopy(seed_analysis)
+
+        if self._post_rescan_effective_branch_strategy == "material_jacobian_trust_region":
+            branch.optimizer = MaterialJacobianTrustRegionStrategy(
+                initial_params=copy.deepcopy(seed_params),
+                shader_params=self._shader_params,
+                search_param_names=self._post_rescan_branch_search_names,
+                config=self._post_rescan_effective_jacobian_config,
+            )
+        elif self._post_rescan_effective_branch_strategy == "material_stage1_hybrid":
+            branch.optimizer = MaterialStage1HybridStrategy(
+                initial_params=copy.deepcopy(seed_params),
+                shader_params=self._shader_params,
+                search_param_names=self._post_rescan_branch_search_names,
+                config=self._post_rescan_effective_hybrid_config,
+            )
+        else:
+            self._restart_post_rescan_cma(branch, race_bounds)
 
     def _select_post_rescan_race_policy(self, scores: dict[str, float]) -> None:
         fallback = self._post_rescan_adaptive_fallback_config
@@ -752,6 +1056,26 @@ class MaterialDiscreteRescanMixin:
         self._post_rescan_effective_branch_sigma = _positive_float(
             selected_fallback.get("sigma"), self._post_rescan_branch_sigma
         )
+        raw_seed_modes = selected_fallback.get(
+            "continuous_seed_modes",
+            self._post_rescan_branch_continuous_seed_modes,
+        )
+        if not isinstance(raw_seed_modes, (list, tuple)):
+            raise ValueError(
+                "adaptive post-rescan continuous_seed_modes must be a list"
+            )
+        self._post_rescan_effective_continuous_seed_modes = tuple(
+            dict.fromkeys(str(value) for value in raw_seed_modes)
+        )
+        invalid_seed_modes = sorted(
+            set(self._post_rescan_effective_continuous_seed_modes)
+            - {"initial", "common_rescan"}
+        )
+        if invalid_seed_modes or not self._post_rescan_effective_continuous_seed_modes:
+            raise ValueError(
+                "adaptive post-rescan race has invalid continuous seed modes: "
+                f"{invalid_seed_modes}"
+            )
         self._post_rescan_effective_restart_count = max(
             int(
                 selected_fallback.get(
@@ -843,13 +1167,53 @@ class MaterialDiscreteRescanMixin:
         ctx.state.global_no_improve = 0
 
     def _next_post_rescan_branch(self) -> _Branch | None:
-        for offset in range(len(self._active_ids)):
-            index = (self._post_rescan_branch_cursor + offset) % len(self._active_ids)
+        if self._post_rescan_effective_allocation_order == "ranked_sequential":
+            indices = range(len(self._active_ids))
+        else:
+            indices = (
+                (self._post_rescan_branch_cursor + offset) % len(self._active_ids)
+                for offset in range(len(self._active_ids))
+            )
+        for index in indices:
             branch = self._branches[self._active_ids[index]]
+            branch_budget = self._post_rescan_branch_budget_limit(branch)
+            seed_count = len(branch.race_continuous_seeds)
+            seed_boundary = math.ceil(
+                branch_budget
+                * (branch.race_continuous_seed_index + 1)
+                / max(seed_count, 1)
+            )
+            optimizer_stopped = bool(
+                branch.optimizer is not None
+                and branch.optimizer.stop_reason() is not None
+            )
+            if (
+                (branch.proposals >= seed_boundary or optimizer_stopped)
+                and branch.race_continuous_seed_index + 1 < seed_count
+            ):
+                race_bounds = {
+                    name: bounds
+                    for name, bounds in self._axis_bounds.items()
+                    if name in self._post_rescan_branch_search_names
+                }
+                self._start_post_rescan_continuous_seed(
+                    branch,
+                    seed_index=branch.race_continuous_seed_index + 1,
+                    race_bounds=race_bounds,
+                )
+                optimizer_stopped = False
+            seed_proposal_start = (
+                int(branch.race_continuous_seed_history[-1]["proposal_start"])
+                if branch.race_continuous_seed_history
+                else 0
+            )
+            seed_local_proposals = branch.proposals - seed_proposal_start
             if (
                 self._post_rescan_effective_branch_strategy == "cmaes"
-                and branch.proposals > 0
-                and branch.proposals % self._post_rescan_effective_restart_budget == 0
+                and seed_local_proposals > 0
+                and seed_local_proposals
+                % self._post_rescan_effective_restart_budget
+                == 0
                 and branch.race_restart_index + 1
                 < self._post_rescan_effective_restart_count
             ):
@@ -860,11 +1224,12 @@ class MaterialDiscreteRescanMixin:
                 }
                 branch.race_restart_index += 1
                 self._restart_post_rescan_cma(branch, race_bounds)
-            if branch.optimizer is not None and branch.optimizer.stop_reason() is not None:
+            if optimizer_stopped:
                 branch.exhausted = True
-            if branch.exhausted or branch.proposals >= self._post_rescan_effective_branch_budget:
+            if branch.exhausted or branch.proposals >= branch_budget:
                 continue
-            self._post_rescan_branch_cursor = (index + 1) % len(self._active_ids)
+            if self._post_rescan_effective_allocation_order == "round_robin":
+                self._post_rescan_branch_cursor = (index + 1) % len(self._active_ids)
             return branch
         return None
 
@@ -907,27 +1272,69 @@ class MaterialDiscreteRescanMixin:
             key=lambda branch: branch.best_score,
             reverse=True,
         )
-        winner = ranked[0]
+        raw_winner = ranked[0]
+        score_tolerance = self._post_rescan_complexity_score_tolerance
+        eligible = [
+            branch
+            for branch in ranked
+            if raw_winner.best_score - branch.best_score <= score_tolerance
+        ]
+        winner = min(
+            eligible,
+            key=lambda branch: (
+                _candidate_define_complexity(branch.candidate),
+                -branch.best_score,
+                branch.candidate_id,
+            ),
+        )
         self._post_rescan_branch_summaries.append(
             {
                 "race_index": len(self._post_rescan_branch_summaries),
                 "group_axis": self._post_rescan_group_axis,
                 "group_axes": list(self._post_rescan_effective_group_axes),
                 "budget_per_candidate": self._post_rescan_effective_branch_budget,
+                "ranking_signal": self._post_rescan_effective_ranking_signal,
+                "allocation_order": self._post_rescan_effective_allocation_order,
+                "budgets_by_rank": list(
+                    self._post_rescan_effective_budgets_by_rank
+                ),
                 "sigma": self._post_rescan_effective_branch_sigma,
+                "continuous_seed_modes": list(
+                    self._post_rescan_effective_continuous_seed_modes
+                ),
                 "restart_count": self._post_rescan_effective_restart_count,
                 "restart_budget": self._post_rescan_effective_restart_budget,
                 "strategy": self._post_rescan_effective_branch_strategy,
                 "adaptive_fallback_applied": self._post_rescan_adaptive_fallback_applied,
+                "raw_winner_candidate_id": raw_winner.candidate_id,
                 "winner_candidate_id": winner.candidate_id,
+                "complexity_regularization": {
+                    "enabled": score_tolerance > 0.0,
+                    "score_tolerance": score_tolerance,
+                    "eligible_candidate_ids": [
+                        branch.candidate_id for branch in eligible
+                    ],
+                    "changed_winner": winner.candidate_id != raw_winner.candidate_id,
+                    "complexity_measure": "enabled_managed_define_count",
+                },
                 "candidates": [
                     {
                         "candidate_id": branch.candidate_id,
                         "axes": copy.deepcopy(branch.candidate.get("axes", {})),
                         "best_fit_score": branch.best_score,
+                        "enabled_managed_define_count": (
+                            _candidate_define_complexity(branch.candidate)
+                        ),
                         "proposals": branch.proposals,
+                        "budget_limit": self._post_rescan_branch_budget_limit(branch),
+                        "ranking_evidence": copy.deepcopy(
+                            self._post_rescan_ranking_evidence.get(branch.candidate_id, {})
+                        ),
                         "seed": branch.race_seed,
                         "seeds": list(branch.race_seeds),
+                        "continuous_seed_history": copy.deepcopy(
+                            branch.race_continuous_seed_history
+                        ),
                     }
                     for branch in ranked
                 ],
@@ -964,3 +1371,12 @@ class MaterialDiscreteRescanMixin:
             self._post_rescan_effective_final_continuous_config,
         )
         return None
+
+
+def _candidate_define_complexity(candidate: dict[str, Any]) -> int:
+    defines = candidate.get("defines")
+    if not isinstance(defines, dict):
+        return 0
+    managed = {str(name) for name in defines.get("managed", ())}
+    enabled = {str(name) for name in defines.get("enabled", ())}
+    return len(managed & enabled)

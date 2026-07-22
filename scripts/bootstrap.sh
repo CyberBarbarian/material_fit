@@ -19,7 +19,7 @@ if [[ ! -x .venv/bin/python ]]; then
 fi
 echo "[2/5] Installing the Python package and test dependencies."
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pip install -e '.[test,perceptual]'
 echo "[3/5] Installing the locked Node.js dependencies."
 npm ci
 if [[ "${1:-}" != "--skip-browser" ]]; then
