@@ -345,6 +345,7 @@ def _select_views(
 def _validate_frozen_camera(profile: dict[str, Any]) -> None:
     calibration = profile.get("camera_calibration")
     camera = profile.get("runtime", {}).get("camera", {})
+    capture = profile.get("capture_defaults", {})
     if not isinstance(calibration, dict) or calibration.get("alignment_passed") is not True:
         raise ValueError("1613 camera calibration is not frozen and accepted")
     if float(camera.get("orthographic_vertical_size", 0.0)) != float(
@@ -353,6 +354,10 @@ def _validate_frozen_camera(profile: dict[str, Any]) -> None:
         raise ValueError("1613 runtime orthographic size differs from frozen calibration")
     if camera.get("center_offset") != calibration.get("center_offset"):
         raise ValueError("1613 runtime center offset differs from frozen calibration")
+    if float(capture.get("target_base_yaw", 0.0)) != float(
+        calibration.get("target_base_yaw", 0.0)
+    ):
+        raise ValueError("1613 target base yaw differs from frozen calibration")
 
 
 def _write_variant_profile(

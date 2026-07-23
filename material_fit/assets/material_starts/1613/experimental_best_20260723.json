@@ -1,21 +1,25 @@
 {
-  "contract": "material_fit_experimental_best_snapshot_v1",
+  "contract": "material_fit_experimental_best_snapshot_v2",
   "asset_id": "holiday_1613",
   "accepted": false,
-  "independent_eight_view_score": 0.8841877893703689,
+  "independent_eight_view_score": 0.8795882290878261,
+  "reference_metadata_sha256": "a709ff37bb2f470b06a9bdd3fa08474db1afff3e7e830249b21da6b89d23556d",
   "acceptance_score": 0.98,
   "material_file": "experimental_best_20260723.lmat",
   "params_file": "experimental_best_20260723_params.json",
-  "material_sha256": "0cb094ef7a35e57f36187504543928a1190d60516e951a4ed781ffef45754c80",
-  "source_run_material_sha256": "123f2bad05144bc4a72e6fafbc9b46df324030b1414ee391abab5334494a68cf",
+  "material_sha256": "6147bd6cab73b44230b2d75fa54f07d09d541b82fd0bfaaa23027ac9149d1e75",
+  "params_sha256": "1819dc646eb60da525489875d79f79f8b812de3bc57d3e3909937899fb6a5ff8",
+  "source_run_material_sha256": "6147bd6cab73b44230b2d75fa54f07d09d541b82fd0bfaaa23027ac9149d1e75",
   "source_pipeline": [
     "shared_v86_material_discrete_joint",
-    "v86_round2",
-    "cma_es_full_resolution_1500"
+    "v2_unity_png_target",
+    "v86_budget1500_initial_score_routed_unified",
+    "full_resolution_rerank_24"
   ],
   "notes": [
-    "This is the current parameter-only best, not an accepted 0.98 result.",
+    "This is the current V2 parameter-only best, not an accepted 0.98 result.",
     "It preserves one shared material and the original one-texture binding.",
+    "The V2 target fixes the Unity rim artifact and uses a frozen 180-degree target base yaw.",
     "It does not use a view-conditioned atlas or a view-specific shader branch."
   ]
 }

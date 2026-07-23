@@ -24,6 +24,8 @@ def test_holiday_1613_renderer_intake_is_self_contained() -> None:
     assert asset.profile["height"] == 700
     assert asset.profile["capture_defaults"]["orthographic_vertical_size"] == 6.625
     assert asset.profile["runtime"]["camera"]["center_offset"] == [0.0, 0.34, 0.0]
+    assert asset.profile["capture_defaults"]["target_base_yaw"] == 180.0
+    assert asset.profile["camera_calibration"]["target_base_yaw"] == 180.0
     assert asset.profile["camera_calibration"]["alignment_passed"] is True
     assert asset.profile["capture_defaults"]["animation_mode"] == "disabled"
     assert len(asset.profile["capture_defaults"]["views"]) == 8

@@ -56,11 +56,6 @@ PUBLIC_ENTRYPOINTS = (
     "scripts/stop_persistent_laya_queue.sh",
 )
 
-HOLIDAY_1613_BEST_SHA256 = (
-    "0cb094ef7a35e57f36187504543928a1190d60516e951a4ed781ffef45754c80"
-)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".")
@@ -215,7 +210,19 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
             best_metadata,
         )
         missing = [str(path) for path in required if not path.exists()]
-        hash_ok = best_material.is_file() and _sha256(best_material) == HOLIDAY_1613_BEST_SHA256
+        snapshot = (
+            json.loads(best_metadata.read_text(encoding="utf-8"))
+            if best_metadata.is_file()
+            else {}
+        )
+        hash_ok = (
+            best_material.is_file()
+            and best_params.is_file()
+            and bool(snapshot.get("material_sha256"))
+            and bool(snapshot.get("params_sha256"))
+            and _sha256(best_material) == str(snapshot["material_sha256"])
+            and _sha256(best_params) == str(snapshot["params_sha256"])
+        )
         detail = (
             "renderer intake and experimental best snapshot present"
             if not missing and hash_ok

@@ -17,7 +17,8 @@
     "material_sha256": "708bdc59fce6d9a0e46e83b1d7716655ce7044a98a2df6c5b3bb26f18a8b3523",
     "texture_sha256": "416d719e10987dc960ae8f0ac2ac796099fe7e22d7bd0f5406da6f319bdd3f96",
     "shader_sha256": "c4a71f3ca946304e93986d7f4b04d18e4cb45f14f57ad0a50ec3082c2ea56946",
-    "best_parameter_only_independent_cross_engine_v3_score": 0.8841877893703689,
+    "prior_reference_best_score_invalidated_by_v2": 0.8841877893703689,
+    "current_v2_best_parameter_only_independent_cross_engine_v3_score": 0.8795882290878261,
     "tracked_experimental_best": "material_fit/assets/material_starts/1613/experimental_best_20260723.lmat",
     "acceptance_score": 0.98,
     "accepted": false,
@@ -30,7 +31,8 @@
     "width": 900,
     "height": 700,
     "orthographic_vertical_size": 6.625,
-    "camera_center_offset": [0.0, 0.34, 0.0]
+    "camera_center_offset": [0.0, 0.34, 0.0],
+    "target_base_yaw": 180.0
   },
   "source_archives": {
     "laya_assets": {
@@ -38,8 +40,8 @@
       "sha256": "4d8d37f0a910cee785fbff0b97b5d14f2271243552f218f5cb39296cacb6fb05"
     },
     "unity_references": {
-      "file_name": "1613.zip",
-      "sha256": "57d6d865ed8ba3bce3ea369a291444ca8b443646c6617bc1edc76a03ac2f71fc"
+      "file_name": "1613_unity_ref_v2(1).zip",
+      "sha256": "d8cc7aca8af47cea9d01583714a14df1508a024e73b43988e8a527d10ea6b055"
     }
   },
   "inherited_runtime_inputs": {
@@ -55,6 +57,7 @@
     "The material main texture UUID f2d112e5-1b94-40ee-9eb0-2a199fe25b15 resolves to the original delivered 1024x1024 texture.",
     "The prefab references two project scripts and eleven resources not included in the archive; the missing resources belong to optional effect renderers rather than the five visible skinned meshes.",
     "The tracked material and texture are byte-identical to the delivered archive. No view-conditioned atlas or shader branch is part of this runtime.",
-    "Eight-view silhouette calibration froze orthographic vertical size 6.625 and camera center offset [0.0, 0.34, 0.0]."
+    "The V2 Unity references remove the rim artifact and define the final eight-view target.",
+    "Eight-view silhouette calibration freezes orthographic vertical size 6.625, camera center offset [0.0, 0.34, 0.0], and target base yaw 180 degrees."
   ]
 }

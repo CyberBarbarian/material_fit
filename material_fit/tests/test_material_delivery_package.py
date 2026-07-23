@@ -28,7 +28,7 @@ def test_tracked_1613_best_is_explicitly_unaccepted_and_preserves_texture() -> N
 
     assert metadata["accepted"] is False
     assert metadata["independent_eight_view_score"] == pytest.approx(
-        0.8841877893703689
+        0.8795882290878261
     )
     assert hashlib.sha256(TRACKED_BEST.read_bytes()).hexdigest() == metadata[
         "material_sha256"

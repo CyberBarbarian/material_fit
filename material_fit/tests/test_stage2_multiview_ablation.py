@@ -86,10 +86,12 @@ def test_validate_frozen_camera_rejects_runtime_drift() -> None:
                 "center_offset": [0.0, 0.34, 0.0],
             }
         },
+        "capture_defaults": {"target_base_yaw": 180.0},
         "camera_calibration": {
             "alignment_passed": True,
             "orthographic_vertical_size": 6.625,
             "center_offset": [0.0, 0.34, 0.0],
+            "target_base_yaw": 180.0,
         },
     }
     _validate_frozen_camera(profile)
@@ -98,6 +100,11 @@ def test_validate_frozen_camera_rejects_runtime_drift() -> None:
 
     with pytest.raises(ValueError, match="center offset"):
         _validate_frozen_camera(drifted)
+
+    yaw_drifted = copy.deepcopy(profile)
+    yaw_drifted["capture_defaults"]["target_base_yaw"] = 0.0
+    with pytest.raises(ValueError, match="target base yaw"):
+        _validate_frozen_camera(yaw_drifted)
 
 
 def test_optimizer_score_progress_uses_initial_and_best_scores(tmp_path: Path) -> None:

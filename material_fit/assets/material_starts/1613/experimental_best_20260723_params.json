@@ -1,40 +1,127 @@
 {
-  "u_Color": [0.9854, 1.0102, 1.0102, 1],
-  "u_MainTex_ST": [1, 1, 0, 0],
-  "u_TexPower": 1.2733400000000001,
-  "u_GammaPower": 1.0290657,
-  "u_SpeTex_ST": [1, 1, 0, 0],
-  "u_LMap_ST": [1, 1, 0, 0],
-  "u_NormalTex_ST": [1, 1, 0, 0],
-  "u_NormalScale": 0.98616,
-  "u_AoPower": 0.1504,
-  "u_EmissionTex_ST": [1, 1, 0, 0],
+  "u_Color": [
+    0.9964000000000001,
+    1.0,
+    1.0,
+    1
+  ],
+  "u_MainTex_ST": [
+    1,
+    1,
+    0,
+    0
+  ],
+  "u_TexPower": 0.8859,
+  "u_GammaPower": 0.9999666700000001,
+  "u_SpeTex_ST": [
+    1,
+    1,
+    0,
+    0
+  ],
+  "u_LMap_ST": [
+    1,
+    1,
+    0,
+    0
+  ],
+  "u_NormalTex_ST": [
+    1,
+    1,
+    0,
+    0
+  ],
+  "u_NormalScale": 0.84996,
+  "u_AoPower": 0.08800000000000001,
+  "u_EmissionTex_ST": [
+    1,
+    1,
+    0,
+    0
+  ],
   "u_EmissionPow": 0.0,
-  "u_ReflectColor": [0.0102, 0.0102, 0.013800000000000002, 1],
-  "u_IndirectStrength": 1.1004,
+  "u_ReflectColor": [
+    0.0,
+    0.0,
+    0.0068000000000000005,
+    1
+  ],
+  "u_IndirectStrength": 0.8688,
   "u_SkyRotateX": -0.01799999999997226,
   "u_SkyRotateY": -0.01799999999997226,
   "u_SkyRotateZ": -0.01799999999997226,
-  "u_ShadowSmoothness": 0.1051,
-  "u_ShadowColor1": [0.9964000000000001, 0.8074, 0.7224, 1],
-  "u_ShadowThreshold1": 0.30510000000000004,
-  "u_ShadowColor2": [0.5, 0.5, 0.5, 1],
+  "u_ShadowSmoothness": 0.1,
+  "u_ShadowColor1": [
+    0.8556,
+    0.7358,
+    0.7802,
+    1
+  ],
+  "u_ShadowThreshold1": 0.3037,
+  "u_ShadowColor2": [
+    0.5,
+    0.5,
+    0.5,
+    1
+  ],
   "u_ShadowThreshold2": 0.4,
-  "u_SpecularColor": [1.1204, 0.9216000000000001, 0.784, 1],
-  "u_SpecularIntensity": 0.794,
-  "u_SpecularPower": 22.671100000000003,
-  "u_SpecularThreshold": 0.7959,
-  "u_SpecularSmoothness": 0.2544,
-  "u_SpeOffet": [0.044399999999999995, -0.4019999999999999, 0.5900000000000003, 0.017600000000000282],
-  "u_RimColor": [0.6566000000000001, 0.5588000000000001, 0.37560000000000004, 1.0],
-  "u_RimIntensity": 2.274,
-  "u_RimWidth": 1.7280000000000002,
-  "u_RimOffet": [0.030400000000000205, 0.46799999999999997, 1.7888000000000002, -1.3416000000000001],
+  "u_SpecularColor": [
+    0.7474000000000001,
+    0.9316000000000001,
+    0.9282,
+    1
+  ],
+  "u_SpecularIntensity": 0.8300000000000001,
+  "u_SpecularPower": 8.761,
+  "u_SpecularThreshold": 0.9776,
+  "u_SpecularSmoothness": 0.2514,
+  "u_SpeOffet": [
+    -0.008799999999999919,
+    0.10959999999999992,
+    0.03840000000000021,
+    -0.01519999999999988
+  ],
   "u_LightRotateX": -0.01799999999997226,
-  "u_LightRotateY": -0.01799999999997226,
+  "u_LightRotateY": 22.5,
   "u_LightRotateZ": -0.01799999999997226,
-  "u_HueShift": 0.0122,
-  "u_Saturation": 1.179,
-  "u_Contrast": 1.0438,
-  "u_AlphaTestValue": 0.5
+  "u_HueShift": 0.038400000000000004,
+  "u_Saturation": 1.3374000000000001,
+  "u_Contrast": 1.0936000000000001,
+  "u_AlphaTestValue": 0.5,
+  "u_RimIntensity": 0.057,
+  "u_RimWidth": 1.874,
+  "u_RimColor": [
+    1.9126,
+    0.0,
+    1.2406000000000001,
+    1.0
+  ],
+  "u_RimOffet": [
+    0.12880000000000003,
+    -0.2839999999999998,
+    1.2232000000000003,
+    0.30120000000000013
+  ],
+  "__material_fit_discrete_candidate__": {
+    "contract": "material_discrete_candidate_v1",
+    "candidate_id": "normal=flat|rim=1|blend_src=0",
+    "axes": {
+      "normal_mode": "flat",
+      "rim_smooth": true,
+      "blend_src": 0
+    },
+    "defines": {
+      "managed": [
+        "NORMALMAP",
+        "NORMALMAP_Y_INVERT",
+        "RIMSMOOTHNESS"
+      ],
+      "enabled": [
+        "RIMSMOOTHNESS"
+      ]
+    },
+    "render_states": {
+      "s_BlendSrc": 0
+    }
+  }
 }

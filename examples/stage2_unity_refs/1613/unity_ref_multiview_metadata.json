@@ -1,10 +1,10 @@
 {
     "exporterVersion": "1.1.0",
-    "exportedAtUtc": "2026-07-21T03:57:51.7544224Z",
+    "exportedAtUtc": "2026-07-23T08:21:47.0592939Z",
     "unityVersion": "2020.3.47f1c1",
     "targetName": "1613",
     "targetAssetPath": "Assets/Fishes/FishBoss/Prefab/boss_1613/1613.prefab",
-    "outputFolder": ".",
+    "outputFolder": "C:/Users/TU/Pictures",
     "imageWidth": 900,
     "imageHeight": 700,
     "distanceScale": 2.200000047683716,
@@ -22,14 +22,14 @@
     "orthographicScale": 2.5,
     "orthographicSize": 2.5,
     "targetCenter": [
-        0.0,
-        0.0,
-        4.896719455718994
+        -0.7829241752624512,
+        -0.053254008293151858,
+        5.377706527709961
     ],
     "targetSize": [
-        5.983821392059326,
-        5.983821392059326,
-        15.303439140319825
+        3.9376273155212404,
+        1.996711015701294,
+        10.755413055419922
     ],
     "modelGeometry": {
         "schemaVersion": "material_fit_model_geometry_v1",
@@ -43,30 +43,30 @@
             0.0
         ],
         "pivotToBoundsCenter": [
-            0.5688092708587647,
-            0.7292755842208862,
+            0.568808913230896,
+            0.7292757034301758,
             -0.700217604637146
         ],
         "actualBounds": {
             "valid": true,
             "min": [
-                -0.8860921859741211,
-                -0.0002736656169872731,
+                -0.886091947555542,
+                -0.00027330676675774157,
                 -1.9113298654556275
             ],
             "max": [
-                2.0237107276916506,
-                1.458824872970581,
+                2.023709774017334,
+                1.4588247537612916,
                 0.5108946561813355
             ],
             "center": [
-                0.5688092708587647,
-                0.7292755842208862,
+                0.568808913230896,
+                0.7292757034301758,
                 -0.700217604637146
             ],
             "size": [
-                2.9098029136657717,
-                1.4590985774993897,
+                2.909801721572876,
+                1.4590981006622315,
                 2.422224521636963
             ]
         },
@@ -3634,7 +3634,7 @@
             "yaw": 0.0,
             "captureYaw": 0.0,
             "pitch": 0.0,
-            "imagePath": "unity_ref_v000_yaw0_pitch0.png",
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v000_yaw0_pitch0.png",
             "fileName": "unity_ref_v000_yaw0_pitch0.png",
             "maskPath": "",
             "maskFileName": "",
@@ -3650,7 +3650,7 @@
             ],
             "targetLocalRotationEuler": [
                 0.0,
-                180.0,
+                0.0,
                 0.0
             ]
         },
@@ -3659,7 +3659,7 @@
             "yaw": 45.0,
             "captureYaw": 315.0,
             "pitch": 0.0,
-            "imagePath": "unity_ref_v001_yaw45_pitch0.png",
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v001_yaw45_pitch0.png",
             "fileName": "unity_ref_v001_yaw45_pitch0.png",
             "maskPath": "",
             "maskFileName": "",
@@ -3675,7 +3675,7 @@
             ],
             "targetLocalRotationEuler": [
                 0.0,
-                225.0,
+                45.000003814697269,
                 0.0
             ]
         },
@@ -3684,108 +3684,8 @@
             "yaw": 90.0,
             "captureYaw": 270.0,
             "pitch": 0.0,
-            "imagePath": "unity_ref_v002_yaw90_pitch0.png",
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v002_yaw90_pitch0.png",
             "fileName": "unity_ref_v002_yaw90_pitch0.png",
-            "maskPath": "",
-            "maskFileName": "",
-            "cameraPosition": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "cameraRotationEuler": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "targetLocalRotationEuler": [
-                0.0,
-                270.0,
-                0.0
-            ]
-        },
-        {
-            "index": 3,
-            "yaw": 135.0,
-            "captureYaw": 225.0,
-            "pitch": 0.0,
-            "imagePath": "unity_ref_v003_yaw135_pitch0.png",
-            "fileName": "unity_ref_v003_yaw135_pitch0.png",
-            "maskPath": "",
-            "maskFileName": "",
-            "cameraPosition": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "cameraRotationEuler": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "targetLocalRotationEuler": [
-                0.0,
-                315.0,
-                0.0
-            ]
-        },
-        {
-            "index": 4,
-            "yaw": 180.0,
-            "captureYaw": 180.0,
-            "pitch": 0.0,
-            "imagePath": "unity_ref_v004_yaw180_pitch0.png",
-            "fileName": "unity_ref_v004_yaw180_pitch0.png",
-            "maskPath": "",
-            "maskFileName": "",
-            "cameraPosition": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "cameraRotationEuler": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "targetLocalRotationEuler": [
-                0.0,
-                -0.000005008956122765085,
-                0.0
-            ]
-        },
-        {
-            "index": 5,
-            "yaw": 225.0,
-            "captureYaw": 135.0,
-            "pitch": 0.0,
-            "imagePath": "unity_ref_v005_yaw225_pitch0.png",
-            "fileName": "unity_ref_v005_yaw225_pitch0.png",
-            "maskPath": "",
-            "maskFileName": "",
-            "cameraPosition": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "cameraRotationEuler": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "targetLocalRotationEuler": [
-                0.0,
-                45.0,
-                0.0
-            ]
-        },
-        {
-            "index": 6,
-            "yaw": 270.0,
-            "captureYaw": 90.0,
-            "pitch": 0.0,
-            "imagePath": "unity_ref_v006_yaw270_pitch0.png",
-            "fileName": "unity_ref_v006_yaw270_pitch0.png",
             "maskPath": "",
             "maskFileName": "",
             "cameraPosition": [
@@ -3805,11 +3705,111 @@
             ]
         },
         {
+            "index": 3,
+            "yaw": 135.0,
+            "captureYaw": 225.0,
+            "pitch": 0.0,
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v003_yaw135_pitch0.png",
+            "fileName": "unity_ref_v003_yaw135_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                135.00001525878907,
+                0.0
+            ]
+        },
+        {
+            "index": 4,
+            "yaw": 180.0,
+            "captureYaw": 180.0,
+            "pitch": 0.0,
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v004_yaw180_pitch0.png",
+            "fileName": "unity_ref_v004_yaw180_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                180.0,
+                0.0
+            ]
+        },
+        {
+            "index": 5,
+            "yaw": 225.0,
+            "captureYaw": 135.0,
+            "pitch": 0.0,
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v005_yaw225_pitch0.png",
+            "fileName": "unity_ref_v005_yaw225_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                225.0,
+                0.0
+            ]
+        },
+        {
+            "index": 6,
+            "yaw": 270.0,
+            "captureYaw": 90.0,
+            "pitch": 0.0,
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v006_yaw270_pitch0.png",
+            "fileName": "unity_ref_v006_yaw270_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                270.0,
+                0.0
+            ]
+        },
+        {
             "index": 7,
             "yaw": 315.0,
             "captureYaw": 45.0,
             "pitch": 0.0,
-            "imagePath": "unity_ref_v007_yaw315_pitch0.png",
+            "imagePath": "C:/Users/TU/Pictures\\unity_ref_v007_yaw315_pitch0.png",
             "fileName": "unity_ref_v007_yaw315_pitch0.png",
             "maskPath": "",
             "maskFileName": "",
@@ -3825,7 +3825,7 @@
             ],
             "targetLocalRotationEuler": [
                 0.0,
-                135.0,
+                315.0,
                 0.0
             ]
         }

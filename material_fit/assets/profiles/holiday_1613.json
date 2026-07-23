@@ -33,6 +33,7 @@
     "pitch_offset": 0.0,
     "target_yaw_sign": -1.0,
     "target_pitch_sign": -1.0,
+    "target_base_yaw": 180.0,
     "animation_mode": "disabled",
     "freeze_animators": true,
     "settle_frames": 0,
@@ -52,14 +53,15 @@
     ]
   },
   "camera_calibration": {
-    "contract": "holiday_1613_unity_laya_camera_alignment_v1",
-    "reference_metadata_sha256": "4faea186f5710ae118e929c3a5966d8bb80ae54e5c021866edcc8e03d92c3b56",
+    "contract": "holiday_1613_unity_laya_camera_alignment_v2",
+    "reference_metadata_sha256": "a709ff37bb2f470b06a9bdd3fa08474db1afff3e7e830249b21da6b89d23556d",
     "orthographic_vertical_size": 6.625,
     "center_offset": [0.0, 0.34, 0.0],
-    "mean_foreground_iou": 0.9445818664731376,
-    "min_foreground_overlap_coefficient": 0.9829032981826341,
-    "max_centroid_error_norm": 0.0056526918998708615,
-    "max_bbox_scale_error": 0.013615955231650212,
+    "target_base_yaw": 180.0,
+    "mean_foreground_iou": 0.9481024979236394,
+    "min_foreground_overlap_coefficient": 0.9830557924502895,
+    "max_centroid_error_norm": 0.003122039195358053,
+    "max_bbox_scale_error": 0.006263014055179594,
     "alignment_passed": true
   },
   "validation_variants": []
