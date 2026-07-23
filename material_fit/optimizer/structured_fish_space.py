@@ -120,14 +120,21 @@ _MATERIAL_SCALAR_COORDINATES: tuple[FishSearchCoordinate, ...] = (
     _scalar("u_NormalScale", MATERIAL_SCALAR_GROUP, 0.0, 1.2, 0.15),
     _scalar("u_ShadowSmoothness", MATERIAL_SCALAR_GROUP, 0.0, 1.0, 0.10),
     _scalar("u_ShadowThreshold1", MATERIAL_SCALAR_GROUP, 0.0, 1.0, 0.08),
-    # u_ShadowThreshold2/u_ShadowColor2 are conditionally hidden by
-    # USE_SECOND_LEVELS, which is absent from the maintained fish material.
     _scalar("u_SpecularIntensity", MATERIAL_SCALAR_GROUP, 0.0, 10.0, 0.40),
     _scalar("u_SpecularPower", MATERIAL_SCALAR_GROUP, 1.0, 200.0, 8.0),
     _scalar("u_SpecularThreshold", MATERIAL_SCALAR_GROUP, 0.0, 1.0, 0.08),
     _scalar("u_SpecularSmoothness", MATERIAL_SCALAR_GROUP, 0.0, 1.0, 0.10),
     _scalar("u_RimIntensity", MATERIAL_SCALAR_GROUP, 0.0, 10.0, 0.40),
     _scalar("u_RimWidth", MATERIAL_SCALAR_GROUP, 0.0, 10.0, 0.50),
+)
+
+# These coordinates are part of the shipped shader, but are dormant unless
+# the material enables USE_SECOND_LEVELS.  Keep them out of the immutable
+# canonical 40-coordinate policy and expose them only when a caller explicitly
+# requests the extended executable parameter space.
+_OPTIONAL_SECOND_LEVEL_COORDINATES: tuple[FishSearchCoordinate, ...] = (
+    _scalar("u_ShadowThreshold2", MATERIAL_SCALAR_GROUP, 0.0, 1.0, 0.08),
+    *_vector_rgb("u_ShadowColor2"),
 )
 
 _MATERIAL_COLOR_COORDINATES: tuple[FishSearchCoordinate, ...] = tuple(
@@ -166,6 +173,15 @@ STRUCTURED_FISH_SCENE_PARAM_NAMES: tuple[str, ...] = tuple(
 STRUCTURED_FISH_MATERIAL_PARAM_NAMES: tuple[str, ...] = tuple(
     dict.fromkeys(coordinate.param_name for coordinate in STRUCTURED_FISH_MATERIAL_COORDINATES)
 )
+STRUCTURED_FISH_OPTIONAL_SECOND_LEVEL_PARAM_NAMES: tuple[str, ...] = tuple(
+    dict.fromkeys(
+        coordinate.param_name for coordinate in _OPTIONAL_SECOND_LEVEL_COORDINATES
+    )
+)
+STRUCTURED_FISH_EXTENDED_MATERIAL_PARAM_NAMES: tuple[str, ...] = (
+    *STRUCTURED_FISH_MATERIAL_PARAM_NAMES,
+    *STRUCTURED_FISH_OPTIONAL_SECOND_LEVEL_PARAM_NAMES,
+)
 STRUCTURED_FISH_PARAM_NAMES: tuple[str, ...] = (
     *STRUCTURED_FISH_SCENE_PARAM_NAMES,
     *STRUCTURED_FISH_MATERIAL_PARAM_NAMES,
@@ -194,9 +210,16 @@ def structured_fish_coordinates(
     shader_by_name = {param.name: param for param in shader_params}
     shader_names = set(shader_by_name)
     requested = set(search_param_names) if search_param_names is not None else None
-    source: Iterable[FishSearchCoordinate] = (
+    base_source: Iterable[FishSearchCoordinate] = (
         STRUCTURED_FISH_MATERIAL_COORDINATES if material_only else STRUCTURED_FISH_COORDINATES
     )
+    source = list(base_source)
+    if requested is not None:
+        source.extend(
+            coordinate
+            for coordinate in _OPTIONAL_SECOND_LEVEL_COORDINATES
+            if coordinate.param_name in requested
+        )
     result: list[FishSearchCoordinate] = []
     for coordinate in source:
         name = coordinate.param_name
@@ -286,7 +309,9 @@ __all__ = [
     "SCENE_ALIGNMENT_GROUP",
     "STRUCTURED_FISH_COORDINATES",
     "STRUCTURED_FISH_MATERIAL_COORDINATES",
+    "STRUCTURED_FISH_EXTENDED_MATERIAL_PARAM_NAMES",
     "STRUCTURED_FISH_MATERIAL_PARAM_NAMES",
+    "STRUCTURED_FISH_OPTIONAL_SECOND_LEVEL_PARAM_NAMES",
     "STRUCTURED_FISH_PARAM_NAMES",
     "STRUCTURED_FISH_SCENE_PARAM_NAMES",
     "STRUCTURED_GROUP_ORDER",

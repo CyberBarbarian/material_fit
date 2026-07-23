@@ -98,6 +98,12 @@ def material_patch_from_lmat(path: str | Path) -> dict[str, Any]:
     }
     enabled_defines = [str(value) for value in props.get("defines", []) if str(value)]
     managed_defines = ["NORMALMAP", "NORMALMAP_Y_INVERT", "RIMSMOOTHNESS"]
+    # Optional shader branches are managed only when the source material
+    # actually enables them.  Canonical Stage 1 materials therefore retain
+    # their immutable three-define hard-state contract.
+    for optional_define in ("USE_SECOND_LEVELS",):
+        if optional_define in enabled_defines:
+            managed_defines.append(optional_define)
     render_states = {
         name: copy.deepcopy(props[name])
         for name in MATERIAL_RENDER_STATE_KEYS

@@ -308,6 +308,12 @@
       extent.y = bounds.extent.y;
       extent.z = bounds.extent.z;
     }
+    const centerOffset = profile.center_offset;
+    if (Array.isArray(centerOffset) && centerOffset.length >= 3) {
+      center.x += numberOr(centerOffset[0], 0);
+      center.y += numberOr(centerOffset[1], 0);
+      center.z += numberOr(centerOffset[2], 0);
+    }
     const radius = numberOr(profile.distance, Math.max(1, extent.x, extent.y, extent.z) * 2.4);
     const yawRad = numberOr(profile.yaw, 0) * Math.PI / 180;
     const pitchRad = numberOr(profile.pitch, 0) * Math.PI / 180;
@@ -1038,6 +1044,7 @@
     "NORMALMAP",
     "NORMALMAP_Y_INVERT",
     "RIMSMOOTHNESS",
+    "USE_SECOND_LEVELS",
   ]);
   const MATERIAL_RENDER_STATE_PROPERTIES = Object.freeze({
     renderQueue: "renderQueue",

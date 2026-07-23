@@ -26,6 +26,7 @@ from material_fit.optimizer.structured_fish_space import (
     FishSearchCoordinate,
     MATERIAL_GROUPS,
     MATERIAL_SCALAR_GROUP,
+    STRUCTURED_FISH_EXTENDED_MATERIAL_PARAM_NAMES,
     STRUCTURED_FISH_MATERIAL_COORDINATES,
     structured_fish_coordinates,
     structured_fish_search_param_names,
@@ -141,6 +142,38 @@ def test_structured_space_has_separate_scene_and_material_groups() -> None:
     assert "u_Color[3]" not in {coordinate.coordinate_id for coordinate in coordinates}
     assert "u_MainTex_ST" not in structured_fish_search_param_names(params, _shader_params())
     assert "u_AlphaTestValue" not in structured_fish_search_param_names(params, _shader_params())
+
+
+def test_second_shadow_level_is_opt_in_without_changing_canonical_40() -> None:
+    params = _params()
+    params["u_ShadowThreshold2"] = 0.4
+    params["u_ShadowColor2"] = [0.5, 0.5, 0.5, 1.0]
+    shader_params = _shader_params() + [
+        ShaderParam("u_ShadowThreshold2", "Float", default=0.4, range_min=0.0, range_max=1.0),
+        ShaderParam("u_ShadowColor2", "Color", default=[0.5, 0.5, 0.5, 1.0]),
+    ]
+
+    canonical = structured_fish_coordinates(
+        params,
+        shader_params=shader_params,
+        material_only=True,
+    )
+    extended = structured_fish_coordinates(
+        params,
+        shader_params=shader_params,
+        search_param_names=STRUCTURED_FISH_EXTENDED_MATERIAL_PARAM_NAMES,
+        material_only=True,
+    )
+
+    assert len(STRUCTURED_FISH_MATERIAL_COORDINATES) == 40
+    assert len(canonical) == 40
+    assert len(extended) == 44
+    assert {row.coordinate_id for row in extended} - {row.coordinate_id for row in canonical} == {
+        "u_ShadowThreshold2",
+        "u_ShadowColor2[0]",
+        "u_ShadowColor2[1]",
+        "u_ShadowColor2[2]",
+    }
 
 
 def test_block_basin_escape_is_deterministic_and_preserves_locked_state() -> None:

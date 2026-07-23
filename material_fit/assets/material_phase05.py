@@ -44,6 +44,12 @@ CROCODILE_MATERIAL = Path(
 CROCODILE_SHADER = Path(
     "assets/resources/shader/Custom_low.shader"
 )
+HOLIDAY_1613_ROOT = Path("examples/holiday_1613_laya_project")
+HOLIDAY_1613_PROFILE = Path("material_fit/assets/profiles/holiday_1613.json")
+HOLIDAY_1613_MATERIAL = Path(
+    "assets/resources/model/1613/mat/fish_1543_shengdanlaoren_laya_diff.lmat"
+)
+HOLIDAY_1613_SHADER = Path("assets/resources/shader/Custom_low.shader")
 
 
 @dataclass(frozen=True)
@@ -88,6 +94,8 @@ def resolve_material_asset(
         spec = _resolve_turtle(repo_root)
     elif normalized in {"crocodile", "crocodile_1503", "1503"}:
         spec = _resolve_crocodile(repo_root)
+    elif normalized in {"holiday", "holiday_1613", "1613"}:
+        spec = _resolve_holiday_1613(repo_root)
     else:
         raise ValueError(f"unsupported material asset: {asset_id}")
     return _with_overrides(
@@ -212,6 +220,22 @@ def _resolve_crocodile(repo_root: Path) -> MaterialAssetSpec:
         scene_path=scene_path,
         shader_path=(root / CROCODILE_SHADER).resolve(),
         target_material_path=(root / CROCODILE_MATERIAL).resolve(),
+        profile=profile,
+    )
+
+
+def _resolve_holiday_1613(repo_root: Path) -> MaterialAssetSpec:
+    root = (repo_root / HOLIDAY_1613_ROOT).resolve()
+    profile_path = (repo_root / HOLIDAY_1613_PROFILE).resolve()
+    if not profile_path.is_file():
+        raise FileNotFoundError(f"missing maintained 1613 renderer profile: {profile_path}")
+    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
+    return MaterialAssetSpec(
+        asset_id="holiday_1613",
+        project_root=root,
+        scene_path=_scene_path(profile.get("scene"), root, profile_path.parent),
+        shader_path=(root / HOLIDAY_1613_SHADER).resolve(),
+        target_material_path=(root / HOLIDAY_1613_MATERIAL).resolve(),
         profile=profile,
     )
 

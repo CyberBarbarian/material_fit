@@ -1,0 +1,3833 @@
+{
+    "exporterVersion": "1.1.0",
+    "exportedAtUtc": "2026-07-21T03:57:51.7544224Z",
+    "unityVersion": "2020.3.47f1c1",
+    "targetName": "1613",
+    "targetAssetPath": "Assets/Fishes/FishBoss/Prefab/boss_1613/1613.prefab",
+    "outputFolder": ".",
+    "imageWidth": 900,
+    "imageHeight": 700,
+    "distanceScale": 2.200000047683716,
+    "minDistance": 1.0,
+    "transparentBackground": true,
+    "useSilhouetteMaskAlpha": true,
+    "keyBackgroundToAlpha": false,
+    "exportMask": false,
+    "backgroundKeyTolerance": 0.019999999552965165,
+    "backgroundKeySoftness": 0.05999999865889549,
+    "useCameraProjection": false,
+    "captureMode": "rotate_target",
+    "useOrthographic": true,
+    "fieldOfView": 35.0,
+    "orthographicScale": 2.5,
+    "orthographicSize": 2.5,
+    "targetCenter": [
+        0.0,
+        0.0,
+        4.896719455718994
+    ],
+    "targetSize": [
+        5.983821392059326,
+        5.983821392059326,
+        15.303439140319825
+    ],
+    "modelGeometry": {
+        "schemaVersion": "material_fit_model_geometry_v1",
+        "targetName": "1613",
+        "coordinateSystem": "laya_right_handed_x_flipped_from_unity",
+        "boundsSpace": "target_local_current_pose",
+        "poseSource": "visible_renderer_vertices",
+        "targetPivot": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "pivotToBoundsCenter": [
+            0.5688092708587647,
+            0.7292755842208862,
+            -0.700217604637146
+        ],
+        "actualBounds": {
+            "valid": true,
+            "min": [
+                -0.8860921859741211,
+                -0.0002736656169872731,
+                -1.9113298654556275
+            ],
+            "max": [
+                2.0237107276916506,
+                1.458824872970581,
+                0.5108946561813355
+            ],
+            "center": [
+                0.5688092708587647,
+                0.7292755842208862,
+                -0.700217604637146
+            ],
+            "size": [
+                2.9098029136657717,
+                1.4590985774993897,
+                2.422224521636963
+            ]
+        },
+        "rendererCount": 36,
+        "visibleRendererCount": 5,
+        "exactBoundsRendererCount": 5,
+        "fallbackBoundsRendererCount": 0,
+        "materialSlotCount": 36,
+        "totalVertexCount": 19859,
+        "totalTriangleCount": 29622,
+        "totalSubMeshCount": 5,
+        "boneCount": 152,
+        "renderers": [
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/fish_1543_shengdanlaoren1",
+                "rendererType": "SkinnedMeshRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": true,
+                "boundsSource": "current_pose_vertices",
+                "meshName": "fish_1543_shengdanlaoren1",
+                "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1613/Model/1613_shengdanlaoren_skin.FBX",
+                "vertexCount": 7317,
+                "triangleCount": 11764,
+                "subMeshCount": 1,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/fish_1543_shengdanlaoren2",
+                "rendererType": "SkinnedMeshRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": true,
+                "boundsSource": "current_pose_vertices",
+                "meshName": "fish_1543_shengdanlaoren2",
+                "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1613/Model/1613_shengdanlaoren_skin.FBX",
+                "vertexCount": 3188,
+                "triangleCount": 5102,
+                "subMeshCount": 1,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/lu-001",
+                "rendererType": "SkinnedMeshRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": true,
+                "boundsSource": "current_pose_vertices",
+                "meshName": "lu-001",
+                "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1613/Model/1613_shengdanlaoren_skin.FBX",
+                "vertexCount": 3028,
+                "triangleCount": 4512,
+                "subMeshCount": 1,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/lu-002",
+                "rendererType": "SkinnedMeshRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": true,
+                "boundsSource": "current_pose_vertices",
+                "meshName": "lu-002",
+                "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1613/Model/1613_shengdanlaoren_skin.FBX",
+                "vertexCount": 3028,
+                "triangleCount": 4512,
+                "subMeshCount": 1,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/effect_1613_shengdanlaoren_daizi_self/fuji/guang01",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/effect_1613_shengdanlaoren_daizi_self/fuji/lizi",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/effect_1613_shengdanlaoren_daizi_self/fuji/guang02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/effect_1613_shengdanlaoren_cheshen_self/fuji/snow01",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/effect_1613_shengdanlaoren_cheshen_self/fuji/snow02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/effect_1613_shengdanlaoren_cheshen_self/fuji/qiliu",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/effect_1613_shengdanlaoren_cheshen_self/fuji/qiliu (1)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/effect_1613_lu_a_tou_self/fuji/lujiao01",
+                "rendererType": "TrailRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/effect_1613_lu_a_tou_self/fuji/lujiao02",
+                "rendererType": "TrailRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/effect_1613_lu_a_tou_self/fuji/lizi01",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/effect_1613_lu_a_tou_self/fuji/lizi01 (1)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia01/fuji/glow",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia01/fuji/glow02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia01/fuji/lizi01 (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia01/fuji/lizi01_xuehua",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia02/fuji/glow",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia02/fuji/glow02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia02/fuji/lizi01 (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/effect_1613_lu_a_jiaoxia02/fuji/lizi01_xuehua (1)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/effect_1613_lu_b_tou_self/fuji/lujiao01",
+                "rendererType": "TrailRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/effect_1613_lu_b_tou_self/fuji/lujiao02",
+                "rendererType": "TrailRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/effect_1613_lu_b_tou_self/fuji/lizi01 (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/effect_1613_lu_b_tou_self/fuji/lizi01 (3)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia01/fuji/glow",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia01/fuji/glow02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia01/fuji/lizi01 (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia01/fuji/lizi01_xuehua (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia02/fuji/glow",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia02/fuji/glow02",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia02/fuji/lizi01 (2)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/effect_1613_lu_b_jiaoxia02/fuji/lizi01_xuehua (3)",
+                "rendererType": "ParticleSystemRenderer",
+                "enabled": true,
+                "activeInHierarchy": false,
+                "includedInActualBounds": false,
+                "boundsSource": "excluded",
+                "meshName": "",
+                "meshAssetPath": "",
+                "vertexCount": 0,
+                "triangleCount": 0,
+                "subMeshCount": 0,
+                "materialSlotCount": 1
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/shengdan_xueqiao",
+                "rendererType": "SkinnedMeshRenderer",
+                "enabled": true,
+                "activeInHierarchy": true,
+                "includedInActualBounds": true,
+                "boundsSource": "current_pose_vertices",
+                "meshName": "shengdan_xueqiao",
+                "meshAssetPath": "Assets/Fishes/FishBoss/PrefabArt/1613/Model/1613_shengdanlaoren_skin.FBX",
+                "vertexCount": 3298,
+                "triangleCount": 3732,
+                "subMeshCount": 1,
+                "materialSlotCount": 1
+            }
+        ],
+        "bones": [
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_01/B_huzi_02/B_huzi_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_01/B_huzi_02",
+                "localPosition": [
+                    0.270101934671402,
+                    -3.8146970382513248e-7,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.0127214267185991e-7,
+                    -1.939386073956939e-8,
+                    0.18808366358280183,
+                    -0.9821529984474182
+                ],
+                "localScale": [
+                    0.9999996423721314,
+                    0.9999996423721314,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    -0.0803445428609848,
+                    0.24215316772460938,
+                    -3.63797872577655e-14
+                ],
+                "localRotation": [
+                    0.6525570750236511,
+                    0.7577396631240845,
+                    3.432936921399232e-7,
+                    -6.482926551143464e-7
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_01/B_huzi_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_01",
+                "localPosition": [
+                    0.21159151196479798,
+                    0.0,
+                    -3.176301177632013e-8
+                ],
+                "localRotation": [
+                    2.2812059796706309e-7,
+                    -7.018386583013126e-8,
+                    0.24962884187698365,
+                    -0.968341588973999
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+                "localPosition": [
+                    0.10320815443992615,
+                    0.0408458337187767,
+                    -1.996522724923011e-9
+                ],
+                "localRotation": [
+                    -9.846908000099575e-8,
+                    -9.080550000817311e-8,
+                    -0.005719717592000961,
+                    -0.9999836683273315
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_meimao_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.18241576850414277,
+                    -0.017934570088982583,
+                    -9.155273232863692e-7
+                ],
+                "localRotation": [
+                    -0.13265246152877809,
+                    0.22323495149612428,
+                    -0.5126591324806213,
+                    -0.8183826208114624
+                ],
+                "localScale": [
+                    1.0,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_meimao_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.18241576850414277,
+                    -0.017934570088982583,
+                    -9.155273232863692e-7
+                ],
+                "localRotation": [
+                    0.13265088200569154,
+                    -0.22323459386825562,
+                    -0.5126593112945557,
+                    -0.8183828592300415
+                ],
+                "localScale": [
+                    0.9999997019767761,
+                    0.9999998211860657,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_yanjing",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.18241576850414277,
+                    -0.017934570088982583,
+                    -7.629394076502649e-7
+                ],
+                "localRotation": [
+                    -0.0000010748040040198248,
+                    2.607806415255709e-8,
+                    -0.6469746828079224,
+                    -0.7625114917755127
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine",
+                "localPosition": [
+                    -0.12440399080514908,
+                    -0.04571409150958061,
+                    -0.2643369436264038
+                ],
+                "localRotation": [
+                    0.02791726589202881,
+                    0.9996102452278137,
+                    0.0000013876164075554698,
+                    4.974663792012279e-9
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh",
+                "localPosition": [
+                    0.24642318487167359,
+                    0.0,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    -5.517853833353001e-14,
+                    1.4139111024569565e-14,
+                    0.06258328258991242,
+                    -0.9980397820472717
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001",
+                "localPosition": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.5,
+                    0.5,
+                    0.4999993145465851,
+                    -0.5000007152557373
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "localPosition": [
+                    0.12454620003700257,
+                    0.04532577097415924,
+                    7.919807032408244e-9
+                ],
+                "localRotation": [
+                    0.0000020791137558262564,
+                    6.923154387550312e-7,
+                    0.0015628543915227056,
+                    -0.9999988079071045
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf",
+                "localPosition": [
+                    0.13479048013687135,
+                    -4.76837147544984e-9,
+                    -1.907348590179936e-8
+                ],
+                "localRotation": [
+                    -0.017083914950489999,
+                    -0.0023565669544041158,
+                    -0.07160341739654541,
+                    -0.9972841143608093
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot/Bip001 R Toe0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 R Thigh/Bip001 R Calf/Bip001 R Foot",
+                "localPosition": [
+                    0.16247405111789704,
+                    0.16647477447986604,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    1.4655511471062255e-8,
+                    1.629608448183717e-8,
+                    -0.7071068286895752,
+                    -0.7071068286895752
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine",
+                "localPosition": [
+                    -0.12440399080514908,
+                    -0.04571555554866791,
+                    0.26433685421943667
+                ],
+                "localRotation": [
+                    0.02791726589202881,
+                    0.9996102452278137,
+                    0.0000013876164075554698,
+                    4.974663792012279e-9
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh",
+                "localPosition": [
+                    0.24642318487167359,
+                    0.0,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    -5.517853833353001e-14,
+                    1.4139111024569565e-14,
+                    0.06258328258991242,
+                    -0.9980397820472717
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf",
+                "localPosition": [
+                    0.13479048013687135,
+                    -4.76837147544984e-9,
+                    -1.907348590179936e-8
+                ],
+                "localRotation": [
+                    0.01708391308784485,
+                    0.0023564796429127456,
+                    -0.07160341739654541,
+                    -0.9972841143608093
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot/Bip001 L Toe0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 L Thigh/Bip001 L Calf/Bip001 L Foot",
+                "localPosition": [
+                    0.16247405111789704,
+                    0.16647478938102723,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.4545857851544497e-8,
+                    -1.6241097355873536e-8,
+                    -0.7071068286895752,
+                    -0.7071068286895752
+                ],
+                "localScale": [
+                    1.0,
+                    1.0000001192092896,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_L_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.08872100710868836,
+                    0.29423055052757265,
+                    0.0079501336440444
+                ],
+                "localRotation": [
+                    -0.45949819684028628,
+                    0.5374590754508972,
+                    -0.4462752044200897,
+                    -0.5484866499900818
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_L_01/B_huzi_L_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_L_01",
+                "localPosition": [
+                    0.08170626312494278,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.008201195858418942,
+                    0.06486640870571137,
+                    0.03650006651878357,
+                    -0.9971925020217896
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_L_01/B_huzi_L_02/B_huzi_L_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_L_01/B_huzi_L_02",
+                "localPosition": [
+                    0.11023515462875366,
+                    3.0517577442878976e-7,
+                    -1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    -0.023296067491173745,
+                    0.10235369950532913,
+                    0.06106718257069588,
+                    -0.9925985336303711
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.000000238418579,
+                    0.9999998211860657
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_R_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.08872115612030029,
+                    0.2942306399345398,
+                    -0.007946624420583249
+                ],
+                "localRotation": [
+                    0.45949745178222659,
+                    -0.5374584197998047,
+                    -0.4462766647338867,
+                    -0.5484867095947266
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_R_01/B_huzi_R_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_R_01",
+                "localPosition": [
+                    0.08170625567436218,
+                    0.0,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    0.008201174437999726,
+                    -0.06486640870571137,
+                    0.036500390619039538,
+                    -0.9971925020217896
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_R_01/B_huzi_R_02/B_huzi_R_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_huzi_R_01/B_huzi_R_02",
+                "localPosition": [
+                    0.11023517698049545,
+                    3.0517577442878976e-7,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    0.02329631708562374,
+                    -0.10235356539487839,
+                    0.06106716766953468,
+                    -0.9925985336303711
+                ],
+                "localScale": [
+                    1.0000003576278687,
+                    1.0000003576278687,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine",
+                "localPosition": [
+                    0.34923744201660159,
+                    -0.0004087447887286544,
+                    -1.0976509701166038e-9
+                ],
+                "localRotation": [
+                    3.966765405039041e-8,
+                    -2.218799863840104e-7,
+                    0.0488351471722126,
+                    -0.9988068342208862
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.23300109803676606,
+                    -0.2514877915382385,
+                    -0.0069517516531050209
+                ],
+                "localRotation": [
+                    -0.6104425191879273,
+                    0.7524474859237671,
+                    -0.1282418817281723,
+                    -0.21151086688041688
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    0.9999997615814209,
+                    0.9999997019767761
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01",
+                "localPosition": [
+                    0.17679598927497865,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.11959648132324219,
+                    -0.09427357465028763,
+                    -0.5797906517982483,
+                    -0.800407350063324
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02/B_maozi_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02",
+                "localPosition": [
+                    0.18643508851528169,
+                    -7.629394360719744e-8,
+                    -7.629394360719744e-8
+                ],
+                "localRotation": [
+                    -0.2078963667154312,
+                    -0.07340983301401138,
+                    0.17133702337741853,
+                    -0.9602258801460266
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02/B_maozi_03/B_maozi_04",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02/B_maozi_03",
+                "localPosition": [
+                    0.1535300463438034,
+                    0.0,
+                    3.814697180359872e-8
+                ],
+                "localRotation": [
+                    -0.00022017810260877013,
+                    -0.18452715873718263,
+                    0.4459368884563446,
+                    -0.8758367300033569
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02/B_maozi_03/B_maozi_04/B_maozi_05",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_maozi_01/B_maozi_02/B_maozi_03/B_maozi_04",
+                "localPosition": [
+                    0.11852477490901947,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.08562488108873368,
+                    0.0022593692410737278,
+                    0.30223268270492556,
+                    -0.9493780732154846
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head/B_bizi",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 Head",
+                "localPosition": [
+                    0.1508624255657196,
+                    0.21926625072956086,
+                    0.0
+                ],
+                "localRotation": [
+                    -6.944337087588792e-7,
+                    2.9359162567743626e-7,
+                    -0.7506585717201233,
+                    -0.6606903672218323
+                ],
+                "localScale": [
+                    1.0,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm",
+                "localPosition": [
+                    0.38246414065361025,
+                    -9.53674295089968e-9,
+                    1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    0.7312127351760864,
+                    0.0733855813741684,
+                    -0.06772398203611374,
+                    -0.6748006939888
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+                "localPosition": [
+                    0.16494856774806977,
+                    0.0012953185942023993,
+                    0.054177504032850268
+                ],
+                "localRotation": [
+                    0.0009296915377490222,
+                    -0.04294780269265175,
+                    0.00807170569896698,
+                    -0.9990442991256714
+                ],
+                "localScale": [
+                    1.0,
+                    0.9999998807907105,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+                "localPosition": [
+                    0.14164695143699647,
+                    -0.015969695523381234,
+                    -0.09954322874546051
+                ],
+                "localRotation": [
+                    -0.15670175850391389,
+                    -0.1119522750377655,
+                    -0.004102503415197134,
+                    -0.9812718629837036
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger0/Bip001 L Finger01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger0",
+                "localPosition": [
+                    0.06646377593278885,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    2.944410049110502e-8,
+                    1.208815270103969e-8,
+                    -0.030788879841566087,
+                    -0.9995259046554565
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand",
+                "localPosition": [
+                    0.05593833699822426,
+                    0.020764769986271859,
+                    -0.14598609507083894
+                ],
+                "localRotation": [
+                    -0.45979389548301699,
+                    -0.36250412464141848,
+                    0.1460188627243042,
+                    -0.7974075675010681
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm",
+                "localPosition": [
+                    0.33324095606803896,
+                    4.76837147544984e-9,
+                    0.0
+                ],
+                "localRotation": [
+                    1.0405609707220265e-9,
+                    1.8038963656152874e-9,
+                    0.059533774852752689,
+                    -0.9982262849807739
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger2/Bip001 L Finger21",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger2",
+                "localPosition": [
+                    0.11317504942417145,
+                    0.0,
+                    -1.907348590179936e-8
+                ],
+                "localRotation": [
+                    3.7180030165728796e-9,
+                    5.206562958548489e-10,
+                    -0.014776239171624184,
+                    -0.9998908638954163
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger1/Bip001 L Finger11",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm/Bip001 L Forearm/Bip001 L Hand/Bip001 L Finger1",
+                "localPosition": [
+                    0.10525833070278168,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    7.389461043061374e-9,
+                    2.0919996845947255e-9,
+                    -0.03090284764766693,
+                    -0.9995223879814148
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm",
+                "localPosition": [
+                    0.33324095606803896,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.9702317555214678e-9,
+                    -1.7484511616316923e-9,
+                    0.059533774852752689,
+                    -0.9982262849807739
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm",
+                "localPosition": [
+                    0.382464200258255,
+                    0.0,
+                    -1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    -0.7312127351760864,
+                    -0.0733855813741684,
+                    -0.06772397458553314,
+                    -0.6748006939888
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle",
+                "localPosition": [
+                    0.2510543167591095,
+                    4.76837147544984e-9,
+                    1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    0.0020828035194426777,
+                    -0.07805365324020386,
+                    -0.0073180426843464378,
+                    -0.9969201683998108
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle/Bip001 L UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle",
+                "localPosition": [
+                    0.2510543465614319,
+                    4.76837147544984e-9,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.0020827967673540117,
+                    0.07805348187685013,
+                    -0.007318128831684589,
+                    -0.9969201683998108
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 L Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+                "localPosition": [
+                    -0.0639566034078598,
+                    0.019999274984002115,
+                    0.22115464508533479
+                ],
+                "localRotation": [
+                    0.6297928094863892,
+                    -0.0698447898030281,
+                    0.7709185481071472,
+                    0.06455503404140473
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck",
+                "localPosition": [
+                    -0.0639566034078598,
+                    0.020000552758574487,
+                    -0.2211555689573288
+                ],
+                "localRotation": [
+                    -0.629792332649231,
+                    0.06984256207942963,
+                    0.7709189653396606,
+                    0.06455683708190918
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_B_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "localPosition": [
+                    0.05367698520421982,
+                    -0.3849674463272095,
+                    9.918211389958743e-7
+                ],
+                "localRotation": [
+                    -7.355769753303321e-7,
+                    0.0000013993471839057748,
+                    0.999859094619751,
+                    0.01678912714123726
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_R_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "localPosition": [
+                    0.024677732959389688,
+                    0.0783325582742691,
+                    -0.6018120050430298
+                ],
+                "localRotation": [
+                    -0.014353958889842034,
+                    0.7069599628448486,
+                    -0.7034161686897278,
+                    -0.07216175645589829
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_L_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "localPosition": [
+                    0.024676283821463586,
+                    0.07833580672740936,
+                    0.6018097996711731
+                ],
+                "localRotation": [
+                    -0.01435505598783493,
+                    0.7069618701934815,
+                    0.7034142017364502,
+                    0.07216265052556992
+                ],
+                "localScale": [
+                    0.9999997615814209,
+                    1.0,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_F_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis",
+                "localPosition": [
+                    -0.064458467066288,
+                    0.5038986802101135,
+                    -0.0000015258788153005299
+                ],
+                "localRotation": [
+                    0.04072679579257965,
+                    0.9991703033447266,
+                    -0.000001379458922201593,
+                    5.721266234104405e-7
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_L_01/B_qunbai_L_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_L_01",
+                "localPosition": [
+                    0.17241375148296357,
+                    7.629394360719744e-8,
+                    -9.53674295089968e-9
+                ],
+                "localRotation": [
+                    -0.000001663860984990606,
+                    -8.46571168722221e-8,
+                    -0.0508141927421093,
+                    -0.9987081289291382
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_F_01/B_qunbao_F_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_F_01",
+                "localPosition": [
+                    0.1528884619474411,
+                    3.814697180359872e-8,
+                    9.654831600869329e-9
+                ],
+                "localRotation": [
+                    8.368563442218147e-8,
+                    -4.094176730973231e-8,
+                    0.10192462056875229,
+                    -0.9947921633720398
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_R_01/B_qunbai_R_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbai_R_01",
+                "localPosition": [
+                    0.1724136769771576,
+                    -3.814697180359872e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    2.381105730364652e-7,
+                    1.2115009440094582e-8,
+                    -0.05081404745578766,
+                    -0.9987081289291382
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_B_01/B_qunbao_B_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/B_qunbao_B_01",
+                "localPosition": [
+                    0.23284827172756196,
+                    0.0,
+                    1.8336686613551479e-9
+                ],
+                "localRotation": [
+                    8.735249679148183e-8,
+                    -3.5046889834688956e-9,
+                    0.040088970214128497,
+                    -0.9991961121559143
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+                "localPosition": [
+                    0.16494841873645783,
+                    0.0012951659737154842,
+                    -0.054177481681108478
+                ],
+                "localRotation": [
+                    -0.0009296839125454426,
+                    0.04294780269265175,
+                    0.00807170756161213,
+                    -0.9990442991256714
+                ],
+                "localScale": [
+                    1.0,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+                "localPosition": [
+                    0.1416471004486084,
+                    -0.01596984826028347,
+                    0.0995432436466217
+                ],
+                "localRotation": [
+                    0.1567017287015915,
+                    0.1119522824883461,
+                    -0.004102502483874559,
+                    -0.9812718629837036
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger0/Bip001 R Finger01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger0",
+                "localPosition": [
+                    0.06646361947059632,
+                    7.629394360719744e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.4320609587059608e-8,
+                    -1.907640978515701e-8,
+                    -0.030788864940404893,
+                    -0.9995259046554565
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand",
+                "localPosition": [
+                    0.05593833699822426,
+                    0.020764769986271859,
+                    0.14598609507083894
+                ],
+                "localRotation": [
+                    0.4597938656806946,
+                    0.36250412464141848,
+                    0.1460188329219818,
+                    -0.7974076271057129
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999998807907105,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger2/Bip001 R Finger21",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger2",
+                "localPosition": [
+                    0.11317458748817444,
+                    0.0,
+                    -9.53674295089968e-9
+                ],
+                "localRotation": [
+                    6.880721253182953e-12,
+                    -4.6561049460436268e-10,
+                    -0.014776235446333886,
+                    -0.9998908638954163
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger1/Bip001 R Finger11",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-Laoren/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001 Neck/Bip001 R Clavicle/Bip001 R UpperArm/Bip001 R Forearm/Bip001 R Hand/Bip001 R Finger1",
+                "localPosition": [
+                    0.10525833070278168,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -2.185179859282016e-8,
+                    -1.6515654621684918e-8,
+                    -0.030902845785021783,
+                    -0.9995223879814148
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.5145674347877502,
+                    0.4629127085208893,
+                    0.3425915539264679
+                ],
+                "localRotation": [
+                    -0.49994853138923647,
+                    -0.680169403553009,
+                    0.14073888957500459,
+                    -0.5173138380050659
+                ],
+                "localScale": [
+                    1.0,
+                    0.9999998211860657,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.5347321033477783,
+                    0.4260094463825226,
+                    0.41432860493659975
+                ],
+                "localRotation": [
+                    0.2732735276222229,
+                    0.37643125653266909,
+                    0.2428487092256546,
+                    -0.8512611985206604
+                ],
+                "localScale": [
+                    0.9999998211860657,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_07/B_bow_08",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_07",
+                "localPosition": [
+                    0.10908645391464234,
+                    7.629394360719744e-8,
+                    -1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    0.006654106546193361,
+                    0.086274154484272,
+                    0.024872003123164178,
+                    -0.9959387183189392
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_07",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.49966731667518618,
+                    0.46276313066482546,
+                    0.42441099882125857
+                ],
+                "localRotation": [
+                    -0.6696651577949524,
+                    -0.6575778722763062,
+                    -0.05724810063838959,
+                    0.34038612246513369
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    0.9999998211860657,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_lingding_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.5017029047012329,
+                    0.40028074383735659,
+                    0.46976593136787417
+                ],
+                "localRotation": [
+                    0.27715635299682619,
+                    0.8195279836654663,
+                    0.2760373651981354,
+                    -0.41876208782196047
+                ],
+                "localScale": [
+                    1.0000004768371583,
+                    1.000000238418579,
+                    0.9999998211860657
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_lingdang_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.44537776708602908,
+                    0.4434913396835327,
+                    0.3921978771686554
+                ],
+                "localRotation": [
+                    0.501554012298584,
+                    0.8581355214118958,
+                    0.08729566633701325,
+                    0.06653108447790146
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000003576278687,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao",
+                "localPosition": [
+                    0.0024578857701271774,
+                    -0.49845826625823977,
+                    -0.5087746977806091
+                ],
+                "localRotation": [
+                    -0.7090572714805603,
+                    -1.9292603781195795e-7,
+                    -0.7051509022712708,
+                    2.687914779642142e-8
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_koudai_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.4531729519367218,
+                    0.3881389796733856,
+                    0.008530578576028347
+                ],
+                "localRotation": [
+                    -1.5545933251814859e-7,
+                    -6.56720402503197e-8,
+                    -0.13547955453395844,
+                    -0.9907801747322083
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_koudai_04",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.44202449917793276,
+                    -0.004381861537694931,
+                    -0.4211235046386719
+                ],
+                "localRotation": [
+                    0.6989389657974243,
+                    -0.10716402530670166,
+                    -0.10716425627470017,
+                    -0.6989392042160034
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_koudai_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.4420241713523865,
+                    -0.004381823353469372,
+                    0.4381799101829529
+                ],
+                "localRotation": [
+                    -0.6989389657974243,
+                    0.10716398060321808,
+                    -0.10716424882411957,
+                    -0.698939323425293
+                ],
+                "localScale": [
+                    1.000000238418579,
+                    1.0000001192092896,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_koudai_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.4531734883785248,
+                    -0.41385069489479067,
+                    0.008530273102223874
+                ],
+                "localRotation": [
+                    -0.9907801747322083,
+                    0.13547930121421815,
+                    7.54229105837112e-8,
+                    -2.3020636774617743e-7
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bag_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    -0.5556918382644653,
+                    0.000010418892088637222,
+                    -3.0517577442878976e-7
+                ],
+                "localRotation": [
+                    -1.7881392011531717e-7,
+                    -2.3283061589829402e-10,
+                    4.163335680599847e-17,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_01/B_bow_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_01",
+                "localPosition": [
+                    0.07286834716796875,
+                    6.103515488575795e-7,
+                    -7.629394360719744e-8
+                ],
+                "localRotation": [
+                    1.3810852905749016e-8,
+                    2.3569106133436436e-7,
+                    -0.0046266354620456699,
+                    -0.9999893307685852
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_03/B_bow_04",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_03",
+                "localPosition": [
+                    0.07286865264177323,
+                    5.722045557376987e-7,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.4770010636766529e-7,
+                    -2.838084185441403e-7,
+                    -0.004626755136996508,
+                    -0.9999893307685852
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    0.9999998807907105,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_05",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.504073977470398,
+                    0.4894644021987915,
+                    0.36651092767715456
+                ],
+                "localRotation": [
+                    -0.7521826028823853,
+                    -0.6528962850570679,
+                    0.08910384774208069,
+                    0.0028856180142611267
+                ],
+                "localScale": [
+                    1.0000003576278687,
+                    1.0000003576278687,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_01/B_belt_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_01",
+                "localPosition": [
+                    0.12560150027275086,
+                    -3.814697180359872e-8,
+                    7.629394360719744e-8
+                ],
+                "localRotation": [
+                    2.3795895742750873e-7,
+                    2.100041740504821e-8,
+                    -0.025602608919143678,
+                    -0.9996722340583801
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.5434253215789795,
+                    0.09753286093473435,
+                    0.47479185461997988
+                ],
+                "localRotation": [
+                    0.2473558932542801,
+                    0.5505930781364441,
+                    0.20189787447452546,
+                    -0.7712973356246948
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    1.000000238418579,
+                    1.0000003576278687
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.4899585247039795,
+                    0.03782923147082329,
+                    0.5361974835395813
+                ],
+                "localRotation": [
+                    0.14150817692279817,
+                    0.5452664494514465,
+                    0.48065662384033205,
+                    -0.6720336079597473
+                ],
+                "localScale": [
+                    0.9999998211860657,
+                    0.9999996423721314,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_daizi_01",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02",
+                "localPosition": [
+                    0.47528690099716189,
+                    0.19409529864788056,
+                    0.5292016267776489
+                ],
+                "localRotation": [
+                    0.4337654411792755,
+                    0.8601028323173523,
+                    0.2680181860923767,
+                    -0.015391001477837563
+                ],
+                "localScale": [
+                    0.9999995231628418,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_03/B_belt_04",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_belt_03",
+                "localPosition": [
+                    0.12560179829597474,
+                    -1.5258788721439488e-7,
+                    0.0
+                ],
+                "localRotation": [
+                    2.5254524871343167e-7,
+                    3.3485147099554527e-8,
+                    -0.02560260333120823,
+                    -0.9996722340583801
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_daizi_01/B_daizi_02",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_daizi_01",
+                "localPosition": [
+                    0.42189979553222659,
+                    0.0,
+                    1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    -0.0051063112914562229,
+                    -0.024874089285731317,
+                    0.31187179684638979,
+                    -0.9497848153114319
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_daizi_01/B_daizi_02/B_daizi_03",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_daizi_01/B_daizi_02",
+                "localPosition": [
+                    0.3902297616004944,
+                    3.0517577442878976e-7,
+                    -3.0517577442878976e-7
+                ],
+                "localRotation": [
+                    -0.0010444362415000797,
+                    -0.07272789627313614,
+                    0.039980802685022357,
+                    -0.9965496063232422
+                ],
+                "localScale": [
+                    1.000000238418579,
+                    1.000000238418579,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_05/B_bow_06",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-bao/B_bag_02/B_bow_05",
+                "localPosition": [
+                    0.10908634215593338,
+                    0.0,
+                    -3.0517577442878976e-7
+                ],
+                "localRotation": [
+                    0.003592247376218438,
+                    0.009912090376019478,
+                    0.1470847725868225,
+                    -0.9890677332878113
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2",
+                "localPosition": [
+                    0.20000320672988892,
+                    3.814697180359872e-8,
+                    3.814697180359872e-8
+                ],
+                "localRotation": [
+                    7.30819749605871e-7,
+                    0.0000016278215753118275,
+                    -0.7258021831512451,
+                    -0.6879034638404846
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "localPosition": [
+                    0.3434053063392639,
+                    -0.00035270690568722785,
+                    -3.814697180359872e-8
+                ],
+                "localRotation": [
+                    0.0,
+                    6.661338147750939e-16,
+                    0.0,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck",
+                "localPosition": [
+                    0.011266708374023438,
+                    -0.11903514713048935,
+                    0.12245368957519531
+                ],
+                "localRotation": [
+                    0.27671507000923159,
+                    0.6866266131401062,
+                    0.6505769491195679,
+                    0.16947652399539948
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1",
+                "localPosition": [
+                    0.18932019174098969,
+                    -0.16672728955745698,
+                    -3.8146970382513248e-7
+                ],
+                "localRotation": [
+                    1.8927840590991959e-14,
+                    -0.000001964220700756414,
+                    0.7081845998764038,
+                    -0.7060273289680481
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis",
+                "localPosition": [
+                    0.1903596669435501,
+                    -0.0002735900925472379,
+                    2.670288097306184e-7
+                ],
+                "localRotation": [
+                    0.0000020804759515158368,
+                    6.936760996723024e-7,
+                    -0.0003981590270996094,
+                    -0.9999999403953552
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck",
+                "localPosition": [
+                    0.2267194241285324,
+                    -0.00014167785411700606,
+                    0.0
+                ],
+                "localRotation": [
+                    1.2940687475586354e-13,
+                    -1.8005843571700098e-7,
+                    0.06491867452859879,
+                    -0.9978905916213989
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle",
+                "localPosition": [
+                    0.31081169843673708,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.5168911218643189,
+                    -0.5299547910690308,
+                    -0.41728177666664126,
+                    -0.5271124243736267
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck",
+                "localPosition": [
+                    0.011266708374023438,
+                    -0.11903447657823563,
+                    -0.1224544495344162
+                ],
+                "localRotation": [
+                    0.27671459317207339,
+                    0.6866284608840942,
+                    -0.6505750417709351,
+                    -0.16947731375694276
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm/Bip004 L Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm",
+                "localPosition": [
+                    0.1667320281267166,
+                    -3.814697180359872e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    -2.4812835773134653e-14,
+                    9.31169259300662e-16,
+                    0.46280813217163088,
+                    -0.8864584565162659
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004",
+                "localPosition": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.5,
+                    0.5,
+                    0.4999993145465851,
+                    -0.5000007152557373
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "localPosition": [
+                    -0.19035935401916505,
+                    0.0004246520984452218,
+                    0.16624969244003297
+                ],
+                "localRotation": [
+                    0.6884199380874634,
+                    0.725312352180481,
+                    8.95153675628535e-7,
+                    -7.648363862244878e-7
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "localPosition": [
+                    -0.19035932421684266,
+                    0.00042564389877952635,
+                    -0.16624976694583894
+                ],
+                "localRotation": [
+                    0.6884199380874634,
+                    0.725312352180481,
+                    0.0000011767058367695427,
+                    -0.000001081108507605677
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm/Bip004 R Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm",
+                "localPosition": [
+                    0.1667320281267166,
+                    -3.814697180359872e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    7.746056163301322e-15,
+                    -3.635233468171697e-17,
+                    0.46280813217163088,
+                    -0.8864584565162659
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle",
+                "localPosition": [
+                    0.31081169843673708,
+                    -1.907348590179936e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.5168911814689636,
+                    0.529954731464386,
+                    -0.41728174686431887,
+                    -0.5271123647689819
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Tail",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "localPosition": [
+                    -0.3087290823459625,
+                    -0.11181846261024475,
+                    -2.670288097306184e-7
+                ],
+                "localRotation": [
+                    -1.1251577401445549e-14,
+                    -0.0000026900183911493515,
+                    0.9698651432991028,
+                    -0.24364228546619416
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Tail/Bip004 Tail1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Tail",
+                "localPosition": [
+                    0.22818778455257417,
+                    -0.00010932922305073589,
+                    0.0
+                ],
+                "localRotation": [
+                    3.4712068831301013e-13,
+                    4.000391129466152e-8,
+                    -0.014422455802559853,
+                    -0.9998959898948669
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1",
+                "localPosition": [
+                    0.17947646975517274,
+                    -0.0001587295555509627,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.2124344226076972e-13,
+                    1.0894684976392455e-7,
+                    -0.03927994519472122,
+                    -0.9992282390594482
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh/Bip004 L Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh",
+                "localPosition": [
+                    0.3193966746330261,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    1.3278152855662404e-14,
+                    -5.063505783962268e-15,
+                    0.35631251335144045,
+                    -0.9343668818473816
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh/Bip004 L Calf/Bip004 L HorseLink",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh/Bip004 L Calf",
+                "localPosition": [
+                    0.31346750259399416,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    9.118337629279803e-15,
+                    -2.7152737184870346e-14,
+                    -0.4334690570831299,
+                    -0.9011684656143189
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm/Bip004 L Forearm/Bip004 L Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm/Bip004 L Forearm",
+                "localPosition": [
+                    0.3688420057296753,
+                    -7.629394360719744e-8,
+                    3.814697180359872e-8
+                ],
+                "localRotation": [
+                    -0.0000010668520644685487,
+                    0.000016109293937915936,
+                    -0.04716002196073532,
+                    -0.9988873600959778
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm/Bip004 L Forearm/Bip004 L Hand/Bip004 L Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 L Clavicle/Bip004 L UpperArm/Bip004 L Forearm/Bip004 L Hand",
+                "localPosition": [
+                    0.3346635699272156,
+                    -0.006176643073558807,
+                    0.000024490356736350805
+                ],
+                "localRotation": [
+                    0.0012283165706321598,
+                    0.000008750366760068573,
+                    -0.020327147096395494,
+                    -0.9997926354408264
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head",
+                "localPosition": [
+                    -0.03504474461078644,
+                    -0.08649718761444092,
+                    0.1672617644071579
+                ],
+                "localRotation": [
+                    0.17797793447971345,
+                    0.6502721309661865,
+                    0.5906701683998108,
+                    -0.44337204098701479
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail1/Bip004 Ponytail11",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail1",
+                "localPosition": [
+                    0.14245185256004334,
+                    -0.00010593413753667846,
+                    -1.5258788721439488e-7
+                ],
+                "localRotation": [
+                    -6.510307404283822e-9,
+                    -1.3395234077506758e-7,
+                    0.04854437708854675,
+                    -0.9988210797309876
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    0.9999998807907105,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh/Bip004 L Calf/Bip004 L HorseLink/Bip004 L Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 L Thigh/Bip004 L Calf/Bip004 L HorseLink",
+                "localPosition": [
+                    0.38046640157699587,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.0000014834583907941124,
+                    -8.42305837522872e-7,
+                    0.05750144273042679,
+                    -0.9983454346656799
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh/Bip004 R Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh",
+                "localPosition": [
+                    0.3193966746330261,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    1.3278152855662404e-14,
+                    -5.063505783962268e-15,
+                    0.35631251335144045,
+                    -0.9343668818473816
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh/Bip004 R Calf/Bip004 R HorseLink",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh/Bip004 R Calf",
+                "localPosition": [
+                    0.31346750259399416,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -2.008069308978653e-14,
+                    3.764912372746648e-14,
+                    -0.4334690570831299,
+                    -0.9011684656143189
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm/Bip004 R Forearm/Bip004 R Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm/Bip004 R Forearm",
+                "localPosition": [
+                    0.3688420355319977,
+                    -7.629394360719744e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    0.0000010668341019481887,
+                    -0.00001610929575690534,
+                    -0.04716002196073532,
+                    -0.9988873600959778
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm/Bip004 R Forearm/Bip004 R Hand/Bip004 R Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 R Clavicle/Bip004 R UpperArm/Bip004 R Forearm/Bip004 R Hand",
+                "localPosition": [
+                    0.3346635401248932,
+                    -0.006176643073558807,
+                    -0.000024471282813465223
+                ],
+                "localRotation": [
+                    -0.0012283165706321598,
+                    -0.000008750361303100362,
+                    -0.020327147096395494,
+                    -0.9997926354408264
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head",
+                "localPosition": [
+                    -0.03504476323723793,
+                    -0.08649642765522003,
+                    -0.16726236045360566
+                ],
+                "localRotation": [
+                    0.17797820270061494,
+                    0.650275707244873,
+                    -0.5906663537025452,
+                    0.44337189197540285
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail2/Bip004 Ponytail21",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 Spine1/Bip004 Neck/Bip004 Neck1/Bip004 Neck2/Bip004 Head/Bip004 Ponytail2",
+                "localPosition": [
+                    0.14245189726352693,
+                    -0.00010585784912109375,
+                    0.0
+                ],
+                "localRotation": [
+                    -7.95704924172469e-9,
+                    -1.6371949129734276e-7,
+                    0.048544421792030337,
+                    -0.9988210201263428
+                ],
+                "localScale": [
+                    1.000000238418579,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh/Bip004 R Calf/Bip004 R HorseLink/Bip004 R Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bip004 R Thigh/Bip004 R Calf/Bip004 R HorseLink",
+                "localPosition": [
+                    0.3804664611816406,
+                    0.0,
+                    -1.907348590179936e-8
+                ],
+                "localRotation": [
+                    0.0000013961803233542014,
+                    8.47332614739571e-7,
+                    0.05750144273042679,
+                    -0.9983454346656799
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2",
+                "localPosition": [
+                    0.20000320672988892,
+                    0.0,
+                    3.814697180359872e-8
+                ],
+                "localRotation": [
+                    7.30819749605871e-7,
+                    0.0000016278215753118275,
+                    -0.7258021831512451,
+                    -0.6879034638404846
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "localPosition": [
+                    0.3434053063392639,
+                    -0.00035270690568722785,
+                    -3.814697180359872e-8
+                ],
+                "localRotation": [
+                    0.0,
+                    6.661338147750939e-16,
+                    0.0,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck",
+                "localPosition": [
+                    0.011266708374023438,
+                    -0.11903510987758637,
+                    0.12245368957519531
+                ],
+                "localRotation": [
+                    0.27671507000923159,
+                    0.6866266131401062,
+                    0.6505769491195679,
+                    0.16947652399539948
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    0.9999998807907105
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1",
+                "localPosition": [
+                    0.18932023644447328,
+                    -0.16672728955745698,
+                    -3.8146970382513248e-7
+                ],
+                "localRotation": [
+                    1.8927840590991959e-14,
+                    -0.000001964220700756414,
+                    0.7081845998764038,
+                    -0.7060273289680481
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis",
+                "localPosition": [
+                    0.1903596669435501,
+                    -0.0002735137823037803,
+                    2.670288097306184e-7
+                ],
+                "localRotation": [
+                    0.0000020804759515158368,
+                    6.936760996723024e-7,
+                    -0.0003981590270996094,
+                    -0.9999999403953552
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck",
+                "localPosition": [
+                    0.2267194241285324,
+                    -0.0001417159946868196,
+                    0.0
+                ],
+                "localRotation": [
+                    1.2397876236920624e-13,
+                    -1.8005847834956513e-7,
+                    0.06491868942975998,
+                    -0.9978905916213989
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle",
+                "localPosition": [
+                    0.3108116388320923,
+                    0.0,
+                    -7.629394360719744e-8
+                ],
+                "localRotation": [
+                    0.5168911218643189,
+                    -0.5299547910690308,
+                    -0.41728177666664126,
+                    -0.5271124243736267
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck",
+                "localPosition": [
+                    0.011266708374023438,
+                    -0.11903446167707443,
+                    -0.1224544495344162
+                ],
+                "localRotation": [
+                    0.27671459317207339,
+                    0.6866284608840942,
+                    -0.6505750417709351,
+                    -0.16947731375694276
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    1.0,
+                    0.9999999403953552
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm/Bip005 L Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm",
+                "localPosition": [
+                    0.1667320281267166,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -2.4812835773134653e-14,
+                    9.31169259300662e-16,
+                    0.46280813217163088,
+                    -0.8864584565162659
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005",
+                "localPosition": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.5,
+                    0.5,
+                    0.4999993145465851,
+                    -0.5000007152557373
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "localPosition": [
+                    -0.19035935401916505,
+                    0.0004246520984452218,
+                    0.16624969244003297
+                ],
+                "localRotation": [
+                    0.6884199380874634,
+                    0.725312352180481,
+                    8.95153675628535e-7,
+                    -7.648363862244878e-7
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "localPosition": [
+                    -0.19035932421684266,
+                    0.00042556761763989925,
+                    -0.16624976694583894
+                ],
+                "localRotation": [
+                    0.6884199380874634,
+                    0.725312352180481,
+                    0.0000011767058367695427,
+                    -0.000001081108507605677
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm/Bip005 R Forearm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm",
+                "localPosition": [
+                    0.1667320281267166,
+                    -3.814697180359872e-8,
+                    7.629394360719744e-8
+                ],
+                "localRotation": [
+                    7.746056163301322e-15,
+                    -3.635233468171697e-17,
+                    0.46280813217163088,
+                    -0.8864584565162659
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle",
+                "localPosition": [
+                    0.31081172823905947,
+                    0.0,
+                    -7.629394360719744e-8
+                ],
+                "localRotation": [
+                    -0.5168911814689636,
+                    0.529954731464386,
+                    -0.41728174686431887,
+                    -0.5271123647689819
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Tail",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "localPosition": [
+                    -0.30872902274131777,
+                    -0.11181853711605072,
+                    -2.670288097306184e-7
+                ],
+                "localRotation": [
+                    -1.1251577401445549e-14,
+                    -0.0000026900183911493515,
+                    0.9698651432991028,
+                    -0.24364228546619416
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Tail/Bip005 Tail1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Tail",
+                "localPosition": [
+                    0.2281877100467682,
+                    -0.00010932922305073589,
+                    0.0
+                ],
+                "localRotation": [
+                    3.4712068831301013e-13,
+                    4.000391129466152e-8,
+                    -0.014422455802559853,
+                    -0.9998959898948669
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1",
+                "localPosition": [
+                    0.1794763207435608,
+                    -0.00015876769612077624,
+                    0.0
+                ],
+                "localRotation": [
+                    -1.2720028447156442e-14,
+                    1.0894684265849719e-7,
+                    -0.03927994146943092,
+                    -0.9992282390594482
+                ],
+                "localScale": [
+                    0.9999998807907105,
+                    0.9999998807907105,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh/Bip005 L Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh",
+                "localPosition": [
+                    0.3193966746330261,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    3.1511463699355516e-15,
+                    -3.161981445990239e-14,
+                    0.3563123941421509,
+                    -0.9343669414520264
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh/Bip005 L Calf/Bip005 L HorseLink",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh/Bip005 L Calf",
+                "localPosition": [
+                    0.3134675621986389,
+                    -7.629394360719744e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    1.687910675487493e-14,
+                    -3.918910755260595e-14,
+                    -0.4334692358970642,
+                    -0.9011683464050293
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm/Bip005 L Forearm/Bip005 L Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm/Bip005 L Forearm",
+                "localPosition": [
+                    0.3688420355319977,
+                    -7.629394360719744e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    -0.0000010668521781553864,
+                    0.000016109293937915936,
+                    -0.04716002941131592,
+                    -0.9988873600959778
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm/Bip005 L Forearm/Bip005 L Hand/Bip005 L Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 L Clavicle/Bip005 L UpperArm/Bip005 L Forearm/Bip005 L Hand",
+                "localPosition": [
+                    0.3346635401248932,
+                    -0.006176643073558807,
+                    0.000024471282813465223
+                ],
+                "localRotation": [
+                    0.0012283165706321598,
+                    0.000008750366760068573,
+                    -0.020327147096395494,
+                    -0.9997926354408264
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail1",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head",
+                "localPosition": [
+                    -0.03504470735788345,
+                    -0.08649703860282898,
+                    0.16726167500019074
+                ],
+                "localRotation": [
+                    0.17797793447971345,
+                    0.6502721309661865,
+                    0.5906701683998108,
+                    -0.44337204098701479
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail1/Bip005 Ponytail11",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail1",
+                "localPosition": [
+                    0.14245185256004334,
+                    -0.00010593413753667846,
+                    0.0
+                ],
+                "localRotation": [
+                    9.314906623814068e-10,
+                    -1.3431402123842418e-7,
+                    0.04854437708854675,
+                    -0.9988210797309876
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    0.9999998807907105,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh/Bip005 L Calf/Bip005 L HorseLink/Bip005 L Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 L Thigh/Bip005 L Calf/Bip005 L HorseLink",
+                "localPosition": [
+                    0.3804662525653839,
+                    3.814697180359872e-8,
+                    1.907348590179936e-8
+                ],
+                "localRotation": [
+                    -0.0000014834590729151387,
+                    -8.4230543961894e-7,
+                    0.05750177800655365,
+                    -0.9983454346656799
+                ],
+                "localScale": [
+                    0.9999998211860657,
+                    0.9999998211860657,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh/Bip005 R Calf",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh",
+                "localPosition": [
+                    0.3193966746330261,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    -8.214650883348399e-15,
+                    1.8341658216108199e-14,
+                    0.3563123941421509,
+                    -0.9343669414520264
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh/Bip005 R Calf/Bip005 R HorseLink",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh/Bip005 R Calf",
+                "localPosition": [
+                    0.3134675920009613,
+                    0.0,
+                    7.629394360719744e-8
+                ],
+                "localRotation": [
+                    -2.8084680102889206e-14,
+                    3.37991387536294e-14,
+                    -0.4334692358970642,
+                    -0.9011683464050293
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm/Bip005 R Forearm/Bip005 R Hand",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm/Bip005 R Forearm",
+                "localPosition": [
+                    0.3688420057296753,
+                    -7.629394360719744e-8,
+                    0.0
+                ],
+                "localRotation": [
+                    0.0000010668342156350264,
+                    -0.00001610929575690534,
+                    -0.04716002941131592,
+                    -0.9988873600959778
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm/Bip005 R Forearm/Bip005 R Hand/Bip005 R Finger0",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 R Clavicle/Bip005 R UpperArm/Bip005 R Forearm/Bip005 R Hand",
+                "localPosition": [
+                    0.3346635401248932,
+                    -0.006176643073558807,
+                    -0.000024490356736350805
+                ],
+                "localRotation": [
+                    -0.0012283165706321598,
+                    -0.000008750361303100362,
+                    -0.020327147096395494,
+                    -0.9997926354408264
+                ],
+                "localScale": [
+                    1.0000001192092896,
+                    1.0000001192092896,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail2",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head",
+                "localPosition": [
+                    -0.035044725984334949,
+                    -0.0864962786436081,
+                    -0.16726230084896089
+                ],
+                "localRotation": [
+                    0.17797820270061494,
+                    0.6502755284309387,
+                    -0.590666651725769,
+                    0.4433717727661133
+                ],
+                "localScale": [
+                    0.9999999403953552,
+                    0.9999999403953552,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail2/Bip005 Ponytail21",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 Spine1/Bip005 Neck/Bip005 Neck1/Bip005 Neck2/Bip005 Head/Bip005 Ponytail2",
+                "localPosition": [
+                    0.1424519270658493,
+                    -0.00010581970127532259,
+                    0.0
+                ],
+                "localRotation": [
+                    8.373278959084019e-9,
+                    -1.3467568749092607e-7,
+                    0.048544418066740039,
+                    -0.9988210201263428
+                ],
+                "localScale": [
+                    1.000000238418579,
+                    1.0000001192092896,
+                    1.0000001192092896
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh/Bip005 R Calf/Bip005 R HorseLink/Bip005 R Foot",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bip005 R Thigh/Bip005 R Calf/Bip005 R HorseLink",
+                "localPosition": [
+                    0.3804663121700287,
+                    3.814697180359872e-8,
+                    -7.629394360719744e-8
+                ],
+                "localRotation": [
+                    0.00000139618089178839,
+                    8.473323305224767e-7,
+                    0.05750177800655365,
+                    -0.9983454346656799
+                ],
+                "localScale": [
+                    0.9999998211860657,
+                    0.9999998211860657,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che",
+                "localPosition": [
+                    -1.1446426384509323e-7,
+                    0.0,
+                    0.0
+                ],
+                "localRotation": [
+                    0.0,
+                    -9.860761315262648e-32,
+                    -1.1754943508222876e-38,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-shengCHE001",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo",
+                "localPosition": [
+                    -0.24466705322265626,
+                    -0.7955485582351685,
+                    0.9022340774536133
+                ],
+                "localRotation": [
+                    1.9470718370939722e-7,
+                    4.3711402497592647e-8,
+                    -7.549789415861597e-8,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-shengzi-zhongB",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate",
+                "localPosition": [
+                    -0.6719810366630554,
+                    0.9728383421897888,
+                    -0.6793103814125061
+                ],
+                "localRotation": [
+                    0.7071069478988648,
+                    -8.429369557916289e-8,
+                    -2.2476486449818368e-8,
+                    -0.7071065902709961
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-shengzi-zhongA",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate",
+                "localPosition": [
+                    0.6719799637794495,
+                    0.9728383421897888,
+                    -0.6793103814125061
+                ],
+                "localRotation": [
+                    0.7071069478988648,
+                    -8.429369557916289e-8,
+                    -2.2476486449818368e-8,
+                    -0.7071065902709961
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine/Bone-shengL001",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-A/Bip005/Bip005 Pelvis/Bip005 Spine",
+                "localPosition": [
+                    0.032332830131053928,
+                    0.0673634335398674,
+                    -0.27755850553512576
+                ],
+                "localRotation": [
+                    -0.48692426085472109,
+                    0.5127434134483337,
+                    -0.4869242310523987,
+                    -0.5127413868904114
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine/Bone-shengL002",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-lu-B/Bip004/Bip004 Pelvis/Bip004 Spine",
+                "localPosition": [
+                    0.0323328971862793,
+                    0.06736190617084503,
+                    0.27431821823120119
+                ],
+                "localRotation": [
+                    -0.49429890513420107,
+                    0.5056382417678833,
+                    -0.49429747462272646,
+                    -0.5056368112564087
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo/Bone-shengCHE002",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-cheba/Bone-che/Bone-chezuo",
+                "localPosition": [
+                    0.2462163269519806,
+                    -0.7955485582351685,
+                    0.9022340774536133
+                ],
+                "localRotation": [
+                    1.9470718370939722e-7,
+                    4.3711402497592647e-8,
+                    -7.549789415861597e-8,
+                    -1.0
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-shengweiA",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate",
+                "localPosition": [
+                    -0.4599999785423279,
+                    1.489485263824463,
+                    -1.8600139617919922
+                ],
+                "localRotation": [
+                    0.7071069478988648,
+                    -8.429369557916289e-8,
+                    -2.2476486449818368e-8,
+                    -0.7071065902709961
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "path": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate/Bone-shengweiB",
+                "parentPath": "1613/FishView/Adapt/DieAction/fish_1600_skin_prefab/1613_shengdanlaoren_skin/Root/translate",
+                "localPosition": [
+                    0.40204742550849917,
+                    1.489485263824463,
+                    -1.8600139617919922
+                ],
+                "localRotation": [
+                    0.7071069478988648,
+                    -8.429369557916289e-8,
+                    -2.2476486449818368e-8,
+                    -0.7071065902709961
+                ],
+                "localScale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            }
+        ]
+    },
+    "views": [
+        {
+            "index": 0,
+            "yaw": 0.0,
+            "captureYaw": 0.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v000_yaw0_pitch0.png",
+            "fileName": "unity_ref_v000_yaw0_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                180.0,
+                0.0
+            ]
+        },
+        {
+            "index": 1,
+            "yaw": 45.0,
+            "captureYaw": 315.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v001_yaw45_pitch0.png",
+            "fileName": "unity_ref_v001_yaw45_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                225.0,
+                0.0
+            ]
+        },
+        {
+            "index": 2,
+            "yaw": 90.0,
+            "captureYaw": 270.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v002_yaw90_pitch0.png",
+            "fileName": "unity_ref_v002_yaw90_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                270.0,
+                0.0
+            ]
+        },
+        {
+            "index": 3,
+            "yaw": 135.0,
+            "captureYaw": 225.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v003_yaw135_pitch0.png",
+            "fileName": "unity_ref_v003_yaw135_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                315.0,
+                0.0
+            ]
+        },
+        {
+            "index": 4,
+            "yaw": 180.0,
+            "captureYaw": 180.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v004_yaw180_pitch0.png",
+            "fileName": "unity_ref_v004_yaw180_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                -0.000005008956122765085,
+                0.0
+            ]
+        },
+        {
+            "index": 5,
+            "yaw": 225.0,
+            "captureYaw": 135.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v005_yaw225_pitch0.png",
+            "fileName": "unity_ref_v005_yaw225_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                45.0,
+                0.0
+            ]
+        },
+        {
+            "index": 6,
+            "yaw": 270.0,
+            "captureYaw": 90.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v006_yaw270_pitch0.png",
+            "fileName": "unity_ref_v006_yaw270_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                90.0,
+                0.0
+            ]
+        },
+        {
+            "index": 7,
+            "yaw": 315.0,
+            "captureYaw": 45.0,
+            "pitch": 0.0,
+            "imagePath": "unity_ref_v007_yaw315_pitch0.png",
+            "fileName": "unity_ref_v007_yaw315_pitch0.png",
+            "maskPath": "",
+            "maskFileName": "",
+            "cameraPosition": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "cameraRotationEuler": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "targetLocalRotationEuler": [
+                0.0,
+                135.0,
+                0.0
+            ]
+        }
+    ]
+}

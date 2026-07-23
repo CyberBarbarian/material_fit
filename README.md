@@ -74,8 +74,9 @@ Rerun the environment check at any time:
 ```
 
 The check verifies Python, the DISTS/PyTorch scorer, Node.js, Playwright 1.61.1,
-Chromium, the vendored LayaAir files, all three example assets, the Stage 1
-policy hashes, and all three Stage 2 Unity reference sets.
+Chromium, the vendored LayaAir files, public Windows/Linux entrypoints, all four
+example assets, the tracked 1613 experimental-best snapshot, the Stage 1 policy
+hashes, and all four Stage 2 Unity reference sets.
 
 The installation and fish Stage 1 command were verified from dependency-free
 source trees on Windows 11 and Linux x86-64. Exact run records are in
@@ -173,7 +174,7 @@ hard-start research variant: it zeros only the 16 searchable appearance
 parameters and preserves textures, UV transforms, alpha state, shader toggles,
 and render state.
 
-Real Unity Stage 2 reference sets for fish, turtle, and crocodile are isolated
+Real Unity Stage 2 reference sets for fish, turtle, crocodile, and holiday 1613 are isolated
 under `examples/stage2_unity_refs/`. Audit a set before material optimization:
 
 ```bash
@@ -181,6 +182,42 @@ python -m material_fit.experiments.material_cross_engine_stage2_intake \
   --asset fish \
   --output-dir artifacts/stage2_fish_intake
 ```
+
+Holiday 1613 uses the same shared-parameter material optimizer for every
+non-empty reference subset. The platform wrappers run all eight tracked views
+by default:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_1613_fit.ps1
+```
+
+```bash
+bash scripts/run_1613_fit.sh
+```
+
+Pass any non-empty tracked subset with `--view-ids`. Reference count changes
+only the images aggregated by the loss; one parameter vector is written to one
+ordinary `.lmat`, and the shader, mesh, texture contents, and camera stay
+fixed. The current 1613 run is experimental and must not be reported accepted
+unless its independent eight-view score reaches the configured `0.98` gate.
+
+Package a completed run for handoff:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_1613_result.ps1 -RunDir artifacts\<run>
+```
+
+```bash
+RUN_DIR=artifacts/<run> bash scripts/package_1613_result.sh
+```
+
+The run-backed packager refuses incomplete output: it requires the report,
+parameter JSON, all eight best-render PNGs, and a contact sheet. With no
+arguments, the same wrapper packages the tracked parameter-only best
+(`0.8841877893703689`, explicitly not accepted) so a fresh checkout always has
+a reproducible handoff artifact. Every ZIP contains the complete runtime
+project with the selected material installed, a parameter JSON, hashes, and a
+resolved-texture audit.
 
 Turtle 1506 has a frozen Stage 2 geometry profile. Render the untouched Laya
 start material on the Unity canvas and run the pre-optimization gate with:

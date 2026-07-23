@@ -30,6 +30,7 @@ def test_runtime_renderer_material_patch_supports_strict_define_variants() -> No
     assert '"NORMALMAP"' in text
     assert '"NORMALMAP_Y_INVERT"' in text
     assert '"RIMSMOOTHNESS"' in text
+    assert '"USE_SECOND_LEVELS"' in text
     assert "standalone source-material state is a valid no-op" in text
     assert "NORMALMAP_Y_INVERT requires NORMALMAP" not in text
     assert "material.addDefine(define)" in text
@@ -89,6 +90,8 @@ def test_runtime_renderer_auto_frames_skinned_mesh_local_bounds() -> None:
     assert "transform.worldMatrix || transform._worldMatrix" in text
     assert "command && command.camera_center" in text
     assert "profile.center" in text
+    assert "profile.center_offset" in text
+    assert "center.y += numberOr(centerOffset[1], 0);" in text
 
 
 def test_runtime_renderer_patches_scene_materials_before_scene_ready() -> None:

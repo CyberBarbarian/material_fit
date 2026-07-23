@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from material_fit.assets.fish_scene import resolve_fish_scene_assets
+from material_fit.assets.material_phase05 import resolve_material_asset
 from material_fit.assets.material_stage1 import resolve_material_stage1_asset
 from material_fit.assets.stage2_unity_references import (
     audit_stage2_unity_references,
@@ -39,6 +40,25 @@ ENGINE_FILES = {
     "laya.trailCommon.js": "2ef54a59ace2cb3c2d1d3346b09749ce2948ee832a20a04eaa7d598267007b60",
     "laya.trail3D.js": "76c06bf63e17310627821813b9b0d9b65a9eaa7a41c446ed03c5abbc5bc4e78f",
 }
+
+PUBLIC_ENTRYPOINTS = (
+    "scripts/bootstrap.ps1",
+    "scripts/bootstrap.sh",
+    "scripts/run_stage1.ps1",
+    "scripts/run_stage1.sh",
+    "scripts/run_1613_fit.ps1",
+    "scripts/run_1613_fit.sh",
+    "scripts/package_1613_result.ps1",
+    "scripts/package_1613_result.sh",
+    "scripts/ensure_persistent_laya_queue.ps1",
+    "scripts/ensure_persistent_laya_queue.sh",
+    "scripts/stop_persistent_laya_queue.ps1",
+    "scripts/stop_persistent_laya_queue.sh",
+)
+
+HOLIDAY_1613_BEST_SHA256 = (
+    "0cb094ef7a35e57f36187504543928a1190d60516e951a4ed781ffef45754c80"
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,6 +156,21 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
         )
     )
 
+    missing_entrypoints = [
+        relative for relative in PUBLIC_ENTRYPOINTS if not (root / relative).is_file()
+    ]
+    checks.append(
+        _check(
+            "public-entrypoints",
+            not missing_entrypoints,
+            (
+                f"{len(PUBLIC_ENTRYPOINTS)} platform entrypoints present"
+                if not missing_entrypoints
+                else ", ".join(missing_entrypoints)
+            ),
+        )
+    )
+
     try:
         assets = resolve_fish_scene_assets(root)
         asset_detail = assets.asset_set_name
@@ -164,6 +199,39 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
         checks.append(_check(f"{asset_id}-assets", ok, detail))
 
     try:
+        asset = resolve_material_asset(root, "holiday_1613")
+        best_root = root / "material_fit/assets/material_starts/1613"
+        best_material = best_root / "experimental_best_20260723.lmat"
+        best_params = best_root / "experimental_best_20260723_params.json"
+        best_metadata = best_root / "experimental_best_20260723.json"
+        required = (
+            asset.project_root,
+            asset.scene_path,
+            asset.shader_path,
+            asset.target_material_path,
+            asset.project_root / "bin/js/bundles/bundle.js",
+            best_material,
+            best_params,
+            best_metadata,
+        )
+        missing = [str(path) for path in required if not path.exists()]
+        hash_ok = best_material.is_file() and _sha256(best_material) == HOLIDAY_1613_BEST_SHA256
+        detail = (
+            "renderer intake and experimental best snapshot present"
+            if not missing and hash_ok
+            else (
+                ", ".join(missing)
+                if missing
+                else "experimental best snapshot hash mismatch"
+            )
+        )
+        ok = not missing and hash_ok
+    except Exception as exc:  # noqa: BLE001 - doctor reports every failed contract
+        detail = str(exc)
+        ok = False
+    checks.append(_check("holiday-1613-assets", ok, detail))
+
+    try:
         profiles = [
             joint_profile_policy(profile)["runtime_profile"]
             for profile in (
@@ -182,7 +250,7 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
 
     stage2_reports: list[dict[str, Any]] = []
     stage2_errors: list[str] = []
-    for asset_id in ("crocodile", "fish", "turtle"):
+    for asset_id in ("crocodile", "fish", "turtle", "holiday_1613"):
         try:
             reference_set = resolve_stage2_unity_references(root, asset_id)
             report = audit_stage2_unity_references(reference_set)
@@ -195,9 +263,9 @@ def inspect_checkout(repo_root: Path) -> dict[str, Any]:
     stage2_detail = (
         ", ".join(stage2_errors)
         if stage2_errors
-        else f"3 structurally valid sets; {geometry_ready_count}/3 geometry-ready"
+        else f"4 structurally valid sets; {geometry_ready_count}/4 geometry-ready"
     )
-    checks.append(_check("stage2-unity-references", not stage2_errors and len(stage2_reports) == 3, stage2_detail))
+    checks.append(_check("stage2-unity-references", not stage2_errors and len(stage2_reports) == 4, stage2_detail))
     return {
         "schema_version": 1,
         "repo_root": str(root),

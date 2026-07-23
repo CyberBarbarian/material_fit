@@ -1,0 +1,156 @@
+{
+  "version": "LAYAMATERIAL:04",
+  "props": {
+    "type": "Custom/FishStandar_Low",
+    "renderQueue": 2000,
+    "materialRenderMode": 0,
+    "s_Cull": 2,
+    "s_Blend": 0,
+    "s_BlendSrc": 6,
+    "s_BlendDst": 7,
+    "s_BlendSrcRGB": 0,
+    "s_BlendDstRGB": 0,
+    "s_BlendSrcAlpha": 0,
+    "s_BlendDstAlpha": 0,
+    "s_BlendEquation": 0,
+    "s_BlendEquationRGB": 0,
+    "s_BlendEquationAlpha": 0,
+    "s_DepthTest": 1,
+    "s_DepthWrite": true,
+    "u_Color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "u_MainTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_TexPower": 1,
+    "u_GammaPower": 1,
+    "u_SpeTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_NormalTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_NormalScale": 1,
+    "u_AoPower": 0.1,
+    "u_EmissionTex_ST": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "u_EmissionPow": 0,
+    "u_ReflectColor": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "u_IndirectStrength": 1,
+    "u_SkyRotateX": 0,
+    "u_SkyRotateY": 0,
+    "u_SkyRotateZ": 0,
+    "u_ShadowSmoothness": 0.1,
+    "u_ShadowColor1": [
+      0.7,
+      0.7,
+      0.7,
+      1
+    ],
+    "u_ShadowThreshold1": 0.3,
+    "u_ShadowColor2": [
+      0.5,
+      0.5,
+      0.5,
+      1
+    ],
+    "u_ShadowThreshold2": 0.4,
+    "u_SpecularColor": [
+      0.9,
+      0.9,
+      0.9,
+      1
+    ],
+    "u_SpecularIntensity": 1,
+    "u_SpecularPower": 8,
+    "u_SpecularThreshold": 0.7,
+    "u_SpecularSmoothness": 0.4,
+    "u_SpeOffet": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_RimColor": [
+      1,
+      0.9,
+      0.8,
+      1
+    ],
+    "u_RimIntensity": 0,
+    "u_RimWidth": 0,
+    "u_RimOffet": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_HitColor": [
+      1,
+      0,
+      0,
+      0
+    ],
+    "u_HitColorOffset": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "u_HitColorIntensity": 1,
+    "u_HitColorThreshold": 0.5,
+    "u_HitColorSmooth": 0.5,
+    "u_HitColorPow": 0.75,
+    "u_LightRotateX": 0,
+    "u_LightRotateY": 0,
+    "u_LightRotateZ": 0,
+    "u_HueShift": 0,
+    "u_Saturation": 1,
+    "u_Contrast": 1,
+    "u_AlphaTestValue": 0.5,
+    "u_Alpha": 1,
+    "textures": [
+      {
+        "path": "res://f2d112e5-1b94-40ee-9eb0-2a199fe25b15",
+        "constructParams": [
+          1024,
+          1024,
+          1,
+          false,
+          false,
+          false
+        ],
+        "propertyParams": {
+          "filterMode": 1,
+          "wrapModeU": 0,
+          "wrapModeV": 0,
+          "anisoLevel": 4
+        },
+        "name": "u_MainTex"
+      }
+    ],
+    "defines": []
+  }
+}

@@ -14,6 +14,7 @@ from .structured_material_space import (
 
 PERTURBATION_PRESETS = {
     "tiny": 0.0001,
+    "small": 0.25,
     "mild": 1.0,
     "medium": 1.5,
     "strong": 2.5,

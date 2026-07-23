@@ -74,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
             max_runtime_sec=args.max_runtime_sec,
             speed_gate_ms=args.speed_gate_ms,
             node_modules=args.node_modules or None,
+            shader_default_anchor_enabled=not args.disable_shader_default_anchor,
+            difference_mode=args.difference_mode,
+            accept_improving_probes=args.accept_improving_probes,
         )
     finally:
         _cleanup_recorded_runtime(run_dir)
@@ -98,6 +101,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--speed-gate-ms", type=float, default=500.0)
     parser.add_argument("--node-modules", default="")
     parser.add_argument("--engine-libs", default="")
+    parser.add_argument(
+        "--disable-shader-default-anchor",
+        action="store_true",
+        help="Use PNG score/residual feedback without probing shader defaults",
+    )
+    parser.add_argument(
+        "--difference-mode",
+        choices=("forward", "central"),
+        default="forward",
+    )
+    parser.add_argument("--accept-improving-probes", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -117,6 +131,9 @@ def run_recovery(
     max_runtime_sec: float,
     speed_gate_ms: float,
     node_modules: str | Path | None,
+    shader_default_anchor_enabled: bool = True,
+    difference_mode: str = "forward",
+    accept_improving_probes: bool = False,
 ) -> dict[str, Any]:
     asset = resolve_material_asset(
         repo_root,
@@ -276,6 +293,9 @@ def run_recovery(
         target_score=target_score,
         node_modules=node_modules,
         views=views,
+        shader_default_anchor_enabled=shader_default_anchor_enabled,
+        difference_mode=difference_mode,
+        accept_improving_probes=accept_improving_probes,
     )
     boundary = _optimizer_boundary_report(fit_config, private_dir=private_dir)
     _write_json(run_dir / "optimizer_input_boundary_report.json", boundary)
@@ -414,6 +434,9 @@ def run_recovery(
         "success_score": success_score,
         "parameter_recovery": parameter_report,
         "shader_default_anchor_audit": shader_default_anchor_audit,
+        "shader_default_anchor_enabled": shader_default_anchor_enabled,
+        "difference_mode": difference_mode,
+        "accept_improving_probes": accept_improving_probes,
         "scorer_sanity": scorer_report,
         "timing": timing,
         "process_cleanup": cleanup,
@@ -495,6 +518,9 @@ def _build_fit_config(
     target_score: float,
     node_modules: str | Path | None,
     views: list[dict[str, Any]],
+    shader_default_anchor_enabled: bool = True,
+    difference_mode: str = "forward",
+    accept_improving_probes: bool = False,
 ) -> dict[str, Any]:
     runtime_bridge: dict[str, Any] = {
         "enabled": True,
@@ -571,9 +597,10 @@ def _build_fit_config(
         },
         "material_jacobian_trust_region": {
             "profile": "material_jacobian_trust_region_v1",
-            "difference_mode": "forward",
+            "difference_mode": str(difference_mode),
             "solve_mode": "full_least_squares",
-            "shader_default_anchor_enabled": True,
+            "shader_default_anchor_enabled": bool(shader_default_anchor_enabled),
+            "accept_improving_probes": bool(accept_improving_probes),
             "probe_step": 0.025,
             "minimum_probe_step": 0.006,
             "ridge": 0.10,

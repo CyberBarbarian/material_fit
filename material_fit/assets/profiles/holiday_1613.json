@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "asset_id": "holiday_1613",
+  "project_root": "laya_project_minimal",
+  "scene": "assets/resources/model/1613/prefab/1613.lh",
+  "width": 900,
+  "height": 700,
+  "runtime": {
+    "target_name": "model",
+    "material_target_name": "model",
+    "background_color": [255, 255, 255, 255],
+    "ambient_color": [0.424308, 0.4578516, 0.5294118, 1],
+    "startup_settle_frames": 1,
+    "camera": {
+      "orthographic": true,
+      "orthographic_vertical_size": 6.625,
+      "center_offset": [0.0, 0.34, 0.0],
+      "distance": 5.0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "height_offset": 0.0
+    }
+  },
+  "capture_defaults": {
+    "target_name": "model",
+    "capture_mode": "rotate_target",
+    "preserve_target_transform": true,
+    "use_orthographic": true,
+    "orthographic_vertical_size": 6.625,
+    "distance_scale": 2.2,
+    "min_distance": 1.0,
+    "yaw_offset": 0.0,
+    "pitch_offset": 0.0,
+    "target_yaw_sign": -1.0,
+    "target_pitch_sign": -1.0,
+    "animation_mode": "disabled",
+    "freeze_animators": true,
+    "settle_frames": 0,
+    "animation_freeze_settle_frames": 0,
+    "transparent_background": true,
+    "preserve_artifact_alpha": false,
+    "visual_background_color": [255, 255, 255, 255],
+    "views": [
+      {"view_id": "v000_yaw0_pitch0", "yaw": 0.0, "pitch": 0.0, "file_name": "laya_v000_yaw0_pitch0.png"},
+      {"view_id": "v001_yaw45_pitch0", "yaw": 45.0, "pitch": 0.0, "file_name": "laya_v001_yaw45_pitch0.png"},
+      {"view_id": "v002_yaw90_pitch0", "yaw": 90.0, "pitch": 0.0, "file_name": "laya_v002_yaw90_pitch0.png"},
+      {"view_id": "v003_yaw135_pitch0", "yaw": 135.0, "pitch": 0.0, "file_name": "laya_v003_yaw135_pitch0.png"},
+      {"view_id": "v004_yaw180_pitch0", "yaw": 180.0, "pitch": 0.0, "file_name": "laya_v004_yaw180_pitch0.png"},
+      {"view_id": "v005_yaw225_pitch0", "yaw": 225.0, "pitch": 0.0, "file_name": "laya_v005_yaw225_pitch0.png"},
+      {"view_id": "v006_yaw270_pitch0", "yaw": 270.0, "pitch": 0.0, "file_name": "laya_v006_yaw270_pitch0.png"},
+      {"view_id": "v007_yaw315_pitch0", "yaw": 315.0, "pitch": 0.0, "file_name": "laya_v007_yaw315_pitch0.png"}
+    ]
+  },
+  "camera_calibration": {
+    "contract": "holiday_1613_unity_laya_camera_alignment_v1",
+    "reference_metadata_sha256": "4faea186f5710ae118e929c3a5966d8bb80ae54e5c021866edcc8e03d92c3b56",
+    "orthographic_vertical_size": 6.625,
+    "center_offset": [0.0, 0.34, 0.0],
+    "mean_foreground_iou": 0.9445818664731376,
+    "min_foreground_overlap_coefficient": 0.9829032981826341,
+    "max_centroid_error_norm": 0.0056526918998708615,
+    "max_bbox_scale_error": 0.013615955231650212,
+    "alignment_passed": true
+  },
+  "validation_variants": []
+}

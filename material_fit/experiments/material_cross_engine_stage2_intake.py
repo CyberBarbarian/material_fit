@@ -154,7 +154,11 @@ def _aggregate_alignment(per_view: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--asset", required=True, choices=("fish", "turtle", "crocodile", "1503", "1504", "1506"))
+    parser.add_argument(
+        "--asset",
+        required=True,
+        choices=("fish", "turtle", "crocodile", "holiday", "1503", "1504", "1506", "1613"),
+    )
     parser.add_argument("--candidate-dir", default="")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()

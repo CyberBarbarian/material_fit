@@ -34,7 +34,7 @@ def build_legal_discrete_candidates(start_patch: Mapping[str, Any]) -> list[dict
 
     raw_states = start_patch.get("render_states")
     render_states = raw_states if isinstance(raw_states, Mapping) else {}
-    start_blend_src = render_states.get("s_BlendSrc", SAFE_BLEND_SRC_VALUES[0])
+    start_blend_src = _effective_blend_src(render_states)
     blend_values = list(SAFE_BLEND_SRC_VALUES)
     if start_blend_src not in blend_values:
         blend_values.append(start_blend_src)
@@ -111,7 +111,7 @@ def find_candidate_for_patch(
     enabled = set(str(name) for name in defines.get("enabled", ()))
     raw_states = patch.get("render_states")
     states = raw_states if isinstance(raw_states, Mapping) else {}
-    blend_src = states.get("s_BlendSrc")
+    blend_src = _effective_blend_src(states)
     for raw_candidate in candidates:
         candidate = normalize_discrete_candidate(raw_candidate)
         if (
@@ -123,6 +123,15 @@ def find_candidate_for_patch(
         "start material discrete state is outside the legal search space: "
         f"defines={sorted(enabled)}, s_BlendSrc={blend_src!r}"
     )
+
+
+def _effective_blend_src(states: Mapping[str, Any]) -> Any:
+    """Canonicalize an unsafe blend factor only when blending is disabled."""
+
+    blend_src = states.get("s_BlendSrc", SAFE_BLEND_SRC_VALUES[0])
+    if states.get("s_Blend") in (0, False) and blend_src not in SAFE_BLEND_SRC_VALUES:
+        return SAFE_BLEND_SRC_VALUES[0]
+    return blend_src
 
 
 def compress_observationally_equivalent_candidates(

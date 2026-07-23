@@ -19,6 +19,15 @@ if str(REPO_ROOT) not in sys.path:
 from tools.material_fit.laya_capture.runtime_bridge import RuntimeCaptureBridge, RuntimeCaptureTimeout  # noqa: E402
 
 
+def test_dynamic_bridge_port_is_browser_safe() -> None:
+    chromium_unsafe = {2049, 3659, 4045, 5060, 5061, 6000, 6566, *range(6665, 6670), 6697, 10080}
+    with RuntimeCaptureBridge(host="127.0.0.1", port=0) as bridge:
+        port = urllib.parse.urlparse(bridge.base_url).port
+        assert port is not None
+        assert 18880 <= port < 18944
+        assert port not in chromium_unsafe
+
+
 def _poll_and_post_error_log(base_url: str, expected_nonce: str) -> None:
     deadline = time.monotonic() + 3.0
     while time.monotonic() < deadline:

@@ -1,0 +1,21 @@
+{
+  "contract": "material_fit_experimental_best_snapshot_v1",
+  "asset_id": "holiday_1613",
+  "accepted": false,
+  "independent_eight_view_score": 0.8841877893703689,
+  "acceptance_score": 0.98,
+  "material_file": "experimental_best_20260723.lmat",
+  "params_file": "experimental_best_20260723_params.json",
+  "material_sha256": "0cb094ef7a35e57f36187504543928a1190d60516e951a4ed781ffef45754c80",
+  "source_run_material_sha256": "123f2bad05144bc4a72e6fafbc9b46df324030b1414ee391abab5334494a68cf",
+  "source_pipeline": [
+    "shared_v86_material_discrete_joint",
+    "v86_round2",
+    "cma_es_full_resolution_1500"
+  ],
+  "notes": [
+    "This is the current parameter-only best, not an accepted 0.98 result.",
+    "It preserves one shared material and the original one-texture binding.",
+    "It does not use a view-conditioned atlas or a view-specific shader branch."
+  ]
+}

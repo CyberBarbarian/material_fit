@@ -1,0 +1,95 @@
+﻿{
+    "modelId": "1613",
+    "preparedObjectName": "fish_1543_shengdanlaoren_laya_skin",
+    "sourcePrefab": "Assets/boss/1613/prefab/fish_1543_shengdanlaoren_laya_skin.prefab",
+    "shaderName": "Custom/FishStandar_Low",
+    "shaderFile": "assets/resources/shader/Custom_low.shader",
+    "note": "Unity 导出时采集的模型部件-材质-贴图关系；customLowSlot 为根据 Unity 属性名和贴图名推测的 Custom_low.shader 字段，otherTextures 需要人工判断。",
+    "parts": [
+        {
+            "partName": "fish_1543_shengdanlaoren01_laya",
+            "nodePath": "fish_1543_shengdanlaoren_laya_skin/fish_1543_shengdanlaoren01_laya",
+            "rendererType": "SkinnedMeshRenderer",
+            "meshName": "fish_1543_shengdanlaoren01_laya",
+            "materials": [
+                {
+                    "materialSlot": 0,
+                    "unityMaterialName": "fish_1543_shengdanlaoren_laya",
+                    "unityMaterialAssetPath": "Assets/boss/1613/model/fish_1543_shengdanlaoren_laya_skin.fbx",
+                    "unityShaderName": "Standard",
+                    "exportedMaterialPath": "mat/fish_1543_shengdanlaoren_laya_skin.lmat",
+                    "customLowTextures": [],
+                    "otherTextures": []
+                }
+            ]
+        },
+        {
+            "partName": "fish_1543_shengdanlaoren02_laya",
+            "nodePath": "fish_1543_shengdanlaoren_laya_skin/fish_1543_shengdanlaoren02_laya",
+            "rendererType": "SkinnedMeshRenderer",
+            "meshName": "fish_1543_shengdanlaoren02_laya",
+            "materials": [
+                {
+                    "materialSlot": 0,
+                    "unityMaterialName": "fish_1543_shengdanlaoren_laya",
+                    "unityMaterialAssetPath": "Assets/boss/1613/model/fish_1543_shengdanlaoren_laya_skin.fbx",
+                    "unityShaderName": "Standard",
+                    "exportedMaterialPath": "mat/fish_1543_shengdanlaoren_laya_skin.lmat",
+                    "customLowTextures": [],
+                    "otherTextures": []
+                }
+            ]
+        },
+        {
+            "partName": "fish_1543_shengdanlaoren03_laya",
+            "nodePath": "fish_1543_shengdanlaoren_laya_skin/fish_1543_shengdanlaoren03_laya",
+            "rendererType": "SkinnedMeshRenderer",
+            "meshName": "fish_1543_shengdanlaoren03_laya",
+            "materials": [
+                {
+                    "materialSlot": 0,
+                    "unityMaterialName": "fish_1543_shengdanlaoren_laya",
+                    "unityMaterialAssetPath": "Assets/boss/1613/model/fish_1543_shengdanlaoren_laya_skin.fbx",
+                    "unityShaderName": "Standard",
+                    "exportedMaterialPath": "mat/fish_1543_shengdanlaoren_laya_skin.lmat",
+                    "customLowTextures": [],
+                    "otherTextures": []
+                }
+            ]
+        },
+        {
+            "partName": "fish_1543_shengdanlaoren04_laya",
+            "nodePath": "fish_1543_shengdanlaoren_laya_skin/fish_1543_shengdanlaoren04_laya",
+            "rendererType": "SkinnedMeshRenderer",
+            "meshName": "fish_1543_shengdanlaoren04_laya",
+            "materials": [
+                {
+                    "materialSlot": 0,
+                    "unityMaterialName": "fish_1543_shengdanlaoren_laya",
+                    "unityMaterialAssetPath": "Assets/boss/1613/model/fish_1543_shengdanlaoren_laya_skin.fbx",
+                    "unityShaderName": "Standard",
+                    "exportedMaterialPath": "mat/fish_1543_shengdanlaoren_laya_skin.lmat",
+                    "customLowTextures": [],
+                    "otherTextures": []
+                }
+            ]
+        },
+        {
+            "partName": "fish_1543_shengdanlaoren05_laya",
+            "nodePath": "fish_1543_shengdanlaoren_laya_skin/fish_1543_shengdanlaoren05_laya",
+            "rendererType": "SkinnedMeshRenderer",
+            "meshName": "fish_1543_shengdanlaoren05_laya",
+            "materials": [
+                {
+                    "materialSlot": 0,
+                    "unityMaterialName": "fish_1543_shengdanlaoren_laya",
+                    "unityMaterialAssetPath": "Assets/boss/1613/model/fish_1543_shengdanlaoren_laya_skin.fbx",
+                    "unityShaderName": "Standard",
+                    "exportedMaterialPath": "mat/fish_1543_shengdanlaoren_laya_skin.lmat",
+                    "customLowTextures": [],
+                    "otherTextures": []
+                }
+            ]
+        }
+    ]
+}

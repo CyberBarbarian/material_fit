@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import errno
 import json
 import re
 import threading
@@ -15,6 +16,13 @@ from .capture_quality import analyze_png_capture_quality
 
 
 _VIEW_ID_RE = re.compile(r"(v\d{3}_yaw-?\d+(?:\.\d+)?_pitch-?\d+(?:\.\d+)?)")
+
+# Chromium refuses HTTP requests to a small set of ports even when the local
+# server is listening. Asking the OS for an ephemeral port can return 2049 or
+# 6667 and make a healthy render fail with ``net::ERR_UNSAFE_PORT``. Dynamic
+# bridges therefore bind from an explicit browser-safe range. The asset server
+# uses 18080-18143, so this range is intentionally separate.
+_DYNAMIC_SAFE_PORTS = range(18880, 18944)
 
 
 class RuntimeCaptureTimeout(RuntimeError):
@@ -484,7 +492,29 @@ def _make_server(host: str, port: int, state: _RuntimeCaptureState) -> Threading
         allow_reuse_address = True
         daemon_threads = True
 
-    return Server((host, int(port)), Handler)
+    class DynamicServer(Server):
+        # Windows permits two listeners to bind the same port when
+        # SO_REUSEADDR is enabled.  A port-zero bridge must reserve its chosen
+        # safe port exclusively so concurrent drivers receive distinct URLs.
+        allow_reuse_address = False
+
+    requested_port = int(port)
+    if requested_port != 0:
+        return Server((host, requested_port), Handler)
+
+    last_error: OSError | None = None
+    for candidate_port in _DYNAMIC_SAFE_PORTS:
+        try:
+            return DynamicServer((host, candidate_port), Handler)
+        except OSError as exc:
+            if exc.errno not in {errno.EADDRINUSE, 10048}:
+                raise
+            last_error = exc
+    raise OSError(
+        errno.EADDRINUSE,
+        f"no available browser-safe runtime bridge port in "
+        f"{_DYNAMIC_SAFE_PORTS.start}-{_DYNAMIC_SAFE_PORTS.stop - 1}",
+    ) from last_error
 
 
 def _expected_view_ids(command: dict[str, Any]) -> list[str]:

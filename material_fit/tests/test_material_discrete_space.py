@@ -46,6 +46,22 @@ def test_shared_space_contains_all_define_bits_blend_values_and_original_starts(
         assert report["target_information_used"] is False
 
 
+def test_opaque_material_canonicalizes_dormant_unsafe_blend_src() -> None:
+    patch = {
+        "defines": {
+            "managed": ["NORMALMAP", "NORMALMAP_Y_INVERT", "RIMSMOOTHNESS"],
+            "enabled": [],
+        },
+        "render_states": {"s_Blend": 0, "s_BlendSrc": 6},
+    }
+
+    candidates = build_legal_discrete_candidates(patch)
+    start_candidate = find_candidate_for_patch(candidates, patch)
+
+    assert len(candidates) == 16
+    assert start_candidate["render_states"] == {"s_BlendSrc": 0}
+
+
 def test_observation_equivalence_keeps_blend_source_when_blending_is_active() -> None:
     start_patch = {
         "defines": {
@@ -145,3 +161,28 @@ def test_write_candidate_material_persists_selected_discrete_state(tmp_path: Pat
         "NORMALMAP_Y_INVERT",
         "RIMSMOOTHNESS",
     ]
+
+
+def test_optional_second_level_define_is_managed_only_when_enabled(tmp_path: Path) -> None:
+    disabled = tmp_path / "disabled.lmat"
+    enabled = tmp_path / "enabled.lmat"
+    base = {
+        "version": "LAYAMATERIAL:04",
+        "props": {
+            "type": "Custom/Test",
+            "defines": [],
+            "textures": [],
+            "u_ShadowThreshold2": 0.4,
+            "u_ShadowColor2": [0.5, 0.5, 0.5, 1.0],
+        },
+    }
+    disabled.write_text(json.dumps(base), encoding="utf-8")
+    base["props"]["defines"] = ["USE_SECOND_LEVELS"]
+    enabled.write_text(json.dumps(base), encoding="utf-8")
+
+    disabled_patch = material_patch_from_lmat(disabled)
+    enabled_patch = material_patch_from_lmat(enabled)
+
+    assert "USE_SECOND_LEVELS" not in disabled_patch["defines"]["managed"]
+    assert enabled_patch["defines"]["managed"][-1] == "USE_SECOND_LEVELS"
+    assert enabled_patch["defines"]["enabled"] == ["USE_SECOND_LEVELS"]

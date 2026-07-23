@@ -1,0 +1,60 @@
+{
+  "name": "holiday_1613_parameter_fit_v1",
+  "purpose": "Tracked 1613 runtime intake for image-observed optimization of one shared ordinary material parameter vector.",
+  "scene": "assets/resources/model/1613/prefab/1613.lh",
+  "source_material": "assets/resources/model/1613/mat/fish_1543_shengdanlaoren_laya_diff.lmat",
+  "runtime_bundle": "bin/js/bundles/bundle.js",
+  "shader": "assets/resources/shader/Custom_low.shader",
+  "animation_mode": "disabled",
+  "appearance_contract": {
+    "algorithm": "shared_v86_material_discrete_joint",
+    "same_algorithm_for_any_positive_view_count": true,
+    "reference_images_are_observations_only": true,
+    "one_shared_parameter_vector": true,
+    "material_count": 1,
+    "bound_texture_count": 1,
+    "texture_size": [1024, 1024],
+    "material_sha256": "708bdc59fce6d9a0e46e83b1d7716655ce7044a98a2df6c5b3bb26f18a8b3523",
+    "texture_sha256": "416d719e10987dc960ae8f0ac2ac796099fe7e22d7bd0f5406da6f319bdd3f96",
+    "shader_sha256": "c4a71f3ca946304e93986d7f4b04d18e4cb45f14f57ad0a50ec3082c2ea56946",
+    "best_parameter_only_independent_cross_engine_v3_score": 0.8841877893703689,
+    "tracked_experimental_best": "material_fit/assets/material_starts/1613/experimental_best_20260723.lmat",
+    "acceptance_score": 0.98,
+    "accepted": false,
+    "invalid_view_conditioned_atlas_score_excluded": 0.9906593425886211
+  },
+  "views": {
+    "yaw_degrees": [0, 45, 90, 135, 180, 225, 270, 315],
+    "pitch_degrees": 0,
+    "background": "white",
+    "width": 900,
+    "height": 700,
+    "orthographic_vertical_size": 6.625,
+    "camera_center_offset": [0.0, 0.34, 0.0]
+  },
+  "source_archives": {
+    "laya_assets": {
+      "file_name": "1613(1).zip",
+      "sha256": "4d8d37f0a910cee785fbff0b97b5d14f2271243552f218f5cb39296cacb6fb05"
+    },
+    "unity_references": {
+      "file_name": "1613.zip",
+      "sha256": "57d6d865ed8ba3bce3ea369a291444ca8b443646c6617bc1edc76a03ac2f71fc"
+    }
+  },
+  "inherited_runtime_inputs": {
+    "source_project": "examples/fish_laya_project",
+    "bundle": "bin/js/bundles/bundle.js",
+    "bundle_sha256": "880dabe1d11fdbe71e92c5ba38191cf9db41af7204e38680e521eeedea5845e7",
+    "shader": "assets/resources/shader/Custom_low.shader",
+    "shader_sha256": "c4a71f3ca946304e93986d7f4b04d18e4cb45f14f57ad0a50ec3082c2ea56946",
+    "reason": "The supplied archive contains model assets but no compiled Laya runtime bundle or shader source."
+  },
+  "known_intake_findings": [
+    "The five visible skinned meshes share material UUID 8205a746-d1be-47d9-b0fd-d6ca1db55356.",
+    "The material main texture UUID f2d112e5-1b94-40ee-9eb0-2a199fe25b15 resolves to the original delivered 1024x1024 texture.",
+    "The prefab references two project scripts and eleven resources not included in the archive; the missing resources belong to optional effect renderers rather than the five visible skinned meshes.",
+    "The tracked material and texture are byte-identical to the delivered archive. No view-conditioned atlas or shader branch is part of this runtime.",
+    "Eight-view silhouette calibration froze orthographic vertical size 6.625 and camera center offset [0.0, 0.34, 0.0]."
+  ]
+}
