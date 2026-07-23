@@ -193,6 +193,9 @@ function prepareBrowserAssets(projectRoot) {
   );
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) {
+    throw new Error(`browser asset preparation could not start ${python}: ${result.error.message}`);
+  }
   if (result.status !== 0) {
     throw new Error(`browser asset preparation failed with exit code ${result.status}`);
   }

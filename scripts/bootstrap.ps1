@@ -5,6 +5,12 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location -LiteralPath $repoRoot
+if (-not $env:PIP_DEFAULT_TIMEOUT) {
+    $env:PIP_DEFAULT_TIMEOUT = "60"
+}
+if (-not $env:PIP_RETRIES) {
+    $env:PIP_RETRIES = "10"
+}
 
 function Invoke-Checked {
     param(

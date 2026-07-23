@@ -57,6 +57,8 @@ def test_linux_bootstrap_explains_missing_python_venv_package() -> None:
     assert "python3 -m venv --clear .venv" in bootstrap
     assert ".venv/bin/python -m pip --version" in bootstrap
     assert "sudo apt-get install -y python3-venv" in bootstrap
+    assert 'PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"' in bootstrap
+    assert 'PIP_RETRIES="${PIP_RETRIES:-10}"' in bootstrap
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:

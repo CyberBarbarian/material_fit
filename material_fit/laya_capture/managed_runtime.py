@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,7 @@ def _spawn_renderer(
         raise FileNotFoundError("node is not available on PATH")
     env = dict(os.environ)
     env["NODE_PATH"] = str(modules)
+    env["PYTHON"] = sys.executable
     command = [
         node,
         str(runner),

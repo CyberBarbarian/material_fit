@@ -131,3 +131,33 @@ def test_linux_transient_webgl_startup_uses_bounded_four_attempts(
     assert stopped == [3001, 3002, 3003, 3004]
     for attempt in (1, 2, 3):
         assert (tmp_path / f"state/runtime_renderer_stderr.attempt_{attempt}.log").is_file()
+
+
+def test_spawned_node_renderer_receives_active_python_executable(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    modules = tmp_path / "node_modules"
+    (modules / "playwright").mkdir(parents=True)
+    captured: dict[str, object] = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        captured.update(kwargs)
+        return _FakeProcess(4001)
+
+    monkeypatch.setattr(managed_runtime.shutil, "which", lambda name: "/usr/bin/node")
+    monkeypatch.setattr(managed_runtime.subprocess, "Popen", fake_popen)
+
+    managed_runtime._spawn_renderer(
+        profile_path=tmp_path / "profile.json",
+        server_url="http://127.0.0.1:9000",
+        ready_file=tmp_path / "ready.json",
+        stdout_path=tmp_path / "stdout.log",
+        stderr_path=tmp_path / "stderr.log",
+        node_modules=modules,
+    )
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env["PYTHON"] == managed_runtime.sys.executable
