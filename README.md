@@ -29,13 +29,18 @@ and verifies Node.js 22.17.1 under `.runtime/`. The Linux fallback requires
 LayaAirIDE is not required. The nine LayaAir 3.4.0 runtime files used by the
 headless renderer are checked in under `vendor/layaair-3.4.0/libs/`.
 
-On Linux, Chromium also needs system libraries. When bootstrap runs as root it
-installs them through Playwright. For an unprivileged account, install them
-once before bootstrap with:
+On Debian or Ubuntu, install the Python virtual-environment module and Chromium
+system libraries once before bootstrap:
 
 ```bash
+sudo apt-get update
+sudo apt-get install -y python3-venv
 sudo npx playwright install-deps chromium
 ```
+
+When bootstrap runs as root, Playwright installs the Chromium system libraries
+automatically. Other Linux distributions must provide their equivalent Python
+`venv` and Chromium runtime packages.
 
 An NVIDIA GPU is optional. CPU or software WebGL can reproduce the pipeline.
 Record the active WebGL backend when comparing performance across machines;

@@ -14,8 +14,12 @@ fi
 command -v node >/dev/null || { echo "Node.js 18+ is required" >&2; exit 1; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 1; }
 
-if [[ ! -x .venv/bin/python ]]; then
-  python3 -m venv .venv
+if [[ ! -x .venv/bin/python ]] || ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
+  if ! python3 -m venv --clear .venv; then
+    echo "Unable to create .venv." >&2
+    echo "On Debian/Ubuntu, run: sudo apt-get install -y python3-venv" >&2
+    exit 1
+  fi
 fi
 echo "[2/5] Installing the Python package and test dependencies."
 .venv/bin/python -m pip install --upgrade pip

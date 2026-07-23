@@ -50,6 +50,15 @@ def test_linux_entrypoints_use_the_repository_playwright_runtime() -> None:
     assert package["dependencies"]["playwright"] == "1.61.1"
 
 
+def test_linux_bootstrap_explains_missing_python_venv_package() -> None:
+    root = Path(__file__).resolve().parents[2]
+    bootstrap = (root / "scripts" / "bootstrap.sh").read_text(encoding="utf-8")
+
+    assert "python3 -m venv --clear .venv" in bootstrap
+    assert ".venv/bin/python -m pip --version" in bootstrap
+    assert "sudo apt-get install -y python3-venv" in bootstrap
+
+
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
