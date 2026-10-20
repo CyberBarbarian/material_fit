@@ -1,5 +1,11 @@
 # Material Fit Repository Rules
 
+## Project status
+
+Archived on 2026-10-20 by the owner. Preserve this snapshot and its records;
+do not start maintenance, experiments or server migration for this project
+without a new explicit request. See `ARCHIVE.md`.
+
 ## Shell and process safety
 
 - On Windows, keep PowerShell commands explicit. Do not pipe directly after a
@@ -29,9 +35,11 @@
 
 ## Capture contract
 
-- Fish, turtle, crocodile, and new adapters use yaw
+- In eight-view mode, fish, turtle, crocodile, and new adapters use yaw
   `0,45,90,135,180,225,270,315`, pitch `0`, zero yaw/pitch offsets, model-bounds
-  framing, and a white comparison background.
+  framing, and a white comparison background. Single-view entrypoints capture
+  only the selected view from their declared profile; do not require eight PNGs
+  for a single-view run or silently expand its optimization objective.
 - Disable animation before startup settling. Do not restore the historical fish
   `idle1@0.21875` exception or copy an editor camera tilt into optimizer
   profiles.
@@ -44,7 +52,10 @@
 
 - The canonical entry point is
   `python -m material_fit.experiments.material_human_reference_stage1`; platform
-  wrappers are `scripts/run_stage1.ps1` and `scripts/run_stage1.sh`.
+  wrappers are `scripts/run_stage1.ps1` and `scripts/run_stage1.sh`. These wrappers
+  request single-view mode; inspect their current flags and the actual run config.
+  The maintained single-view success gate is `0.93`; historical eight-view
+  `0.98` evidence is a different contract. Keep early-stop and acceptance separate.
 - The only public policy is
   `v86_budget1500_initial_score_routed_unified`. It permits one initial score
   plus at most 1,499 proposals. Child policy snapshots are immutable JSON under
@@ -56,10 +67,11 @@
 - V86 may use only the initial full-resolution PNG score to choose its low,
   medium, or high route. The router and optimizer must not receive the asset
   name, target material, target parameters, or human-adjusted parameters.
-- Freeze the selected hard state and all six scene/light coordinates before the
-  final 40-coordinate material refinement.
+- Preserve the selected mode's search scope. Single-view Stage 1 may search
+  material only; staged joint search freezes the selected hard state and all six
+  scene/light coordinates before final 40-coordinate material refinement.
 - Browser iterations return score and residual vectors only. Target, start,
-  scorer-sanity, and final evidence captures emit the eight PNG files.
+  scorer-sanity, and final evidence captures emit the configured one or eight PNGs.
 - Judge the `<=500 ms` speed gate from isolated stable decision iteration time,
   excluding startup and report generation.
 
@@ -101,5 +113,7 @@ runtime APIs and must not be reintroduced as branches in the main runner.
   branches or active wrappers.
 - New assets add adapter data and tests; they do not add asset-name branches to
   optimizer code.
-- Run `python -m pytest -q` after changes. For deployment changes, also test the
-  documented bootstrap and a real run on both Windows and Linux.
+- For code changes, run the maintained tests relevant to the affected boundary.
+  Documentation-only changes need command/path and contract checks. For deployment
+  changes, test the documented bootstrap and real run on both Windows and Linux;
+  report any platform whose authorized validation remains unavailable.

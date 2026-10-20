@@ -1,0 +1,133 @@
+{
+  "archive_date": "2026-10-20",
+  "preceding_published_commit": "946325b39f9f105601ee01ee91af2685bcd2c73c",
+  "runtime_revalidated": false,
+  "source_comparison": {
+    "remote_scoped_files": 601,
+    "local_tracked_files": 652,
+    "byte_exact": 507,
+    "newline_only": 60,
+    "local_newer_content": 28,
+    "remote_only_obsolete_staging": 6,
+    "local_only_later_delivery_files": 57
+  },
+  "accepted_platform": "Linux",
+  "evidence_date": "2026-07-22",
+  "figures": [
+    {
+      "file": "stage1-target-start-best.png",
+      "original_relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/human_target_start_best_single_view.png",
+      "sha256": "64c065bc1263a75601b046015bfcb8996694c95b7ea95101ed34ee55056f2755",
+      "bytes": 56260
+    },
+    {
+      "file": "stage2-unity-start-human-best.png",
+      "original_relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/unity_start_human_best_back_view_full_v86.png",
+      "sha256": "17a659b4b3efaa8dd4aada4a2984e224c96058ada25c9cb3e595ba0f02c89566",
+      "bytes": 167848
+    }
+  ],
+  "private_raw_reports": [
+    {
+      "relative_path": "artifacts/linux_phase05_turtle_v52_v6_localcontrast_20260722/process_cleanup_report.json",
+      "bytes": 5153,
+      "sha256": "ca0774f7dbcac2e35a4945085f782369067324cb65cc48039619a4be6036b580"
+    },
+    {
+      "relative_path": "artifacts/linux_phase05_turtle_v52_v6_localcontrast_20260722/phase05_v86_campaign_report.json",
+      "bytes": 8723,
+      "sha256": "5578216a1c2c9eccc0bee56ac6f4353223bc8af3846cf564a076c4e1c48c9da3"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/process_cleanup_report.json",
+      "bytes": 2498,
+      "sha256": "c867a8653da0af34fa64a00a47141f22739b2940ba57e4e879837544a7cd3575"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/runtime_discrete_patch_report.json",
+      "bytes": 1704,
+      "sha256": "6f608fd6275185a49e5b7aff71f7f66881d132b97653f327293b7f1baa93940d"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/stage1_report.json",
+      "bytes": 30909,
+      "sha256": "debd9816cb04eb7744bda7e4ecc60beb1416ff0b8e430ddd098eace6e38b3625"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/stage1_discrete_search_space_report.json",
+      "bytes": 4073,
+      "sha256": "96653632ed9d3856b3b5190f29067b9aa90463ecc52fb517d9a64298c732dac2"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/stage1_image_score_report.json",
+      "bytes": 10652,
+      "sha256": "dd904fda0e6c2bf6a760c52740d8bd81db5ddf70ca44e34060aa926e78b41ee0"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/iteration_timing_report.json",
+      "bytes": 427,
+      "sha256": "f6d5d423f8d8468203a73d6a3aa8b143900377f6e579479a3a1c6457adcf654b"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/best_continuous_params.json",
+      "bytes": 2014,
+      "sha256": "c25e78f68bfb4d6d514a07ecdc6c89d0a1f57cbe72f02847fcd9c68b11a028cf"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/stage1_budget_report.json",
+      "bytes": 782,
+      "sha256": "e4bc435cee6c7788daaa212ee7a4e78cc846a13d28ca410b7f8a71c046560a1b"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/optimizer_input_boundary_report.json",
+      "bytes": 432,
+      "sha256": "c16f0780d39d2faa7b06260c1388fb2a5de1ff2ab6496aab23c7f68fad7ee884"
+    },
+    {
+      "relative_path": "artifacts/linux_stage1_turtle_v52_v6_localcontrast_20260722/fit_config.json",
+      "bytes": 43381,
+      "sha256": "4ce14bbebdb65c478b8d2df81efb33759d5b1dbdbd5e2b267db2235768f93d2a"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/process_cleanup_report.json",
+      "bytes": 2103,
+      "sha256": "3fc9e7715388c0bf03e72942278fc638c5263e4c7d4734a14c80707a8c46646f"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/stage2_single_view_report.json",
+      "bytes": 170356,
+      "sha256": "9a1a527ca656141e72f3a4c173601babea4bc3820163d989cb80f7ede1d2da33"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/stage2_discrete_search_space_report.json",
+      "bytes": 8856,
+      "sha256": "e7d30e5f4718bbe9952606a2249c92608751f56a35028a0157abaabf898536f9"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/stage2_image_score_report.json",
+      "bytes": 52568,
+      "sha256": "1b0a415be0b05875d5866d11958821fba67d9554ca95fe112b6562b66d239a66"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/frozen_confidence_mask_report.json",
+      "bytes": 2943,
+      "sha256": "91fd0d1f58bdf7b2b36b55b8a2c3ba329b649f7f88b0c89ccf93ebb257307620"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/iteration_timing_report.json",
+      "bytes": 426,
+      "sha256": "87ebad49ff52d2844c1717ffbcb4762185079a8b091a3363d328bbec870149e9"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/fit_config.json",
+      "bytes": 47301,
+      "sha256": "9751a4abb839fa27be56d9d80b236fac7bccae3555321f978694debfcb91a23a"
+    },
+    {
+      "relative_path": "artifacts/linux_stage2_turtle_v52_v6_localcontrast_20260722/stage2_scorer_sanity.json",
+      "bytes": 63964,
+      "sha256": "10c98adc570a6817a61c10a5d4ab96c7a27745156bc727dbe6d739fc2a2ecfe7"
+    }
+  ],
+  "boundary": "Original metrics and acceptance boundaries are documented in ARCHIVE.md and material_fit/docs/. Raw reports, exact source manifest and retained payloads are in the private companion release. No new runtime acceptance is claimed."
+}

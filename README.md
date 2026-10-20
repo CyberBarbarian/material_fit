@@ -1,5 +1,8 @@
 # Material Fit
 
+Archived on 2026-10-20. See [ARCHIVE.md](ARCHIVE.md) for the frozen version,
+preserved scope and restoration notes.
+
 Material Fit searches LayaAir material parameters from rendered images. The
 renderer is treated as a black box: the optimizer submits a material, receives
 one or eight PNG views, and updates its proposal from image scores and residuals.
